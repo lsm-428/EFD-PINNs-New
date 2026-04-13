@@ -358,7 +358,7 @@ class SequenceDataGenerator:
 
 ```bash
 # 运行 DataGenerator 测试
-python -m pytest tests/test_two_phase_data_generator.py -v
+python -m uv run pytest tests/test_two_phase_data_generator.py -v
 
 # 验证采样分布
 python -c "

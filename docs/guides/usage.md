@@ -1,6 +1,6 @@
 # EFD-PINNs 使用指南
 
-**最后更新**: 2026-02-04
+**最后更新**: 2026-04-13
 **适用版本**: v4.5
 
 ---
@@ -77,10 +77,13 @@ phi_field = predictor.predict_phi_field(voltage=20, time=0.02)
 
 ```bash
 # 综合评估（自动选择最新 outputs/train/pinn_*）
-python evaluate.py
+uv run evaluate.py
 
 # 对比最近两个模型
-python evaluate.py --compare
+uv run evaluate.py --compare
+
+# 启动交互式分析仪表板
+uv run scripts/dashboard.py
 ```
 
 ---
@@ -103,13 +106,13 @@ print(f"20V 接触角: {theta:.1f}°")
 
 ```bash
 # 使用默认配置训练
-python train_two_phase.py
+uv run train_two_phase.py
 
 # 自定义 epochs
-python train_two_phase.py --epochs 60000
+uv run train_two_phase.py --epochs 60000
 
 # 快速冒烟测试
-python train_two_phase.py --epochs 1000
+uv run train_two_phase.py --epochs 1000
 
 # 输出目录：outputs/train/pinn_<timestamp>/
 # 训练日志：outputs/train/pinn_<timestamp>/training.log

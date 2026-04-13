@@ -84,7 +84,7 @@ uv sync --extra web
 | 组名 | 包含内容 | 用途 |
 |------|---------|------|
 | `full` | pandas, pyvista, plotly | 完整数据分析与可视化 |
-| `testing` | pytest, hypothesis | 测试框架 |
+| `testing` | uv run pytest, hypothesis | 测试框架 |
 | `monitoring` | tensorboard | 训练监控 |
 | `web` | fastapi, pydantic, uvicorn, streamlit | Web API 与 UI |
 
@@ -175,7 +175,7 @@ python -c "import torch; print(f'PyTorch: {torch.__version__}')"
 python -c "import numpy; print(f'NumPy: {numpy.__version__}')"
 
 # 运行测试
-pytest tests/ -v --tb=short
+uv run pytest tests/ -v --tb=short
 ```
 
 ---

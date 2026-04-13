@@ -1,6 +1,6 @@
 # 安装和配置指南
 
-**最后更新**: 2026-02-04
+**最后更新**: 2026-04-12
 
 ## 系统要求
 
@@ -71,7 +71,7 @@ python -c "import torch; print(f'PyTorch: {torch.__version__}, CUDA: {torch.cuda
 python -c "from src.config import PHYSICS; print('EFD3D 导入成功')"
 
 # 运行基础测试
-pytest tests/test_physics_sanity.py -v
+uv run pytest tests/test_physics_sanity.py -v
 ```
 
 ---
@@ -144,7 +144,7 @@ uv sync --force-reinstall
 uv sync --extra testing
 
 # 运行测试
-pytest tests/ -v --tb=short
+uv run pytest tests/ -v --tb=short
 ```
 
 ---

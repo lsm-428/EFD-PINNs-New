@@ -1,8 +1,8 @@
 # EFD3D Scripts Guide
 
-**Last Updated**: 2026-03-12  
-**Version**: v4.5  
-**Total Scripts**: 1 main script + visualizer_3d module
+**最后更新**: 2026-04-13  
+**版本**: v4.5  
+**脚本总数**: 2 个
 
 ---
 
@@ -19,29 +19,24 @@
 
 ---
 
-## Overview
+## 概述
 
-The EFD3D scripts module has been streamlined. Most CLI tools have been integrated into the interactive Streamlit Dashboard, providing a unified interface for all analysis tasks.
+EFD3D 脚本模块已经过精简，大多数 CLI 工具已集成到交互式 Streamlit 仪表板中，为所有分析任务提供统一接口。
 
-### Current Script Organization
+### 当前脚本组织结构
 
 ```
 scripts/
-├── dashboard.py           # Streamlit Dashboard (main entry point)
-│
-└── visualizer_3d/         # 3D visualization module
-    ├── visualizer_3d.py          # Main entry
-    ├── visualization_core.py     # Core rendering
-    ├── animation_utils.py        # Animation utilities
-    └── interactive_features.py   # Interactive features
+├── dashboard.py           # Streamlit 仪表板（主入口点）
+└── run_ablation.sh        # 消融研究脚本
 ```
 
-### Key Features
+### 主要特性
 
-- **Streamlit Dashboard**: Interactive web UI consolidating most analysis tools
-- **Auto-Detection**: Tools auto-detect latest models when paths not specified
-- **Publication Quality**: IEEE-standard figures available via notebooks scripts
-- **3D Visualization**: PyVista-based professional rendering
+- **Streamlit 仪表板**: 交互式 Web UI，整合了大部分分析工具
+- **自动检测**: 工具自动检测最新模型（当未指定路径时）
+- **出版物质量**: 通过笔记本脚本提供 IEEE 标准图形
+- **3D 可视化**: 集成在 Streamlit 仪表板中
 
 ---
 
@@ -116,47 +111,9 @@ streamlit run scripts/dashboard.py --server.headless true
 
 ---
 
-### 2. `visualizer_3d/` - 3D Visualization Module
+### 2. 3D Visualization
 
-**Purpose**: Professional 3D visualization of PINN predictions
-
-**Location**: `scripts/visualizer_3d/`
-
-#### Modules
-
-| File | Description |
-|------|------------|
-| `visualizer_3d.py` | Main entry point with PixelVisualizer class |
-| `visualization_core.py` | Core rendering functions |
-| `animation_utils.py` | Animation generation utilities |
-| `interactive_features.py` | Interactive visualization features |
-
-#### Features
-
-- 3D φ field rendering (isosurfaces, volumes)
-- Interactive visualization with PyVista
-- Animation generation
-- Multiple visualization modes
-
-#### Usage
-
-```bash
-# Run demo visualization
-python -m scripts.visualizer_3d.visualizer_3d --demo
-
-# Interactive 3D exploration
-python -m scripts.visualizer_3d.visualizer_3d --interactive
-```
-
-#### Programmatic Usage
-
-```python
-from scripts.visualizer_3d.visualizer_3d import PixelVisualizer
-
-viz = PixelVisualizer(model_path='outputs/train/pinn_*/best_model.pth')
-viz.plot_aperture_3d(voltage=20, time=0.01)
-viz.save('aperture_3d.png')
-```
+3D visualization functionality is now integrated into the Streamlit Dashboard, providing interactive 3D rendering and analysis capabilities.
 
 ---
 
@@ -174,7 +131,7 @@ The following scripts have been removed as their functionality is now available 
 | `generate.py` | (Removed - use Dashboard export features) |
 | `ieee_figures.py` | (Removed - use Dashboard export features) |
 | `verify_parameters.py` | (Simple utility, no replacement) |
-| `test_all.py` | `pytest tests/` |
+| `test_all.py` | `uv run pytest tests/` |
 | `cli_utils.py` | (Inlined into scripts) |
 | `constants.py` | (Inlined into scripts) |
 
@@ -209,12 +166,11 @@ Navigate to the appropriate tab:
 ### Pattern 2: 3D Visualization
 
 ```bash
-# Run demo visualization
-python -m scripts.visualizer_3d.visualizer_3d --demo
-
-# Interactive 3D exploration
-python -m scripts.visualizer_3d.visualizer_3d --interactive
+# Use Dashboard for 3D visualization
+streamlit run scripts/dashboard.py
 ```
+
+Navigate to the "🧊 3D体积视图" tab for interactive 3D visualization.
 
 ### Pattern 3: Publication Figure Generation
 
@@ -228,7 +184,7 @@ streamlit run scripts/dashboard.py
 
 ```bash
 # 1. Train model
-python train_two_phase.py --config config/v4.5-standard.json
+uv run train_two_phase.py --config config/v4.5-standard.json
 
 # 2. Analyze via Dashboard
 streamlit run scripts/dashboard.py  # Use 📊 Training tab
@@ -267,3 +223,4 @@ The Dashboard provides export options in each tab for saving visualizations to c
 - [Visualization Guide](visualization_guide.md) - Detailed visualization options
 - [Troubleshooting Guide](troubleshooting.md) - Common issues and solutions
 - [API Reference](../api/README.md) - Programmatic API documentation
+- [Project Core Documentation](../../CLAUDE.md) - Developer guide and knowledge base

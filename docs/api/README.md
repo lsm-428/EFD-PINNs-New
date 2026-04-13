@@ -1,6 +1,6 @@
 # EFD-PINNs API 参考文档
 
-**最后更新**: 2026-03-13
+**最后更新**: 2026-04-13
 **版本**: v4.5
 
 ## 概述
@@ -38,6 +38,7 @@ EFD-PINNs 是一个基于物理信息神经网络 (PINN) 的电润湿显示 (EWD
 | 模块 | 说明 | 文档 |
 |------|------|------|
 | **PINNAperturePredictor** | 面向用户的预测接口，封装模型加载与后处理 | [core_models.md](core_models.md#pinnaperturepredictor) |
+| **HybridPredictor** | Stage 1 + Stage 2 集成预测器，支持端到端推理 | [core_models.md](core_models.md#hybridpredictor) |
 
 ### 4. 训练系统 (`src/models/pinn_two_phase.py`)
 
@@ -67,6 +68,19 @@ times = np.linspace(0, 0.03, 100)
 etas = [predictor.predict(voltage=20, time=t) for t in times]
 ```
 
+### 2. 命令行工具使用
+
+```bash
+# 训练模型
+uv run train_two_phase.py --config config/v4.5-standard.json
+
+# 评估模型
+uv run evaluate.py outputs/train/pinn_YYYYMMDD_HHMMSS/
+
+# 启动交互式仪表板
+uv run scripts/dashboard.py
+```
+
 ### 2. 获取 3D 物理场
 
 ```python
@@ -82,11 +96,20 @@ fields = predictor.predict_full_field(
 # - 'phi': 相场 (0=极性液体, 1=油墨)
 ```
 
-### 3. 使用命令行工具查询知识库
+### 3. 使用命令行工具
 
 ```bash
 cd /home/scnu/Gitee/EFD3D/
-source .venv/bin/activate
+
+# 激活环境
+source .venv/bin/activate  # Linux/Mac
+# .\.venv\Scripts\activate  # Windows
+
+# 运行测试
+uv run pytest tests/ -v
+
+# 启动仪表板
+uv run scripts/dashboard.py
 ```
 
 ---
@@ -105,7 +128,7 @@ source .venv/bin/activate
 
 ## 📊 版本信息
 
-**当前版本**: v4.5 (2026-03-13)
+**当前版本**: v4.5 (2026-04-13)
 
 **关键特性**:
 - ✅ 6D Triad 输入: `(x, y, z, V_from, V_to, t_since)`

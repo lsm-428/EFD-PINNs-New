@@ -250,7 +250,7 @@ return {
 ### Step 2: 重新训练
 
 ```bash
-python train_two_phase.py --config config/stage2_planB_20260108.json
+uv run train_two_phase.py --config config/stage2_planB_20260108.json
 ```
 
 ### Step 3: 验证

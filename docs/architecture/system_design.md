@@ -1,6 +1,6 @@
 # EFD-PINNs 系统设计文档
 
-**最后更新**: 2026-02-04
+**最后更新**: 2026-04-13
 
 ---
 
@@ -47,17 +47,21 @@ graph TD
   - **Navier-Stokes**: 含混合密度/粘度与 CSF 表面张力模型。
   - **VOF**: 相场输运方程。
   - **Continuity**: 不可压缩流体连续性。
+  - **电润湿力**: 显式电润湿驱动力模型。
 说明：
 - 两相流 PINN 的训练数据生成器位于 `src/models/pinn_two_phase.py:DataGenerator`（Triplet/Triad 输入），并不在 `src/physics/` 下。
 
 #### 层级 3: 训练与优化层 (`src/training/`)
-- **`components.py`**: 动态权重调度与 Checkpoint 管理等通用组件。
+- **`scheduler.py`**: 动态权重调度和学习率调度。
+- **`stabilizer.py`**: 训练稳定性管理（NaN恢复、梯度裁剪）。
+- **`components.py`**: 训练通用组件。
 
 #### 层级 4: 工具与自动化层 (`root` & `scripts/`)
 - **`evaluate.py`**: 核心评估工具。生成动态响应曲线、3D 界面重构、响应时间统计。
-- **`scripts/analysis/training/analyze_log.py`**: 训练日志解析与可视化（输出 loss_breakdown.csv 等）。
-- **`scripts/analysis/diagnose_oscillation.py`**: 动态响应波动/突变诊断（针对 0→30→0V）。
-- **`scripts/analysis/volume/check_conservation.py`**: 体积守恒与升压→降压边界连续性检查。
+- **`scripts/dashboard.py`**: 交互式仪表板，集成了训练分析、动态响应诊断、体积守恒检查等功能。
+- **训练日志分析**: 通过仪表板的"📊 训练输出分析"模块实现。
+- **动态响应诊断**: 通过仪表板的"📈 瞬态响应"模块实现。
+- **体积守恒检查**: 通过仪表板的"🩺 物理诊断"模块实现。
 
 ---
 

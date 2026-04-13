@@ -220,20 +220,20 @@ div_u_norm = div_u * self.L_char / self.U_char
 
 ```bash
 # 使用评估脚本
-python evaluate.py
+uv run evaluate.py
 ```
 
 ## 核心训练命令
 
 ```bash
 # 使用推荐配置训练 (60,000 epochs)
-python train_two_phase.py --config config/v4.5-standard.json
+uv run train_two_phase.py --config config/v4.5-standard.json
 
 # 快速冒烟测试 (1000 epochs)
-python train_two_phase.py --epochs 1000
+uv run train_two_phase.py --epochs 1000
 
 # 使用 LBFGS 微调配置（备选）
-python train_two_phase.py --config config/v4.5_lbfgs_tuned.json
+uv run train_two_phase.py --config config/v4.5_lbfgs_tuned.json
 ```
 
 ## 故障排除

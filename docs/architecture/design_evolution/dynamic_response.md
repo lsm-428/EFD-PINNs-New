@@ -274,7 +274,7 @@ tau_recovery = 0.0075  # 7.5ms (校准值)
 
 ```bash
 # 生成方波响应曲线 (0-30-0V)
-python evaluate.py outputs/train/pinn_xxx --mode dynamic
+uv run evaluate.py outputs/train/pinn_xxx --mode dynamic
 ```
 
 **预期效果**:

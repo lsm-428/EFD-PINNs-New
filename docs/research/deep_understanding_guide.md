@@ -1,6 +1,6 @@
 # EFD3D PINN 深度理解指南
 
-**撰写时间**: 2026-03-02  
+**最后更新**: 2026-04-13  
 **目的**: 为论文撰写和实验验证提供深度技术理解  
 **受众**: 项目开发者、论文审阅者、后续研究者  
 
@@ -681,10 +681,10 @@ activation: Tanh + Linear
 
 | 图表类型 | 对应脚本 | 输出位置 |
 |----------|---------|---------|
-| 动态响应曲线 | `scripts/evaluate.py` | `outputs/train/pinn_20260205_174333/dynamic_curves_best.png` |
-| 流场分布 | `scripts/analyze_flow_field.py` | `outputs/train/pinn_20260205_174333/phi_grid_evolution_best.png` |
-| 训练曲线 | `scripts/analysis/training/analyze_log.py` | `outputs/train/pinn_20260205_174333/learning_curve.png` |
-| 3D 界面 | `scripts/visualizer_3d.py` | `outputs/train/pinn_20260205_174333/interface_3d_steady_best.png` |
+| 动态响应曲线 | `evaluate.py` | `outputs/train/pinn_20260205_174333/dynamic_curves_best.png` |
+| 流场分布 | `evaluate.py` | `outputs/train/pinn_20260205_174333/phi_grid_evolution_best.png` |
+| 训练曲线 | `evaluate.py` | `outputs/train/pinn_20260205_174333/learning_curve.png` |
+| 3D 界面 | `scripts/dashboard.py` | `outputs/train/pinn_20260205_174333/interface_3d_steady_best.png` |
 
 ---
 

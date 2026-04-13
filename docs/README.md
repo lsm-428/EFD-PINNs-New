@@ -1,6 +1,6 @@
 # 📚 EFD-PINNs 文档中心
 
-**最后更新**: 2026-02-04
+**最后更新**: 2026-04-13
 
 ---
 
@@ -32,36 +32,27 @@
 
 ## 📁 文档结构
 
-```
-docs/
-├── README.md                    # 本文档
-├── CHANGELOG.md                 # 更新日志
-├── CONTRIBUTING.md              # 贡献指南
-│
-├── guides/                      # 📘 使用指南
-│   ├── quickstart.md           # 快速开始
-│   ├── installation.md           # 安装配置
-│   ├── data-generation-core.md   # 数据生成核心
-│   ├── training_guide.md        # 训练策略与高级优化
-│   ├── physics_and_device_guide.md  # 物理理论与器件规格
-│   ├── configuration_guide.md      # 配置系统与权重
-│   ├── troubleshooting.md        # 故障排除
-│   ├── scripts_guide.md          # 脚本工具使用指南 ⭐
-│   └── visualization_guide.md    # 可视化指南
-│
-├── api/                         # 💻 API 文档
-│   ├── README.md               # API 概览
-│   ├── core_models.md          # 核心模型
-│   ├── physics_constraints.md  # 物理约束
-│   ├── training_system.md      # 训练系统
-│   ├── input_output_layers.md  # 输入输出层
-│   └── examples_and_best_practices.md  # 示例与最佳实践
-│
-├── architecture/                # 🏗️ 架构文档
-│   ├── system_design.md       # 系统设计与架构
-│   ├── model_architecture.md   # 模型架构详解
-│   ├── design_evolution/       # 设计演进记录
-│   └── problem_analysis/       # 问题分析
+src/
+├── models/                    # 神经网络模型 (3 modules)
+│   ├── aperture_model.py      # Stage 1 开口率模型（已校准）
+│   └── pinn_two_phase.py      # Stage 2 两相流 PINN（6D Triad 输入）
+├── predictors/                # 预测器 (3 modules)
+│   ├── pinn_aperture.py       # Stage 2 PINN 预测器
+│   └── hybrid_predictor.py    # Stage 1 + Stage 2 集成预测器
+├── physics/                   # 物理约束 (2 modules)
+│   └── constraints.py         # Navier-Stokes, VOF, 连续性方程
+├── training/                  # 训练基础设施 (4 modules)
+│   ├── scheduler.py           # 动态损失权重调度
+│   ├── stabilizer.py          # NaN恢复, 梯度裁剪
+│   └── components.py          # 训练工具
+├── config/                    # 配置管理 (3 modules)
+│   ├── __init__.py            # PHYSICS参数导出
+│   └── physics_config.py      # 类型安全配置
+├── dashboard/                 # Streamlit仪表板 (21 modules)
+│   ├── monitor/               # 监控和日志分析 (6 modules)
+│   └── reports/               # 报告生成 (3 modules)
+├── solvers/                   # CFD求解器 (2 modules)
+└── utils/                     # 工具函数 (3 modules)
 ```
 
 ---
@@ -91,7 +82,7 @@ docs/
 |------|------|------|
 | 30V 开口率 | **83.4%** | 像素开口率优化至工业级水平 |
 | 体积误差 | **<1%** | VOF 输运方程体积守恒修正成效 |
-| 代码规模 | **41 文件** | 21 src + 5 scripts + 15 tests |
+| 代码规模 | **57 文件** | 41 src + 1 scripts + 15 tests |
 | 输入表示 | **6D Triad** | (x, y, z, V_from, V_to, t_since) |
 
 ### 技术参数详情 {#physics-parameters}
@@ -168,20 +159,27 @@ docs/
 
 #### 层结构
 
-```
-z = 0 μm
-├─ 底层 ITO 玻璃 - 刚性界面
-│
-├─ 介电层 SU-8 (400nm, ε=3.0) - 电场隔离
-│
-├─ 疏水层 Teflon (400nm, ε=1.9) - 控制润湿性
-│
-├─ 围堰 SU-8 (3.5μm 实际 / 20μm 模型)
-│  └─ 内部填充 (174×174μm):
-│      ├─ 油墨层 (3μm) - 底部，疏水性
-│      └─ 极性液体层 (17μm) - 顶部
-│
-└─ 顶层 ITO - 透明电极
+src/
+├── models/                    # 神经网络模型 (3 modules)
+│   ├── aperture_model.py      # Stage 1 开口率模型（已校准）
+│   └── pinn_two_phase.py      # Stage 2 两相流 PINN（6D Triad 输入）
+├── predictors/                # 预测器 (3 modules)
+│   ├── pinn_aperture.py       # Stage 2 PINN 预测器
+│   └── hybrid_predictor.py    # Stage 1 + Stage 2 集成预测器
+├── physics/                   # 物理约束 (2 modules)
+│   └── constraints.py         # Navier-Stokes, VOF, 连续性方程
+├── training/                  # 训练基础设施 (4 modules)
+│   ├── scheduler.py           # 动态损失权重调度
+│   ├── stabilizer.py          # NaN恢复, 梯度裁剪
+│   └── components.py          # 训练工具
+├── config/                    # 配置管理 (3 modules)
+│   ├── __init__.py            # PHYSICS参数导出
+│   └── physics_config.py      # 类型安全配置
+├── dashboard/                 # Streamlit仪表板 (21 modules)
+│   ├── monitor/               # 监控和日志分析 (6 modules)
+│   └── reports/               # 报告生成 (3 modules)
+├── solvers/                   # CFD求解器 (2 modules)
+└── utils/                     # 工具函数 (3 modules)
 ```
 
 ### API 参考
@@ -192,21 +190,24 @@ z = 0 μm
 - **输入**: 6D Triad `[x,y,z,V_from,V_to,t_since]`
 - **输出**: 5D物理场 `[u,v,w,p,φ]`
 - **网络**: 双分支MLP（速度网络 + φ网络）
+- **特性**: 支持三阶段渐进式训练，包含电润湿驱动力
 
 ##### `Trainer` (`src/models/pinn_two_phase.py`)
-- **功能**: 管理三阶段训练
-- **特性**: 动态权重调度，训练稳定性管理
+- **功能**: 管理三阶段训练流程
+- **特性**: 动态权重调度，训练稳定性管理，NaN恢复机制
 
 ##### `PhysicsConstraints` (`src/physics/constraints.py`)
-- **实现**: 控制方程残差
+- **实现**: 物理方程约束集
   - 连续性: `∇·u = 0`
   - Navier-Stokes: `ρ(∂u/∂t + u·∇u) = -∇p + μ∇²u + F_st + F_ew`
-  - VOF: `∂φ/∂t + ∇·(φu) = 0`
+  - VOF: `∂φ/∂t + u·∇φ = 0`
+  - 界面锐化: `L_sharp = λ·φ(1-φ)`
 
 ##### `EnhancedApertureModel` (`src/models/aperture_model.py`)
 - **功能**: 基于Young-Lippmann方程的解析模型
-- **输入**: `[V_from, V_to, t_since]`
+- **输入**: 电压值
 - **输出**: `[θ, η]`（接触角，开口率）
+- **状态**: 已校准，30V开口率83.4%
 
 ### 训练进展
 
@@ -224,38 +225,48 @@ z = 0 μm
 
 | 脚本 | 说明 |
 |------|------|
-| `scripts/dashboard.py` | Streamlit 交互式仪表板，用于 PINN 模型分析和可视化 |
-| `scripts/visualizer_3d/visualizer_3d.py` | 3D 可视化模块，包含体积渲染和界面重建功能 |
+| `scripts/dashboard.py` | Streamlit 交互式仪表板，集成了所有分析和可视化功能 ⭐ |
+| `scripts/run_ablation.sh` | 消融研究脚本 |
+
+### 仪表板功能模块
+
+`scripts/dashboard.py` 包含8个功能模块：
+1. **📊 2D场分析** - 截面场分析，支持任意电压序列模拟
+2. **🧊 3D体渲染视图** - 三维体积渲染和界面重建
+3. **📈 瞬态响应** - 时域响应分析和动态可视化
+4. **🩺 物理诊断** - 物理约束验证和残差分析
+5. **📊 训练输出分析** - 训练曲线、模型性能和收敛分析
+6. **⏱️ 基准测试** - 性能指标和性能对比
+7. **🔄 对比分析** - 多模型/多配置对比
+8. **📐 Stage 1** - 解析模型验证和接触角分析
 
 ### 使用示例
 
 ```bash
-# 启动交互式仪表板
-python scripts/dashboard.py
+# 启动交互式仪表板（推荐）
+uv run scripts/dashboard.py
 
-# 运行 3D 可视化
-python scripts/visualizer_3d/visualizer_3d.py --config config/v4.5-standard.json
-```
-
-有关脚本使用的详细信息，请参阅 **[scripts_guide.md](guides/scripts_guide.md)**。
-
----
-
-## 📂 源码结构（关键部分）
-
-```
+# 运行消融研究
+uv run scripts/run_ablation.sh
 src/
-├── models/                    # 神经网络模型
+├── models/                    # 神经网络模型 (3 modules)
 │   ├── aperture_model.py      # Stage 1 开口率模型（已校准）
 │   └── pinn_two_phase.py      # Stage 2 两相流 PINN（6D Triad 输入）
-├── predictors/                # 预测器
-│   └── pinn_aperture.py       # Stage 2 PINN 预测器 (支持 6D 输入)
-├── physics/                   # 物理约束
-├── training/                  # 训练系统
-├── utils/                     # 工具函数
-└── solvers/                   # CFD 求解器
+├── predictors/                # 预测器 (3 modules)
+│   ├── pinn_aperture.py       # Stage 2 PINN 预测器
+│   └── hybrid_predictor.py    # Stage 1 + Stage 2 集成预测器
+├── physics/                   # 物理约束 (2 modules)
+│   └── constraints.py         # Navier-Stokes, VOF, 连续性方程
+├── training/                  # 训练基础设施 (4 modules)
+│   ├── scheduler.py           # 动态损失权重调度
+│   ├── stabilizer.py          # NaN恢复, 梯度裁剪
+│   └── components.py          # 训练工具
+├── config/                    # 配置管理 (3 modules)
+│   ├── __init__.py            # PHYSICS参数导出
+│   └── physics_config.py      # 类型安全配置
+├── dashboard/                 # Streamlit仪表板 (21 modules)
+│   ├── monitor/               # 监控和日志分析 (6 modules)
+│   └── reports/               # 报告生成 (3 modules)
+├── solvers/                   # CFD求解器 (2 modules)
+└── utils/                     # 工具函数 (3 modules)
 ```
-
----
-
-**返回**: [项目主页](../README.md)

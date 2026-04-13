@@ -131,12 +131,12 @@
 ```bash
 # 运行 sanity check 测试
 conda activate efd
-python -m pytest tests/test_physics_sanity.py -v
+python -m uv run pytest tests/test_physics_sanity.py -v
 
 # 验证模块导入
 python -c "from src.physics.constraints import PhysicsConstraints, PINNConstraintLayer; print('OK')"
 python -c "from src.models.pinn_two_phase import PhysicsLoss, Trainer; print('OK')"
 
 # 运行评估脚本
-python evaluate.py
+uv run evaluate.py
 ```

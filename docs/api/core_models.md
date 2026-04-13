@@ -1,6 +1,6 @@
 # 核心模型 API
 
-**最后更新**: 2026-02-04
+**最后更新**: 2026-04-12
 **版本**: v4.5
 
 ## TwoPhasePINN
@@ -70,9 +70,11 @@ def forward_triplet(
 
 ## LSTMPINNModel
 
-**类路径**: `src.models.lstm_pinn.model.LSTMPINNModel`
+**类路径**: （当前版本中已移除）
 
 基于 LSTM 的时空序列混合模型，组合 LSTM 编码器和 MLP 解码器，用于捕捉长时程动态效应（如迟滞和恢复过程）。
+
+**注意**: LSTMPINNModel 在当前 v4.5 版本中已不再使用，推荐使用标准的 TwoPhasePINN 模型。
 
 ### 架构特点
 - **编码器**: `VoltageEncoder` (LSTM)，处理电压时间序列 `(V_0, V_1, ..., V_t)`。

@@ -70,8 +70,10 @@ $$
 显式引入电润湿力作为体积力项：
 
 $$
-\mathbf{F}_{ew} = \frac{\varepsilon_0 \varepsilon_r V^2}{2d} \cdot \phi \cdot 4\phi(1-\phi) \cdot e^{-z/2h} \cdot \mathbf{n}
+\mathbf{F}_{ew} = \frac{\varepsilon_0 \varepsilon_r (V - V_T)^2}{2d} \cdot \phi \cdot 4\phi(1-\phi) \cdot e^{-z/2h} \cdot \mathbf{n}
 $$
+
+其中 $V_T = 3.0V$ 是阈值电压，确保低于阈值时电润湿力为零。
 
 详细参数说明请参见[物理理论与器件规格指南](../guides/physics_and_device_guide.md#physics-parameters)。
 

@@ -17,10 +17,10 @@
 ### 使用方法
 ```bash
 # 验证特定训练结果
-python evaluate.py outputs_pinn_<timestamp>
+uv run evaluate.py outputs_pinn_<timestamp>
 
 # 或省略目录参数，自动选择最新 outputs_pinn_* 目录
-python evaluate.py
+uv run evaluate.py
 ```
 
 ---

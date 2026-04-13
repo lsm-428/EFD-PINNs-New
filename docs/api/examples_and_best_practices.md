@@ -98,19 +98,19 @@ print(f"序列末端预测 φ 均值: {phi_pred.mean().item():.4f}")
 
 ```bash
 # 标准训练 (默认配置，30,000 epochs)
-python train_two_phase.py
+uv run train_two_phase.py
 
 # 指定配置文件
-python train_two_phase.py --config config/v4.5-standard.json
+uv run train_two_phase.py --config config/v4.5-standard.json
 
 # 自定义训练轮次
-python train_two_phase.py --epochs 50000
+uv run train_two_phase.py --epochs 50000
 
 # 快速冒烟测试 (1000 epochs)
-python train_two_phase.py --epochs 1000
+uv run train_two_phase.py --epochs 1000
 
 # 从 Checkpoint 恢复
-python train_two_phase.py --resume_from outputs/train/pinn_latest/latest_model.pth
+uv run train_two_phase.py --resume_from outputs/train/pinn_latest/latest_model.pth
 ```
 
 ### v4.5 训练配置
@@ -177,7 +177,7 @@ TwoPhasePINN 使用 6D 输入 `(x, y, z, V_from, V_to, t_since)` 来统一描述
 
 ```bash
 # 运行评估脚本
-python evaluate.py
+uv run evaluate.py
 
 # 检查输出
 # - 30V 开口率应接近 83.4%

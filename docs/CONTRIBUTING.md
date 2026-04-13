@@ -128,19 +128,19 @@ from src.predictors.pinn_aperture import PINNAperturePredictor
 
 ```bash
 # 运行所有测试
-python -m pytest tests/ -v
+python -m uv run pytest tests/ -v
 
 # 运行特定测试
-python -m pytest tests/test_config_loading.py -v
+python -m uv run pytest tests/test_config_loading.py -v
 
 # 运行属性测试
-python -m pytest tests/test_model_dimensions.py -v
+python -m uv run pytest tests/test_model_dimensions.py -v
 ```
 
 ### 编写测试
 
 ```python
-import pytest
+import uv run pytest
 from hypothesis import given, strategies as st
 from src.models.aperture_model import EnhancedApertureModel
 
@@ -202,7 +202,7 @@ Closes #123
 ### 1. 确保测试通过
 
 ```bash
-python -m pytest tests/ -v
+python -m uv run pytest tests/ -v
 ```
 
 ### 2. 更新文档
@@ -235,7 +235,7 @@ python -m pytest tests/ -v
 简要描述遇到的问题
 
 ## 复现步骤
-1. 运行命令 `python train_two_phase.py --config config/xxx.json`
+1. 运行命令 `uv run train_two_phase.py --config config/xxx.json`
 2. 等待训练开始
 3. 出现错误
 

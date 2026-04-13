@@ -1,6 +1,6 @@
 # 故障排除指南
 
-**最后更新**: 2026-02-04
+**最后更新**: 2026-04-12
 
 ## 常见问题
 
@@ -41,7 +41,7 @@ print(f"模型可用: {predictor.is_available}")
 - 运行 Stage 2 训练生成最新 PINN 模型：
 
 ```bash
-python train_two_phase.py --config config/device_calibrated_physics.json
+uv run train_two_phase.py --config config/device_calibrated_physics.json
 ```
 
 ### 3. CUDA 内存不足
@@ -57,7 +57,7 @@ RuntimeError: CUDA out of memory
 - 使用 CPU 训练 (不推荐用于完整 60,000 epochs)
 
 ```bash
-python train_two_phase.py --cpu
+uv run train_two_phase.py --cpu
 ```
 
 ### 4. 训练损失爆炸
@@ -83,7 +83,7 @@ python train_two_phase.py --cpu
 - 运行评估脚本查看动态响应：
 
 ```bash
-python evaluate.py
+uv run evaluate.py
 ```
 
 ## 调试工具
@@ -92,13 +92,13 @@ python evaluate.py
 
 ```bash
 # 使用评估脚本
-python evaluate.py
+uv run evaluate.py
 ```
 
 ### 运行测试
 
 ```bash
-python -m pytest tests/ -v
+python -m uv run pytest tests/ -v
 ```
 
 ## 日志和监控
@@ -149,5 +149,5 @@ for V in voltages:
 ## 获取帮助
 
 1. 查看文档: `docs/`
-2. 运行测试: `python -m pytest tests/ -v`
+2. 运行测试: `python -m uv run pytest tests/ -v`
 3. 检查示例: `docs/api/examples_and_best_practices.md`

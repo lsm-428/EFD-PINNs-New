@@ -1,6 +1,6 @@
 # 训练报告汇总
 
-**最后更新**: 2026-02-04
+**最后更新**: 2026-04-13
 
 ---
 
@@ -23,8 +23,8 @@
 
 TwoPhasePINN 使用 6 维输入 `(x, y, z, V_from, V_to, t_since)`。
 
-**当前训练配置** (2026-03-13): [config/v4.5-standard.json](../../config/v4.5-standard.json) (推荐配置)
-- **训练代数**: 60,000 epochs
+**当前训练配置**: [config/v4.5-standard.json](../../config/v4.5-standard.json) (推荐配置)
+- **训练轮次**: 60,000 epochs
 - **当前进度**: **已完成**
 - **批量大小**: 4,096
 - **学习率**: 3.0e-4

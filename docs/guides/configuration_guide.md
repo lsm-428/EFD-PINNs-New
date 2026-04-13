@@ -1,6 +1,6 @@
 # 配置系统与权重指南
 
-**最后更新**: 2026-03-06
+**最后更新**: 2026-04-13
 
 ---
 
@@ -35,8 +35,8 @@ config/
 | 配置文件 | 场景 | 说明 |
 |----------|------|------|
 | `v4.5-standard.json` | ⭐ 推荐 | 标准配置，已验证收敛，60,000 epochs |
-| `device_calibrated_physics.json` | 设备校准 | 核心物理参数配置 |
-| `v4.5_lbfgs_tuned.json` | LBFGS优化 | 备选配置，高权重设置 |
+| `device_calibrated_physics.json` | 物理参数 | 核心物理参数配置（SSOT） |
+| `v4.5_lbfgs_tuned.json` | LBFGS优化 | 备选配置，适用于L-BFGS微调 |
 
 ---
 
@@ -181,11 +181,11 @@ LBFGS优化器需要更高的物理约束权重，因为：
 
 ### 5.3 快速参考表
 
-| 场景 | 配置文件 | vof | continuity | volume |
-|------|----------|-----|------------|--------|
+| 场景 | 配置文件 | vof_weight | continuity_weight | volume_weight |
+|------|----------|------------|-------------------|---------------|
 | ⭐ 推荐训练 | v4.5-standard.json | 0.5 | 0.5 | 100.0 |
-| 设备校准 | device_calibrated_physics.json | 1.0 | 0.3 | 10.0 |
-| LBFGS优化 | v4.5_lbfgs_tuned.json | 10.0 | 2000.0 | - |
+| 物理参数 | device_calibrated_physics.json | 1.0 | 0.3 | 10.0 |
+| LBFGS优化 | v4.5_lbfgs_tuned.json | 10.0 | 2000.0 | 2000.0 |
 
 ---
 
@@ -233,7 +233,7 @@ print(f"输出目录: {OUTPUT_DIR}")
 
 3. **运行训练**：
    ```bash
-   python train_two_phase.py --config config/experiment_new_material.json
+   uv run train_two_phase.py --config config/experiment_new_material.json
    ```
 
    脚本会自动加载指定文件，并更新全局 `PHYSICS` 常量，确保模型使用的是新参数。
@@ -246,7 +246,7 @@ print(f"输出目录: {OUTPUT_DIR}")
 
 ```bash
 # 使用推荐配置训练
-python train_two_phase.py --config config/v4.5-standard.json
+uv run train_two_phase.py --config config/v4.5-standard.json
 ```
 
 ### 代码中加载配置
@@ -292,7 +292,7 @@ A: `pinn_two_phase.py` 中的 `DEFAULT_CONFIG_TEMPLATE` 仅用于参考结构，
 A: 这是为了确认配置已成功注入。如果不显示此日志，说明可能意外使用了硬编码回退（这种情况在新代码中已被杜绝）。
 
 **Q: 推荐使用哪个配置文件？**
-A: 建议使用 `config/device_calibrated_physics.json` 作为基础，它包含了经过设备校准的最佳物理参数。
+A: 建议使用 `config/v4.5-standard.json` 作为训练配置，它包含了经过验证的收敛配置。物理参数应从 `config/device_calibrated_physics.json` 获取。
 
 ### 10.2 权重配置问题
 

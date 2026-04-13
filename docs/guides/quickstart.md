@@ -1,6 +1,6 @@
 # EFD3D 快速开始指南
 
-**最后更新**: 2026-02-04
+**最后更新**: 2026-04-13
 **版本**: v4.5
 
 ## 🚀 快速上手
@@ -42,14 +42,11 @@ for V in [0, 10, 20, 30]:
 启动完整的 60,000 轮渐进式训练：
 
 ```bash
-# 使用默认配置训练
-python train_two_phase.py
-
-# 或指定 epochs
-python train_two_phase.py --epochs 60000
+# 使用推荐配置训练
+uv run train_two_phase.py --config config/v4.5-standard.json
 
 # 快速测试 (1000 轮)
-python train_two_phase.py --epochs 1000
+uv run train_two_phase.py --epochs 1000
 ```
 
 ### 4. 动态响应验证 (6D Triad)
@@ -58,13 +55,13 @@ python train_two_phase.py --epochs 1000
 
 ```bash
 # 运行评估脚本
-python evaluate.py
+uv run evaluate.py
 
 # 指定模型目录
-python evaluate.py outputs/train/pinn_latest
+uv run evaluate.py outputs/train/pinn_YYYYMMDD_HHMMSS/
 
 # 对比最近两个模型
-python evaluate.py --compare
+uv run evaluate.py --compare
 ```
 
 ### 5. 结果可视化
@@ -72,7 +69,7 @@ python evaluate.py --compare
 生成 6D 输入空间的物理场切片与响应曲线：
 
 ```bash
-python evaluate.py
+uv run evaluate.py
 ```
 
 ---
@@ -97,22 +94,22 @@ print(f"30V: θ={result['theta']:.1f}°, η={result['aperture_percent']:.1f}%")
 
 ```bash
 # 快速测试
-python train_two_phase.py --epochs 1000
+uv run train_two_phase.py --epochs 1000
 
 # 完整训练 (60,000 epochs)
-python train_two_phase.py --epochs 60000
+uv run train_two_phase.py --epochs 60000
 ```
 
 ### 步骤 3：物理验证
 
 ```bash
-python evaluate.py
+uv run evaluate.py
 ```
 
 ### 步骤 4：可视化结果
 
 ```bash
-python evaluate.py  # 自动生成可视化
+uv run evaluate.py  # 自动生成可视化
 ```
 
 ---
