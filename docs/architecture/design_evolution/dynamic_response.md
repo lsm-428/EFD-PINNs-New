@@ -135,28 +135,28 @@ def compute_total_loss(model, triad_data, epoch):
     triad_data: (x, y, z, V_from, V_to, t_since)
     """
     losses = {}
-    
+
     # 1. 基础物理损失 (NS + VOF + Continuity)
     # 在 Triad 空间中，dt 对应 d(t_since)
     losses["physics"] = compute_pde_residuals(model, triad_data)
-    
+
     # 2. 边界条件损失 (z=0)
     # 根据 (V_from, V_to, t_since) 确定目标接触角 theta_target
     losses["contact_angle"] = compute_bc_loss(model, triad_data)
-    
+
     # 3. 动态响应引导损失 (仅在降压区间 V_to < V_from 激活)
     if triad_data.is_step_down:
         # 强制符合 η(t_since) = η_start * exp(-t_since / 7.5ms)
         losses["eta_recovery"] = compute_recovery_guidance(
-            model, 
+            model,
             triad_data,
             tau_recovery=0.0075
         )
-    
+
     # 4. 表面张力损失 (CSF 模型)
     # 强化降压过程中的界面回流动力
     losses["surface_tension"] = compute_surface_tension_loss(model, triad_data)
-    
+
     return losses
 ```
 
@@ -199,17 +199,17 @@ def theta_constant_loss(model, triad_data, theta0=120.0):
     step_down_mask = triad_data.V_to < triad_data.V_from
     if not step_down_mask.any():
         return 0.0
-    
+
     # 获取底面 z=0 的梯度
     grad_phi = compute_phi_gradient(model, triad_data.z0_points)
-    
+
     # 接触角：cos(θ) = -∂φ/∂z / |∇φ|
     dphi_dz = grad_phi[:, 2]
     grad_mag = torch.norm(grad_phi, dim=1) + 1e-10
-    
+
     cos_theta_pred = -dphi_dz / grad_mag
     cos_theta_target = torch.cos(torch.tensor(theta0 * np.pi / 180))
-    
+
     # 只在界面附近 (phi 约为 0.5) 施加约束
     interface_mask = (phi > 0.1) & (phi < 0.9)
     return F.mse_loss(cos_theta_pred[interface_mask], cos_theta_target)
@@ -224,13 +224,13 @@ def eta_recovery_constraint_loss(model, triad_data, tau_recovery=0.0075):
     """
     # 获取起始电压 V_from 的稳态开口率
     eta_start = model.aperture_model.get_steady_eta(triad_data.V_from)
-    
+
     # 目标开口率按指数衰减
     eta_target = eta_start * torch.exp(-triad_data.t_since / tau_recovery)
-    
+
     # 模型在当前 triad 状态下的预测开口率
     eta_pred = model.predict_aperture_ratio(triad_data)
-    
+
     return F.mse_loss(eta_pred, eta_target)
 ```
 

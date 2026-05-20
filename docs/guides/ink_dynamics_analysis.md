@@ -16,7 +16,7 @@
 ```
 z方向结构 (从底到顶):
 ├── 疏水层表面 (z=0μm): 疏油，接触角120°→60°（电压控制）
-├── 围堰立壁 (z=0-3.5μm): 亲油，固定71°接触角  
+├── 围堰立壁 (z=0-3.5μm): 亲油，固定71°接触角
 ├── 空气/透明液体 (z=3.5-20μm): 工作空间
 └── 顶部表面 (z=20μm): 疏油，120°接触角
 
@@ -79,19 +79,19 @@ def critical_phase_sampling():
 # 边界感知采样
 def boundary_aware_sampling():
     """考虑边界特性的空间采样"""
-    
+
     # 1. 立壁附近加密 (亲油效应)
     wall_samples = sample_near_walls(density=2.0)
-    
+
     # 2. 角落区域加密 (角落聚集效应)
     corner_samples = sample_corners(density=1.5)
-    
+
     # 3. 中心区域正常采样
     center_samples = sample_center(density=1.0)
-    
+
     # 4. z方向界面加密
     interface_samples = sample_interface_region()
-    
+
     return combine_samples([wall_samples, corner_samples, center_samples])
 ```
 
@@ -105,7 +105,7 @@ def movement_scenario_sampling():
         'wall_climbing': 0.2,       # 沿壁爬升
         'mixed_mode': 0.1           # 混合模式
     }
-    
+
     # 根据物理合理性分配采样比例
     # 中心收缩最常见，分配更多数据
     return generate_scenario_data(scenarios)
@@ -132,7 +132,7 @@ boundary_conditions = {
         'voltage_controlled': True
     },
     'wall_surface': {
-        'type': '亲油立壁', 
+        'type': '亲油立壁',
         'contact_angle': '71°',
         'voltage_controlled': False
     },

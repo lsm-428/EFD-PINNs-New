@@ -7,7 +7,7 @@
 
 使用方法:
     from src.config.paths import CONFIG_PATH, PROJECT_ROOT
-    
+
     # 加载配置
     with open(CONFIG_PATH) as f:
         config = json.load(f)
@@ -59,21 +59,22 @@ else:
 # 辅助函数
 # ============================================================================
 
+
 def get_config_path(config_path: Optional[str] = None) -> Path:
     """
     获取配置文件路径
-    
+
     优先级:
     1. 显式传入的 config_path
     2. 环境变量 EFD_CONFIG_PATH
     3. 默认路径 config/device_calibrated_physics.json
-    
+
     Args:
         config_path: 可选的配置文件路径
-        
+
     Returns:
         配置文件的 Path 对象
-        
+
     Raises:
         FileNotFoundError: 配置文件不存在时
     """
@@ -84,34 +85,33 @@ def get_config_path(config_path: Optional[str] = None) -> Path:
             path = PROJECT_ROOT / path
     else:
         path = CONFIG_PATH
-    
+
     if not path.exists():
         raise FileNotFoundError(
-            f"配置文件未找到: {path}\n"
-            f"请确保文件存在，或设置环境变量 EFD_CONFIG_PATH"
+            f"配置文件未找到: {path}\n请确保文件存在，或设置环境变量 EFD_CONFIG_PATH"
         )
-    
+
     return path
 
 
 def get_output_dir(subdir: Optional[str] = None, create: bool = True) -> Path:
     """
     获取输出目录路径
-    
+
     Args:
         subdir: 可选的子目录名
         create: 是否自动创建目录
-        
+
     Returns:
         输出目录的 Path 对象
     """
     path = OUTPUT_DIR
     if subdir:
         path = path / subdir
-    
+
     if create and not path.exists():
         path.mkdir(parents=True, exist_ok=True)
-    
+
     return path
 
 
@@ -120,7 +120,7 @@ def get_output_dir(subdir: Optional[str] = None, create: bool = True) -> Path:
 # ============================================================================
 __all__ = [
     "PROJECT_ROOT",
-    "CONFIG_PATH", 
+    "CONFIG_PATH",
     "DEFAULT_CONFIG_PATH",
     "OUTPUT_DIR",
     "DEFAULT_OUTPUT_DIR",

@@ -30,10 +30,10 @@ def _compute_data_loss(self, data, physics_cfg, stage1_factor):
     idx = torch.randperm(len(data["interface_points"]))[:self.batch_size]
     interface_pts = data["interface_points"][idx]
     interface_tgt = data["interface_targets"][idx]
-    
+
     phi_pred = self.model(interface_pts)[:, 4]
     interface_loss = F.mse_loss(phi_pred, interface_tgt)
-    
+
     base_weight = physics_cfg.get("interface_weight", 500.0)
     return interface_loss * base_weight * stage1_factor, interface_loss
 ```
@@ -80,7 +80,7 @@ def compute_continuity_residual(self, u, v, w, coords):
     grad_u = self.compute_gradient(u, coords)
     grad_v = self.compute_gradient(v, coords)
     grad_w = self.compute_gradient(w, coords)
-    
+
     continuity = grad_u[:, 0] + grad_v[:, 1] + grad_w[:, 2]
     return continuity
 ```
@@ -98,10 +98,10 @@ def _compute_vof_residual(self, x_phys, predictions, model):
     """∂φ/∂t + u·∇φ = 0"""
     # 时间导数
     phi_t = g_phi[:, 5]
-    
+
     # 对流项
     vof_advection = phi_t + u * phi_x + v * phi_y + w * phi_z
-    
+
     return vof_advection
 ```
 
@@ -119,13 +119,13 @@ def compute_navier_stokes_residual(self, x_phys, predictions, model):
     # 混合密度/粘度
     rho = phi * rho_oil + (1 - phi) * rho_polar
     mu = phi * mu_oil + (1 - phi) * mu_polar
-    
+
     # 对流项
     u_conv = u * u_x + v * u_y + w * u_z
-    
+
     # 粘性项
     u_laplacian = u_xx + u_yy + u_zz
-    
+
     # NS 残差
     ns_u = rho * (u_t + u_conv) + p_x - mu * u_laplacian
 ```
@@ -144,7 +144,7 @@ def compute_surface_tension_residual(self, phi, coords):
     # 曲率 κ = -∇·(∇φ/|∇φ|)
     grad_phi_mag = torch.sqrt(phi_x**2 + phi_y**2 + phi_z**2 + 1e-10)
     kappa = -laplacian_phi / grad_phi_mag
-    
+
     return kappa
 ```
 
@@ -177,19 +177,19 @@ def get_physics_weights(self, epoch):
     if epoch < self.stage1_epochs:
         # Stage 1: 纯数据学习
         return {"continuity": 0.0, "vof": 0.0, "ns": 0.0, "surface_tension": 0.0}
-    
+
     elif epoch < self.stage2_epochs:
         # Stage 2: 渐进引入物理 (10% 权重)
         progress = (epoch - self.stage1_epochs) / (self.stage2_epochs - self.stage1_epochs)
         smooth_factor = 0.5 * (1 + np.tanh(4 * (progress - 0.5)))
-        
+
         return {
             "continuity": 0.1 * smooth_factor * 0.1,
             "vof": 0.1 * smooth_factor * 0.1,
             "ns": 0.01 * smooth_factor * 0.05,
             "surface_tension": 0.0
         }
-    
+
     else:
         # Stage 3: 完整物理约束
         return {

@@ -14,7 +14,7 @@
 def __init__(self, config: Dict[str, Any] = None):
     """
     初始化训练器。
-    
+
     参数:
     - config: 包含网络架构、物理常数、权重调度的配置字典
     """
@@ -57,7 +57,7 @@ def get_physics_weights(self, epoch: int) -> Dict[str, float]:
 def generate_training_data(self, n_points: int) -> Dict[str, torch.Tensor]:
     """
     生成一批训练数据。
-    
+
     返回字典:
     - 'interface': 界面附近的高密度采样点
     - 'domain': 全域随机采样点

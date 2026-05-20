@@ -27,7 +27,7 @@
 def _sample_point_by_eta(self, eta: float) -> tuple:
     """
     根据开口率采样空间点
-    
+
     策略：
     - eta < 0.5 (中心开口): 在界面附近采样，中心透明
     - eta >= 0.5 (角落开口): 在四角附近采样
@@ -83,10 +83,10 @@ h_ink ────────────────────────  
 def sample_continuous_times(n_samples):
     """
     连续时间采样 (Beta 分布)
-    
+
     使用 Beta(0.5, 1.0) 分布，自然地在早期 (t=0) 附近采样更多点，
     同时平滑覆盖整个时间域。
-    
+
     概率密度函数：p(t) ∝ t^(-0.5)
     """
     t_samples = np.random.beta(0.5, 1.0, n_samples) * t_max
@@ -213,10 +213,10 @@ for V in V_ic:
     x = np.random.rand() * self.Lx
     y = np.random.rand() * self.Ly
     z = np.random.rand() * self.Lz
-    
+
     # tanh 界面
     phi = 0.5 * (1 - np.tanh((z - self.h_ink) / interface_width))
-    
+
     # 三元组格式: (x, y, z, V_from, V_to, t_since=0)
     ic_points.append([x, y, z, V, V, 0.0])
 ```
@@ -243,7 +243,7 @@ n_bc = data_cfg.get("n_boundary", 10000)
 for V_from, V_to, t in scenarios:
     # 随机选择一个壁面
     boundary_type = np.random.randint(0, 4)  # 0:x0, 1:xL, 2:y0, 3:yL
-    
+
     if boundary_type == 0:   # x=0
         x, y = 0, np.random.rand() * self.Ly
     elif boundary_type == 1: # x=Lx
@@ -252,7 +252,7 @@ for V_from, V_to, t in scenarios:
         x, y = np.random.rand() * self.Lx, 0
     else:                    # y=Ly
         x, y = np.random.rand() * self.Lx, self.Ly
-    
+
     z = np.random.rand() * self.Lz
 ```
 
@@ -298,7 +298,7 @@ DEFAULT_DATA_CONFIG = {
 class EndToEndDataGenerator:
     """
     端到端训练数据生成器
-    
+
     与标准 DataGenerator 的区别：
     - 不依赖 Stage 1 解析模型
     - 直接使用 TwoPhasePINN 的预测作为软约束
@@ -314,7 +314,7 @@ LSTM-PINN 使用 `SequenceDataGenerator`：
 class SequenceDataGenerator:
     """
     LSTM-PINN 序列数据生成器
-    
+
     特点：
     - 生成电压序列输入 (seq_len, 3) 三元组
     - 每步包含 (V_from, V_to, t_since)

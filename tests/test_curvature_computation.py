@@ -44,10 +44,10 @@ def _compute_curvature_logic(phi_grads):
     grad_mag = torch.sqrt(grad_mag_sq)
 
     numerator = (
-        phi_xx * (phi_y**2 + phi_z**2) +
-        phi_yy * (phi_x**2 + phi_z**2) +
-        phi_zz * (phi_x**2 + phi_y**2) -
-        2 * (phi_x * phi_y * phi_xy + phi_x * phi_z * phi_xz + phi_y * phi_z * phi_yz)
+        phi_xx * (phi_y**2 + phi_z**2)
+        + phi_yy * (phi_x**2 + phi_z**2)
+        + phi_zz * (phi_x**2 + phi_y**2)
+        - 2 * (phi_x * phi_y * phi_xy + phi_x * phi_z * phi_xz + phi_y * phi_z * phi_yz)
     )
     kappa = -numerator / (grad_mag_sq * grad_mag + 1e-10)
     return kappa
@@ -56,11 +56,14 @@ def _compute_curvature_logic(phi_grads):
 class TestCurvatureComputation:
     """曲率计算测试套件"""
 
-    @pytest.mark.parametrize("R,epsilon,rtol", [
-        (0.5, 0.05, 0.15),   # 标准球面
-        (1.0, 0.05, 0.15),   # 大半径
-        (0.25, 0.03, 0.20),  # 小半径
-    ])
+    @pytest.mark.parametrize(
+        "R,epsilon,rtol",
+        [
+            (0.5, 0.05, 0.15),  # 标准球面
+            (1.0, 0.05, 0.15),  # 大半径
+            (0.25, 0.03, 0.20),  # 小半径
+        ],
+    )
     def test_sphere_curvature(self, R, epsilon, rtol):
         """
         测试球面曲率计算
@@ -78,7 +81,7 @@ class TestCurvatureComputation:
 
         # VOF 场：phi(r) = 0.5 * (1 - tanh((r - R) / epsilon))
         # phi=1 inside (r < R), phi=0 outside (r > R)
-        r = torch.sqrt(x[:, 0]**2 + x[:, 1]**2 + x[:, 2]**2)
+        r = torch.sqrt(x[:, 0] ** 2 + x[:, 1] ** 2 + x[:, 2] ** 2)
         phi = 0.5 * (1 - torch.tanh((r - R) / epsilon))
 
         # 一阶导数
@@ -94,9 +97,15 @@ class TestCurvatureComputation:
         phi_yz = torch.autograd.grad(phi_y.sum(), x, create_graph=True)[0][:, 2]
 
         phi_grads = {
-            "phi_x": phi_x, "phi_y": phi_y, "phi_z": phi_z,
-            "phi_xx": phi_xx, "phi_yy": phi_yy, "phi_zz": phi_zz,
-            "phi_xy": phi_xy, "phi_xz": phi_xz, "phi_yz": phi_yz
+            "phi_x": phi_x,
+            "phi_y": phi_y,
+            "phi_z": phi_z,
+            "phi_xx": phi_xx,
+            "phi_yy": phi_yy,
+            "phi_zz": phi_zz,
+            "phi_xy": phi_xy,
+            "phi_xz": phi_xz,
+            "phi_yz": phi_yz,
         }
 
         kappa = _compute_curvature_logic(phi_grads)
@@ -121,7 +130,7 @@ class TestCurvatureComputation:
         epsilon = 0.05
 
         x = torch.tensor([[R, 0.0, 0.0]], requires_grad=True)
-        r = torch.sqrt(x[:, 0]**2 + x[:, 1]**2 + x[:, 2]**2)
+        r = torch.sqrt(x[:, 0] ** 2 + x[:, 1] ** 2 + x[:, 2] ** 2)
         phi = 0.5 * (1 - torch.tanh((r - R) / epsilon))
 
         grad_phi = torch.autograd.grad(phi.sum(), x, create_graph=True)[0]
@@ -135,17 +144,23 @@ class TestCurvatureComputation:
         phi_yz = torch.autograd.grad(phi_y.sum(), x, create_graph=True)[0][:, 2]
 
         phi_grads = {
-            "phi_x": phi_x, "phi_y": phi_y, "phi_z": phi_z,
-            "phi_xx": phi_xx, "phi_yy": phi_yy, "phi_zz": phi_zz,
-            "phi_xy": phi_xy, "phi_xz": phi_xz, "phi_yz": phi_yz
+            "phi_x": phi_x,
+            "phi_y": phi_y,
+            "phi_z": phi_z,
+            "phi_xx": phi_xx,
+            "phi_yy": phi_yy,
+            "phi_zz": phi_zz,
+            "phi_xy": phi_xy,
+            "phi_xz": phi_xz,
+            "phi_yz": phi_yz,
         }
 
         kappa = _compute_curvature_logic(phi_grads)
 
         # 曲率大小应在合理范围内（不能为零或无穷大）
-        assert 0.1 < abs(kappa.item()) < 100.0, (
-            f"Curvature magnitude {abs(kappa.item()):.4f} is not physically reasonable"
-        )
+        assert (
+            0.1 < abs(kappa.item()) < 100.0
+        ), f"Curvature magnitude {abs(kappa.item()):.4f} is not physically reasonable"
 
 
 # 保留独立运行功能（用于手动测试）

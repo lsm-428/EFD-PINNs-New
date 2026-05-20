@@ -130,7 +130,7 @@ python scripts/verify_config_weights.py
 
 **几何约束 (v4.5已优化)**：
 - **LV** (界面损失): < 0.01 ✅
-- **Vol** (体积守恒): < 0.2 ✅  
+- **Vol** (体积守恒): < 0.2 ✅
 - **θ** (接触角): < 0.5 ✅
 - **IF** (界面): < 2.5 ✅
 
@@ -201,7 +201,7 @@ cp config/v4.6-momentum-optimized.json config/v4.7-custom.json
 # 终端1: 基准测试
 gpu=0 uv run train_two_phase.py --config config/v4.5-standard.json
 
-# 终端2: 优化测试  
+# 终端2: 优化测试
 gpu=1 uv run train_two_phase.py --config config/v4.6-momentum-optimized.json
 
 # 终端3: 监控对比

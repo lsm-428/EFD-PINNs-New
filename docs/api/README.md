@@ -148,4 +148,3 @@ uv run scripts/dashboard.py
 - **训练报告**: [../research/TRAINING_REPORTS.md](../research/TRAINING_REPORTS.md)
 - **知识库导航**: [../../CLAUDE.md](../../CLAUDE.md)
 - **CHANGELOG**: [../CHANGELOG.md](../CHANGELOG.md)
-

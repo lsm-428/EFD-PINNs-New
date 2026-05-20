@@ -38,22 +38,22 @@ class TwoPhasePINN(nn.Module):
 ```python
 def forward(self, x):
     # x: (batch, 6) → [x, y, z, V_from, V_to, t_since]
-    
+
     # 1. 归一化
     x_norm = x / Lx, y_norm = y / Ly, z_norm = z / Lz
     V_from_norm = V_from / 30, V_to_norm = V_to / 30
     t_norm = t_since / t_max
-    
+
     # 详细参数说明请参见[物理理论与器件规格指南](../guides/physics_and_device_guide.md#physics-parameters)。
-    
+
     # 2. Phi 预测
     phi_input = [x_norm, y_norm, z_norm, V_from_norm, V_to_norm, t_norm]
     phi = sigmoid(phi_net(phi_input))  # 约束在 [0, 1]
-    
+
     # 3. 速度/压力预测（phi 作为输入）
     vel_input = [phi_input, phi]
     u, v, w, p = vel_net(vel_input)
-    
+
     return (u, v, w, p, phi)
 ```
 
@@ -69,22 +69,22 @@ class PhysicsLoss:
         # 混合流体属性
         rho = phi * rho_oil + (1-phi) * rho_polar
         mu = phi * mu_oil + (1-phi) * mu_polar
-        
+
         # 对流项
         u_conv = u*u_x + v*u_y + w*u_z
-        
+
         # 粘性项
         u_visc = mu * (u_xx + u_yy + u_zz) + ...
-        
+
         # 表面张力 (CSF)
         kappa = compute_curvature(grads)
         F_st = sigma * kappa * grad_phi
-        
+
         # 电润湿力 (CSF) - 关键！
         V_eff = max(0, V - V_threshold)
         sigma_ew = epsilon_0 * epsilon_r * V_eff**2 / (2*d)
         F_ew = -sigma_ew * grad_phi
-        
+
         # N-S 残差
         ns = rho*(u_t + u_conv) + p_x - u_visc - F_st - F_ew
         return mean(ns**2)
@@ -150,18 +150,18 @@ class Trainer:
     stage1_epochs = 1500    # 纯数据学习
     stage2_epochs = 4000  # 连续性 + VOF
     stage3_epochs = 60000  # 完整物理
-    
+
     # 优化器
     optimizer = Adam(lr=0.0003)
     scheduler = CosineAnnealingLR(T_max=epochs)
-    
+
     # 学习率预热
     warmup_epochs = 500
     warmup_start_lr = lr * 0.01
-    
+
     # 梯度裁剪
     gradient_clip = 1.0
-    
+
     # 批次大小
     batch_size = 4096
 ```
@@ -177,27 +177,27 @@ PHYSICS = {
     "Ly": 174e-6,        # 像素高度 (m)
     "Lz": 20e-6,         # 总高度 (m)
     "h_ink": 3e-6,       # 油墨层厚度 (m)
-    
+
     # 流体参数
     "rho_oil": 800.0,     # 油墨密度 (kg/m³)
     "rho_polar": 1000.0, # 极性液体密度 (kg/m³)
     "mu_oil": 0.003,     # 油墨粘度 (Pa·s)
     "mu_polar": 0.001,   # 极性液体粘度 (Pa·s)
     "gamma": 0.015,       # 表面张力 (N/m)
-    
+
     # 电润湿参数
     "theta0": 120.0,      # 初始接触角 (°)
     "theta_wall": 71.0,   # 像素墙接触角 (°)
-    "epsilon_r": 12.0,    # 有效介电常数
+    "epsilon_r": 12.0,    # 四层串联等效: SU-8+Teflon AF+Oil+Polar liquid
     "d_dielectric": 4e-7, # 介电层厚度 (m)
     "V_threshold": 3.0,   # 阈值电压 (V)
-    
+
     # 动态参数
     "tau": 0.005,        # 响应时间常数 (s)
     "tau_recovery": 0.0075, # 恢复时间常数 (s)
     "zeta": 0.8,         # 阻尼比
     "t_max": 0.05,       # 最大时间 (s)
-    
+
     # 训练约束
     "eta_max": 0.85,     # 最大开口率
 }

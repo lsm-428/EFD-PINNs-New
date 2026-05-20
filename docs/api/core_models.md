@@ -44,7 +44,7 @@ def forward(self, x: torch.Tensor) -> torch.Tensor:
     """
     Args:
         x: (batch_size, 6) - [x, y, z, V_from, V_to, t_since]
-    
+
     Returns:
         (batch_size, 5) - [u, v, w, p, phi]
     """
@@ -56,11 +56,11 @@ def forward_triplet(
 ) -> torch.Tensor:
     """
     三元组格式的前向传播（与 LSTM-Hybrid-PINN 接口一致）
-    
+
     Args:
         spatial_coords: (batch, 3) - (x, y, z)
         voltage_triplet: (batch, 3) - (V_from, V_to, t_since)
-    
+
     Returns:
         (batch, 5) - [u, v, w, p, phi]
     """
@@ -138,13 +138,13 @@ def predict_phi(
 ### 主要方法
 ```python
 def predict_enhanced(
-    self, 
-    voltage: float, 
+    self,
+    voltage: float,
     time: float = None
 ) -> Dict:
     """
     增强预测，包含电容器充电效应和体积守恒计算。
-    
+
     Returns:
         包含以下键的字典:
         - effective_voltage: 有效电压 (考虑 RC 充电)
@@ -203,7 +203,7 @@ def predict(
         voltage: 电压 (V)
         time: 跳变后经过的时间 (s)
         n_points: 采样点数
-    
+
     Returns:
         开口率 (0.0 - 1.0)
     """
@@ -223,7 +223,7 @@ def predict_full_field(
         voltage: 电压 (V)
         time: 跳变后经过的时间 (s)
         n_points: 空间采样点数 (nx, ny, nz)
-    
+
     Returns:
         字典包含:
         - 'u', 'v', 'w': 速度分量 (m/s)
@@ -249,7 +249,7 @@ def compute_aperture_contour(
         time: 跳变后经过的时间 (s)
         n_points: 采样点数
         method: 轮廓计算方法 ("contour" 或 "threshold")
-    
+
     Returns:
         - aperture: 开口率
         - contour_x, contour_y: 接触线坐标

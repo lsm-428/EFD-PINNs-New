@@ -42,7 +42,7 @@ def setup_logging(
     log_file: Optional[str] = None,
     enable_console: bool = True,
     verbose: bool = False,
-    format_type: str = "default"
+    format_type: str = "default",
 ) -> None:
     """
     配置统一的日志系统
@@ -85,7 +85,7 @@ def setup_logging(
         log_path = Path(log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
-        file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
+        file_handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
         file_handler.setLevel(logging.DEBUG)  # 文件记录所有级别
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
@@ -121,6 +121,7 @@ def log_level_from_env(env_var: str = "EFD_LOG_LEVEL", default: str = "INFO") ->
         日志级别字符串
     """
     import os
+
     return os.getenv(env_var, default)
 
 
@@ -162,6 +163,7 @@ class LoggerMixin:
 # 便捷函数
 # ============================================================================
 
+
 def set_log_level(level: str) -> None:
     """
     设置所有 logger 的日志级别
@@ -176,7 +178,7 @@ def disable_third_party_logging() -> None:
     """
     禁用第三方库的详细日志
     """
-    for name in ['matplotlib', 'PIL', 'numba']:
+    for name in ["matplotlib", "PIL", "numba"]:
         logging.getLogger(name).setLevel(logging.WARNING)
 
 

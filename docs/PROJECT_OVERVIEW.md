@@ -91,7 +91,7 @@ PHYSICS = {
 
     # 电学参数
     "epsilon_0": 8.854e-12, # 真空介电常数 (F/m)
-    "epsilon_r": 12.0,      # 介电层相对介电常数
+    "epsilon_r": 12.0,      # 四层串联等效: SU-8+Teflon AF+Oil+Polar liquid
     "epsilon_h": 1.9,       # 疏水层相对介电常数
     "d_dielectric": 4e-7,   # 介电层厚度 (m)
     "d_hydrophobic": 4e-7,  # 疏水层厚度 (m)

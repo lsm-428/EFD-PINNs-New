@@ -33,16 +33,16 @@
 
 ```python
 def compute_core_residuals(
-    self, 
-    x: torch.Tensor, 
-    predictions: torch.Tensor, 
+    self,
+    x: torch.Tensor,
+    predictions: torch.Tensor,
     model: nn.Module = None
 ) -> Dict[str, torch.Tensor]:
     """
     参数:
     - x: (N, 6) 输入坐标 (x,y,z, V_from, V_to, t_since)
     - predictions: (N, 5) 模型输出 (u,v,w,p,phi)
-    
+
     返回字典包含:
     - 'continuity': ∇·u
     - 'momentum_u/v/w': N-S 残差 (含 F_ew)
@@ -131,19 +131,19 @@ $$
 #### `compute_total_loss`
 ```python
 def compute_total_loss(
-    self, 
-    model: nn.Module, 
-    x_phys: torch.Tensor, 
+    self,
+    model: nn.Module,
+    x_phys: torch.Tensor,
     weights: Dict[str, float]
 ) -> Tuple[torch.Tensor, Dict]:
     """
     计算总物理损失。
-    
+
     Args:
         model: PINN 模型
         x_phys: (N, 6) 训练点坐标
         weights: 损失权重字典
-    
+
     Returns:
         - total_loss: 加权求和后的标量损失
         - details: 各分项损失详情

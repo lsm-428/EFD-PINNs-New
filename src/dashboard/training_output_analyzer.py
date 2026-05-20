@@ -5,10 +5,9 @@
 扫描和分析训练输出目录，提取训练运行信息。
 """
 
-import os
 from pathlib import Path
 from typing import List, Optional, Dict, Any
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime
 import json
 import pandas as pd
@@ -741,7 +740,7 @@ class ModelLoader:
         # 2. 加载配置并构建模型
         config = ModelLoader._load_config(run_dir, config_path)
         if config is None:
-            warnings.warn(f"无法加载配置文件，使用默认配置")
+            warnings.warn("无法加载配置文件，使用默认配置")
             config = {}
 
         model_config = ModelLoader._build_model_config(config)
@@ -1415,7 +1414,6 @@ class TrainingOutputAnalyzer:
             run: 选中的训练运行信息
         """
         import streamlit as st
-        import plotly.graph_objects as go
 
         st.markdown("### 📊 评估指标")
 
@@ -1494,7 +1492,9 @@ class TrainingOutputAnalyzer:
                     <div style="font-size: 12px; opacity: 0.8; margin-bottom: 8px;">📁 训练运行</div>
                     <div style="font-size: 18px; font-weight: bold;">{}</div>
                 </div>
-                """.format(run.name),
+                """.format(
+                    run.name
+                ),
                 unsafe_allow_html=True,
             )
 
@@ -1513,7 +1513,9 @@ class TrainingOutputAnalyzer:
                     <div style="font-size: 12px; opacity: 0.8; margin-bottom: 8px;">🕐 创建时间</div>
                     <div style="font-size: 18px; font-weight: bold;">{}</div>
                 </div>
-                """.format(time_str),
+                """.format(
+                    time_str
+                ),
                 unsafe_allow_html=True,
             )
 
@@ -1532,7 +1534,9 @@ class TrainingOutputAnalyzer:
                     <div style="font-size: 24px; font-weight: bold;">{}</div>
                     <div style="font-size: 12px; opacity: 0.8;">个检查点</div>
                 </div>
-                """.format(len(run.model_files)),
+                """.format(
+                    len(run.model_files)
+                ),
                 unsafe_allow_html=True,
             )
 
@@ -2317,7 +2321,7 @@ class TrainingOutputAnalyzer:
                 st.error(f"❌ 模型加载失败: {e}")
                 return
 
-        st.success(f"✅ 模型加载成功")
+        st.success("✅ 模型加载成功")
 
         try:
             with st.spinner("正在计算轨迹..."):
@@ -2460,7 +2464,6 @@ class TrainingOutputAnalyzer:
     ):
         """渲染切片可视化子标签页 (Task 7)"""
         import streamlit as st
-        import numpy as np
 
         st.markdown("#### 🔲 3D切片可视化")
         st.markdown("选择切片平面和位置，可视化二维截面上的物理量分布。")
@@ -2576,7 +2579,6 @@ class TrainingOutputAnalyzer:
         import streamlit as st
         import plotly.graph_objects as go
         from plotly.subplots import make_subplots
-        import numpy as np
 
         st.markdown("#### 📊 切片可视化结果")
 
@@ -2587,7 +2589,7 @@ class TrainingOutputAnalyzer:
                 st.error(f"❌ 模型加载失败: {e}")
                 return
 
-        st.success(f"✅ 模型加载成功")
+        st.success("✅ 模型加载成功")
 
         try:
             with st.spinner("正在计算切片..."):

@@ -16,7 +16,7 @@ Usage:
 
 import os
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -370,7 +370,7 @@ class HTMLReport:
 
         summary_html = f"""
         <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 20px 0;">
-            <div style="background: linear-gradient(135deg, #667eea20, #764ba220); 
+            <div style="background: linear-gradient(135deg, #667eea20, #764ba220);
                         padding: 20px; border-radius: 8px; text-align: center;">
                 <div style="font-size: 1.8em; font-weight: bold; color: #667eea;">
                     {len(epochs):,}
@@ -379,7 +379,7 @@ class HTMLReport:
                     Total Epochs
                 </div>
             </div>
-            <div style="background: linear-gradient(135deg, #667eea20, #764ba220); 
+            <div style="background: linear-gradient(135deg, #667eea20, #764ba220);
                         padding: 20px; border-radius: 8px; text-align: center;">
                 <div style="font-size: 1.8em; font-weight: bold; color: #667eea;">
                     {best_epoch:,}
@@ -388,7 +388,7 @@ class HTMLReport:
                     Best Epoch
                 </div>
             </div>
-            <div style="background: linear-gradient(135deg, #667eea20, #764ba220); 
+            <div style="background: linear-gradient(135deg, #667eea20, #764ba220);
                         padding: 20px; border-radius: 8px; text-align: center;">
                 <div style="font-size: 1.8em; font-weight: bold; color: #667eea;">
                     {final_loss:.2f}
@@ -397,7 +397,7 @@ class HTMLReport:
                     Final Loss
                 </div>
             </div>
-            <div style="background: linear-gradient(135deg, #667eea20, #764ba220); 
+            <div style="background: linear-gradient(135deg, #667eea20, #764ba220);
                         padding: 20px; border-radius: 8px; text-align: center;">
                 <div style="font-size: 1.8em; font-weight: bold; color: #667eea;">
                     {best_loss:.2f}
@@ -501,14 +501,14 @@ class HTMLReport:
             margin: 0;
             padding: 0;
         }}
-        
+
         body {{
             font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
             background: #f5f5f5;
             padding: 20px;
             color: #333;
         }}
-        
+
         .container {{
             max-width: 1200px;
             margin: 0 auto;
@@ -517,14 +517,14 @@ class HTMLReport:
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }}
-        
+
         h1 {{
             color: #333;
             border-bottom: 2px solid #667eea;
             padding-bottom: 10px;
             margin-bottom: 10px;
         }}
-        
+
         h2 {{
             color: #444;
             border-bottom: 1px solid #eee;
@@ -532,19 +532,19 @@ class HTMLReport:
             margin: 30px 0 20px 0;
             font-size: 1.5em;
         }}
-        
+
         h3 {{
             color: #555;
             margin: 20px 0 10px 0;
             font-size: 1.2em;
         }}
-        
+
         .subtitle {{
             color: #777;
             font-size: 0.95em;
             margin-bottom: 20px;
         }}
-        
+
         /* Chart styling */
         .chart-section {{
             margin: 30px 0;
@@ -553,24 +553,24 @@ class HTMLReport:
             border-radius: 8px;
             border: 1px solid #eee;
         }}
-        
+
         .chart-container {{
             width: 100%;
             min-height: 400px;
         }}
-        
+
         .chart-container .plotly {{
             width: 100% !important;
             height: 100% !important;
         }}
-        
+
         /* Responsive chart sizing */
         @media (min-width: 768px) {{
             .chart-container {{
                 min-height: 500px;
             }}
         }}
-        
+
         /* Section styling */
         .section {{
             margin: 25px 0;
@@ -579,35 +579,35 @@ class HTMLReport:
             border-radius: 8px;
             border: 1px solid #eee;
         }}
-        
+
         .section-content {{
             padding: 15px 0;
         }}
-        
+
         /* Collapsible sections */
         details.section {{
             cursor: pointer;
         }}
-        
+
         details.section[open] {{
             background: #f0f0f0;
         }}
-        
+
         summary {{
             cursor: pointer;
             padding: 10px 0;
             font-weight: 600;
         }}
-        
+
         summary::before {{
             content: '▼ ';
             font-size: 0.8em;
         }}
-        
+
         details.section[open] summary::before {{
             content: '▲ ';
         }}
-        
+
         /* Metrics table */
         .metrics-table {{
             width: 100%;
@@ -615,31 +615,31 @@ class HTMLReport:
             margin: 20px 0;
             font-size: 0.95em;
         }}
-        
+
         .metrics-table thead {{
             background: #667eea;
             color: white;
         }}
-        
+
         .metrics-table th {{
             padding: 12px;
             text-align: left;
             font-weight: 600;
         }}
-        
+
         .metrics-table td {{
             padding: 10px;
             border-bottom: 1px solid #ddd;
         }}
-        
+
         .metrics-table tr:hover {{
             background: #f5f5f5;
         }}
-        
+
         .metrics-table tbody tr:last-child td {{
             border-bottom: none;
         }}
-        
+
         /* Footer */
         .footer {{
             margin-top: 40px;
@@ -649,7 +649,7 @@ class HTMLReport:
             font-size: 0.85em;
             text-align: center;
         }}
-        
+
         /* Blink animation for loading */
         @keyframes blink {{
             0%, 100% {{ opacity: 1; }}
@@ -661,13 +661,13 @@ class HTMLReport:
     <div class="container">
         <h1>{self.title}</h1>
         {f'<p class="subtitle">{self.subtitle}</p>' if self.subtitle else ""}
-        
+
         {metrics_html}
-        
+
         {sections_html}
-        
+
         {chart_html}
-        
+
         <div class="footer">
             <p>Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
         </div>

@@ -2,9 +2,7 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
-import os
 import time
-import pandas as pd
 from pathlib import Path
 
 # Add project root to path
@@ -370,8 +368,8 @@ with tabs[2]:
         if wf_type == "Step Function":
             step_v = st.number_input("Step Amplitude (V)", -v_limit, v_limit, 30.0)
             delay = st.number_input("Delay (ms)", 0.0, duration, 0.1)
-            func = (
-                lambda t: (0.0, step_v, t - delay / 1000.0)
+            func = lambda t: (
+                (0.0, step_v, t - delay / 1000.0)
                 if t > delay / 1000.0
                 else (0.0, 0.0, 0.0)
             )

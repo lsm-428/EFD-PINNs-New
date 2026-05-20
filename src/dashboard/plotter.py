@@ -10,8 +10,6 @@ import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
 import plotly.graph_objects as go
-import tempfile
-import os
 from typing import Optional, Dict
 
 try:
@@ -259,7 +257,7 @@ class FlowFieldPlotter:
 
         im = ax.contourf(X, Y, log_val, levels=20, cmap="magma")
         cbar = plt.colorbar(im, ax=ax)
-        cbar.set_label(f"Log10 |Residual|")
+        cbar.set_label("Log10 |Residual|")
 
         ax.set_xlabel(f"{labels[0]} (μm)")
         ax.set_ylabel(f"{labels[1]} (μm)")

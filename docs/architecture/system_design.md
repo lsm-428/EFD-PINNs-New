@@ -21,7 +21,7 @@ graph TD
     Theta --> S2[Stage 2: 两相流 6D PINN]
     S2 --> Phi[三维相场分布 φ(x,y,z,t)]
     Phi --> Eta[开口率 η(t)]
-    
+
     subgraph "Physics Engine (含电润湿力)"
         S2 -- 物理损失 -- NS[Navier-Stokes + 电润湿力]
         S2 -- 界面损失 -- VOF[VOF 界面追踪]

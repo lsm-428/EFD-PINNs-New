@@ -1,7 +1,7 @@
 # EFD3D Scripts Guide
 
-**最后更新**: 2026-04-13  
-**版本**: v4.5  
+**最后更新**: 2026-04-13
+**版本**: v4.5
 **脚本总数**: 2 个
 
 ---
@@ -75,7 +75,7 @@ The Dashboard provides access to:
 
 **Purpose**: Interactive web-based visualization and analysis interface
 
-**File**: `scripts/dashboard.py`  
+**File**: `scripts/dashboard.py`
 **Type**: Main entry point (Streamlit app)
 
 #### Features

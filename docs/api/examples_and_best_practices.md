@@ -50,7 +50,7 @@ if predictor.is_available:
     # 返回字典包含: u, v, w (速度), p (压力), phi (相场), X, Y, Z (网格)
     fields = predictor.predict_full_field(voltage=30, time=0.015, n_points=(50, 50, 20))
     print(f"中心点相场值: {fields['phi'][25, 25, 10]:.4f}")
-    
+
     # 3. 获取接触线轮廓
     contour_info = predictor.compute_aperture_contour(voltage=30, time=0.015)
     print(f"接触线等效半径: {contour_info['contour_r']*1e6:.2f} μm")
@@ -72,7 +72,7 @@ from src.models.lstm_pinn.model import LSTMPINNModel
 
 # 1. 准备输入数据
 # 空间坐标 (batch=100, 3)
-spatial_coords = torch.rand(100, 3) 
+spatial_coords = torch.rand(100, 3)
 
 # 电压序列 (batch=100, seq_len=10, 1)
 # 模拟 0V -> 10V -> 20V -> 30V 的阶梯升压

@@ -190,4 +190,3 @@ z 方向：
 如果你希望做逐行对比（GitHub 版本 vs 覆盖前版本）：
 - 需要你提供覆盖前的 `src/models/pinn_two_phase.py` 备份（例如 IDE Local History、手动备份文件、或你当时保存的 patch）
 - 仅凭当前仓库无法还原“覆盖前”实现细节
-

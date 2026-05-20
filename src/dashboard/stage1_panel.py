@@ -8,7 +8,7 @@ Stage 1 分析模型演示面板组件
 import streamlit as st
 import numpy as np
 import pandas as pd
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Tuple
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -342,10 +342,12 @@ def render_stage1_tab():
     展示 Young-Lippmann 方程、接触角预测、开口率预测等功能。
     """
     st.subheader("📐 Stage 1 Analytical Model")
-    st.markdown("""
+    st.markdown(
+        """
     Stage 1 模型基于 **Young-Lippmann 方程** 预测接触角和开口率。
     通过电润湿效应，电压改变界面张力，从而改变接触角。
-    """)
+    """
+    )
 
     # 获取模型
     model = get_stage1_model()
@@ -511,7 +513,8 @@ def render_young_lippmann_theory():
     """渲染 Young-Lippmann 理论说明"""
     st.markdown("### Young-Lippmann 方程")
 
-    st.markdown("""
+    st.markdown(
+        """
     #### 电润湿原理
 
     电润湿 (Electrowetting) 是一种通过施加电压改变固体表面润湿性的现象。
@@ -520,14 +523,16 @@ def render_young_lippmann_theory():
     #### Young-Lippmann 方程
 
     电润湿效应由 Young-Lippmann 方程描述：
-    """)
+    """
+    )
 
     # 使用 LaTeX 渲染方程
     st.latex(
         r"\cos\theta(V) = \cos\theta_0 + \frac{\varepsilon_r \varepsilon_0}{2\gamma d} V^2"
     )
 
-    st.markdown("""
+    st.markdown(
+        """
     其中：
     - $\\theta(V)$: 电压 $V$ 下的接触角
     - $\\theta_0$: 初始接触角（零电压时）
@@ -536,7 +541,8 @@ def render_young_lippmann_theory():
     - $\\gamma$: 表面张力 (N/m)
     - $d$: 介电层厚度 (m)
     - $V$: 施加电压 (V)
-    """)
+    """
+    )
 
     # 显示物理参数
     st.markdown("#### 本模型物理参数")
@@ -580,13 +586,15 @@ def render_young_lippmann_theory():
     # 开口率计算
     st.markdown("#### 开口率计算")
 
-    st.markdown("""
+    st.markdown(
+        """
     开口率 (Aperture Ratio) 表示像素的透明区域比例，由接触角推导：
 
     $$\\eta = \\sin^2\\left(\\frac{\\theta}{2}\\right)$$
 
     开口率越高，像素越亮（透光越多）。
-    """)
+    """
+    )
 
     # 示例计算
     st.markdown("#### 示例计算")

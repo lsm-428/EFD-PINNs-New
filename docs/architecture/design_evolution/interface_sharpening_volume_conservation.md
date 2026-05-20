@@ -56,7 +56,7 @@ $$\mathcal{L}_{sharp} = \frac{1}{N} \sum_{i=1}^{N} \phi_i (1 - \phi_i)$$
 def compute_sharpening_loss(self, phi_pred):
     """
     计算界面锐化损失
-    
+
     φ(1-φ) 在 φ=0 和 φ=1 时为 0，
     在 φ=0.5 时达到最大值 0.25
     """
@@ -102,22 +102,22 @@ $$\mathcal{L}_{vol} = \left| \frac{V_{ink} - V_0}{V_0} \right|$$
 def compute_volume_conservation_residual(self, x_phys, predictions):
     """
     计算体积守恒残差
-    
+
     使用蒙特卡洛积分估计油墨体积
     """
     # 提取 φ 场
     phi = predictions[:, 4]
     phi_clamped = torch.clamp(phi, 0.0, 1.0)
-    
+
     # 计算平均 φ 值
     phi_mean = torch.mean(phi_clamped)
-    
+
     # 初始油墨体积分数
     ink_fraction_target = 0.15  # h_ink / Lz = 3μm / 20μm
-    
+
     # 体积守恒残差（相对误差）
     volume_residual = (phi_mean - ink_fraction_target) / ink_fraction_target
-    
+
     return volume_residual
 ```
 
@@ -170,25 +170,25 @@ def _compute_vof_residual(self, x_phys, predictions, model):
     """VOF 方程 + 人工压缩项"""
     # 1. 标准 VOF 残差
     vof_advection = phi_t + u * phi_x + v * phi_y + w * phi_z
-    
+
     # 2. 界面法向量 n = ∇φ / |∇φ|
     grad_phi_mag = torch.sqrt(phi_x**2 + phi_y**2 + phi_z**2 + 1e-10)
     n_x, n_y, n_z = phi_x / grad_phi_mag, phi_y / grad_phi_mag, phi_z / grad_phi_mag
-    
+
     # 3. 压缩速度 |u_c| = C_α × |u|
     vel_mag = torch.sqrt(u**2 + v**2 + w**2 + 1e-10)
     c_alpha = 1.0  # 压缩系数
-    
+
     # 4. 压缩通量 φ(1-φ) 在 φ=0,1 时为 0
     factor = c_alpha * vel_mag * phi * (1 - phi)
     flux_c = factor * n
-    
+
     # 5. 压缩项散度
     compression_term = div(flux_c)
-    
+
     # 6. 组合残差
     vof_residual = vof_advection + compression_term
-    
+
     return vof_residual
 ```
 

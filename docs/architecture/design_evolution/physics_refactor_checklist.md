@@ -3,22 +3,22 @@
 > **说明**：本 checklist 针对 PINN 训练中的物理残差计算统一，不涉及 Stage 1 解析模型（`EnhancedApertureModel` / `HybridPredictor`）。Stage 1 模型作为边界条件和目标数据源，保持独立。
 
 > **完成状态**：✅ 主体工作已完成（2025-12-31），剩余 2 项为低优先级后续工作（已对照当前代码与测试逐条核查）
-> 
+>
 > **最后更新**：2026-02-04
 
 ### 一、方程实现与统一入口 ✅ 完成
 
-- [x] 在 `PhysicsConstraints` 中集中实现 Navier–Stokes 残差  
+- [x] 在 `PhysicsConstraints` 中集中实现 Navier–Stokes 残差
       （`compute_navier_stokes_residual`，含混合密度/粘度与 CSF 曲率）
-- [x] 在 `PhysicsConstraints` 中集中实现 VOF 残差  
+- [x] 在 `PhysicsConstraints` 中集中实现 VOF 残差
       （`_compute_vof_residual`，使用 (x, y, z, V_from, V_to, t_since) 坐标）
-- [x] 在 `PhysicsConstraints` 中集中实现表面张力 / 接触角 / 体积守恒等辅助残差  
+- [x] 在 `PhysicsConstraints` 中集中实现表面张力 / 接触角 / 体积守恒等辅助残差
       （`compute_surface_tension_residual`、`compute_volume_conservation_residual` 等）
-- [x] 在 `PhysicsConstraints` 中提供统一入口  
+- [x] 在 `PhysicsConstraints` 中提供统一入口
       `compute_core_residuals(x_phys, predictions, model)`，返回标准残差字典：
-      - continuity  
-      - momentum_u / momentum_v / momentum_w  
-      - vof  
+      - continuity
+      - momentum_u / momentum_v / momentum_w
+      - vof
       - surface_tension / volume_conservation 等
 - [x] **验证 Stage 1 模型不受影响**（2025-12-31）
       - 代码结构上，两者均从统一物理配置读取关键参数 ✓
@@ -32,10 +32,10 @@
       - `compute_total_loss(model, points, weights)` 作为推荐入口
       - `_sanitize_tensor()` 进行 NaN/Inf 清理
 - [x] 在 `PINNConstraintLayer.compute_physics_loss` 中（2025-12-31）：
-      - 将首个调用从  
-        `compute_navier_stokes_residual(x_phys, model_predictions, model=model)`  
-        调整为  
-        `compute_core_residuals(x_phys, model_predictions, model=model)`  
+      - 将首个调用从
+        `compute_navier_stokes_residual(x_phys, model_predictions, model=model)`
+        调整为
+        `compute_core_residuals(x_phys, model_predictions, model=model)`
       - 只在需要额外电学 / 热学 / 接触线等拓展约束时，再追加单独的残差计算
       - 在 `residual_weights` 中添加 `vof` 权重 (0.5)
 - [x] 检查是否存在对 `compute_navier_stokes_residual`、`_compute_vof_residual` 的直接调用（2025-12-31）：

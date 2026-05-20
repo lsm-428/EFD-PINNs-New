@@ -155,12 +155,12 @@ def create_experiment_simulator_tab():
                 # Store simulation parameters in shared datastore
                 params = {
                     "waveform_type": waveform_type.value,
-                    "initial_voltage": step_params[0].value
-                    if waveform_type.value == "step"
-                    else 0,
-                    "final_voltage": step_params[1].value
-                    if waveform_type.value == "step"
-                    else 0,
+                    "initial_voltage": (
+                        step_params[0].value if waveform_type.value == "step" else 0
+                    ),
+                    "final_voltage": (
+                        step_params[1].value if waveform_type.value == "step" else 0
+                    ),
                 }
                 DATA_STORE.update_parameters(**params)
 

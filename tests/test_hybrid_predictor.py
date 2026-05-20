@@ -15,9 +15,7 @@
 
 import pytest
 import numpy as np
-import torch
 from src.predictors.hybrid_predictor import HybridPredictor
-from src.models.aperture_model import EnhancedApertureModel
 
 
 class TestHybridPredictor:
@@ -30,6 +28,7 @@ class TestHybridPredictor:
 
     def test_initialization_with_aperture_model(self):
         """测试使用注入的 ApertureModel 初始化"""
+
         # 创建一个模拟的 ApertureModel
         class MockApertureModel:
             def __init__(self):
@@ -43,7 +42,7 @@ class TestHybridPredictor:
     def test_get_initial_contact_angle(self):
         """测试获取初始接触角"""
         predictor = HybridPredictor()
-        theta_0 = predictor.params['theta0']
+        theta_0 = predictor.params["theta0"]
 
         # 初始接触角应该是 120 度（从配置文件读取）
         assert theta_0 == pytest.approx(120.0, rel=0.01)
@@ -73,7 +72,9 @@ class TestHybridPredictor:
         V_to = 30.0
 
         # 使用step_response方法
-        t, thetas = predictor.step_response(V_start=V_from, V_end=V_to, duration=0.05, t_step=0.001, num_points=5)
+        t, thetas = predictor.step_response(
+            V_start=V_from, V_end=V_to, duration=0.05, t_step=0.001, num_points=5
+        )
 
         assert len(thetas) == 5
         assert all(0 < theta < 180 for theta in thetas)
@@ -90,7 +91,9 @@ class TestHybridPredictor:
         V_to = 0.0
 
         # 使用step_response方法
-        t, thetas = predictor.step_response(V_start=V_from, V_end=V_to, duration=0.05, t_step=0.001, num_points=5)
+        t, thetas = predictor.step_response(
+            V_start=V_from, V_end=V_to, duration=0.05, t_step=0.001, num_points=5
+        )
 
         assert len(thetas) == 5
         assert all(0 < theta < 180 for theta in thetas)
@@ -117,7 +120,12 @@ class TestHybridPredictor:
         # 预测多个电压点的接触角
         voltages = np.array([0.0, 10.0, 20.0, 30.0])
         time = 0.01  # 10ms
-        thetas = np.array([predictor.predict(voltage=V, time=time, V_initial=0.0, t_step=0.0) for V in voltages])
+        thetas = np.array(
+            [
+                predictor.predict(voltage=V, time=time, V_initial=0.0, t_step=0.0)
+                for V in voltages
+            ]
+        )
 
         assert isinstance(thetas, np.ndarray)
         assert len(thetas) == len(voltages)
@@ -132,7 +140,9 @@ class TestHybridPredictor:
         V_to = 30.0
         t_since = 0.01  # 10ms，转换为秒
 
-        theta = predictor.predict(voltage=V_to, time=t_since, V_initial=V_from, t_step=0.0)
+        theta = predictor.predict(
+            voltage=V_to, time=t_since, V_initial=V_from, t_step=0.0
+        )
 
         assert isinstance(theta, (float, np.floating))
         assert 0 < theta < 180
@@ -154,6 +164,7 @@ class TestHybridPredictor:
 
     def test_theta_to_aperture_with_injected_model(self):
         """测试使用注入的模型"""
+
         # 创建一个模拟的 ApertureModel
         class MockApertureModel:
             def contact_angle_to_aperture_ratio(self, theta):
@@ -194,7 +205,7 @@ class TestHybridPredictor:
         predictor = HybridPredictor()
 
         # 从配置文件读取参数
-        theta_0 = predictor.params['theta0']
+        theta_0 = predictor.params["theta0"]
 
         # 验证静态预测在 t=0 时与初始角度一致
         theta_pred = predictor.young_lippmann(0.0)
@@ -206,7 +217,7 @@ class TestHybridPredictor:
         predictor = HybridPredictor()
 
         # 获取时间常数
-        tau = predictor.params.get('tau', 0.005)  # 秒
+        tau = predictor.params.get("tau", 0.005)  # 秒
 
         # 测试在时间常数处的响应（欠阻尼系统会有振荡）
         V_from = 0.0
@@ -219,7 +230,9 @@ class TestHybridPredictor:
         theta_tau = predictor.dynamic_response(tau, theta_0, theta_inf)
 
         # 对于欠阻尼系统，检查值在合理范围内
-        assert min(theta_0, theta_inf) <= theta_tau <= max(theta_0, theta_inf) + 10  # 允许轻微超调
+        assert (
+            min(theta_0, theta_inf) <= theta_tau <= max(theta_0, theta_inf) + 10
+        )  # 允许轻微超调
 
     def test_multiple_voltage_steps(self):
         """测试多个电压步骤"""
@@ -233,7 +246,9 @@ class TestHybridPredictor:
         for i in range(len(voltage_sequence) - 1):
             V_from = voltage_sequence[i]
             V_to = voltage_sequence[i + 1]
-            theta = predictor.predict(voltage=V_to, time=t_since, V_initial=V_from, t_step=0.0)
+            theta = predictor.predict(
+                voltage=V_to, time=t_since, V_initial=V_from, t_step=0.0
+            )
             thetas.append(theta)
 
         assert len(thetas) == len(voltage_sequence) - 1
@@ -249,7 +264,7 @@ class TestHybridPredictorEdgeCases:
         theta = predictor.young_lippmann(0.0)
 
         # 零电压时应该接近初始接触角
-        theta_0 = predictor.params['theta0']
+        theta_0 = predictor.params["theta0"]
         assert theta == pytest.approx(theta_0, rel=0.01)
 
     def test_negative_voltage(self):
@@ -281,7 +296,9 @@ class TestHybridPredictorEdgeCases:
         V_to = 30.0
         t_since = 0.0
 
-        theta = predictor.predict(voltage=V_to, time=t_since, V_initial=V_from, t_step=0.0)
+        theta = predictor.predict(
+            voltage=V_to, time=t_since, V_initial=V_from, t_step=0.0
+        )
 
         # t=0 时应该接近起始电压的静态接触角
         theta_from_static = predictor.young_lippmann(V_from)
@@ -295,7 +312,9 @@ class TestHybridPredictorEdgeCases:
         V_to = 30.0
         t_since = 1.0  # 1 秒
 
-        theta_dynamic = predictor.predict(voltage=V_to, time=t_since, V_initial=V_from, t_step=0.0)
+        theta_dynamic = predictor.predict(
+            voltage=V_to, time=t_since, V_initial=V_from, t_step=0.0
+        )
         theta_static = predictor.young_lippmann(V_to)
 
         # 长时间后应该接近稳态

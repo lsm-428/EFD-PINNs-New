@@ -130,9 +130,9 @@ class TestVOF3D:
         print(f"  Relative error: {relative_error:.2%}")
 
         # Allow 10% error due to discretization
-        assert relative_error < 0.10, (
-            f"Volume error should be < 10%: got {relative_error:.2%}"
-        )
+        assert (
+            relative_error < 0.10
+        ), f"Volume error should be < 10%: got {relative_error:.2%}"
 
     def test_interface_area_sphere(self, vof_grid):
         """
@@ -157,9 +157,9 @@ class TestVOF3D:
         print(f"  Relative error: {relative_error:.2%}")
 
         # Allow 15% error due to discretization and contour approximation
-        assert relative_error < 0.15, (
-            f"Area error should be < 15%: got {relative_error:.2%}"
-        )
+        assert (
+            relative_error < 0.15
+        ), f"Area error should be < 15%: got {relative_error:.2%}"
 
     def test_volume_integration_ellipsoid(self, ellipsoid_phi_grid):
         """
@@ -189,9 +189,9 @@ class TestVOF3D:
         )
         print(f"  Relative error: {relative_error:.2%}")
 
-        assert relative_error < 0.10, (
-            f"Volume error should be < 10%: got {relative_error:.2%}"
-        )
+        assert (
+            relative_error < 0.10
+        ), f"Volume error should be < 10%: got {relative_error:.2%}"
 
     def test_contour_properties(self, vof_grid):
         """Test contour mesh properties."""
@@ -206,15 +206,15 @@ class TestVOF3D:
         )
 
         # Sphere with r=0.3 centered at 0.5 should have bounds [0.2, 0.8]
-        assert bounds[0] > 0.15 and bounds[1] < 0.85, (
-            "Contour bounds should encompass the sphere"
-        )
-        assert bounds[2] > 0.15 and bounds[3] < 0.85, (
-            "Contour bounds should encompass the sphere"
-        )
-        assert bounds[4] > 0.15 and bounds[5] < 0.85, (
-            "Contour bounds should encompass the sphere"
-        )
+        assert (
+            bounds[0] > 0.15 and bounds[1] < 0.85
+        ), "Contour bounds should encompass the sphere"
+        assert (
+            bounds[2] > 0.15 and bounds[3] < 0.85
+        ), "Contour bounds should encompass the sphere"
+        assert (
+            bounds[4] > 0.15 and bounds[5] < 0.85
+        ), "Contour bounds should encompass the sphere"
 
         # Check if it's a manifold
         assert contours.is_all_triangles, "Contour should be triangulated"

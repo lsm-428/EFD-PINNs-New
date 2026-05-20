@@ -48,7 +48,7 @@ config/
 |------|------|--------|------|
 | 初始接触角 | `theta0` | 120° | 疏水层初始接触角 |
 | 像素墙接触角 | `theta_wall` | 71° | 围堰壁接触角 |
-| 有效介电常数 | `epsilon_r` | 12.0 | 有效介电层（含渗透修正） |
+| 有效介电常数 | `epsilon_r` | 12.0 | 四层串联: SU-8+Teflon AF+Oil+Polar liquid |
 | 表面张力 | `gamma` | 0.015 N/m | 有效界面张力 |
 | 介电层厚度 | `dielectric_thickness` | 0.4 μm | SU-8 层 |
 

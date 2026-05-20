@@ -14,9 +14,11 @@
 """
 
 import pytest
-import numpy as np
 import torch
-from src.training.scheduler import DynamicPhysicsWeightScheduler, PhysicsWeightIntegration
+from src.training.scheduler import (
+    DynamicPhysicsWeightScheduler,
+    PhysicsWeightIntegration,
+)
 
 
 class TestDynamicPhysicsWeightScheduler:
@@ -25,9 +27,7 @@ class TestDynamicPhysicsWeightScheduler:
     def test_initialization(self):
         """测试初始化"""
         scheduler = DynamicPhysicsWeightScheduler(
-            initial_weight=0.1,
-            min_weight=0.01,
-            max_weight=5.0
+            initial_weight=0.1, min_weight=0.01, max_weight=5.0
         )
         assert scheduler.current_weight == 0.1
         assert scheduler.min_weight == 0.01
@@ -37,7 +37,7 @@ class TestDynamicPhysicsWeightScheduler:
     def test_initial_weight_from_dict(self):
         """测试从字典初始化 initial_weight"""
         scheduler = DynamicPhysicsWeightScheduler(
-            initial_weight={'value': 0.2, 'other': 0.3}
+            initial_weight={"value": 0.2, "other": 0.3}
         )
         assert scheduler.current_weight == 0.2
 
@@ -69,10 +69,7 @@ class TestDynamicPhysicsWeightScheduler:
         scheduler.current_weight = 1.0
 
         # 数据损失远大于物理损失，应增加权重
-        new_weight = scheduler._adaptive_adjustment(
-            data_loss=2.0,
-            physics_loss=1.0
-        )
+        new_weight = scheduler._adaptive_adjustment(data_loss=2.0, physics_loss=1.0)
         assert new_weight > scheduler.current_weight
 
     def test_adaptive_adjustment_decrease(self):
@@ -81,10 +78,7 @@ class TestDynamicPhysicsWeightScheduler:
         scheduler.current_weight = 1.0
 
         # 物理损失远大于数据损失，应减少权重
-        new_weight = scheduler._adaptive_adjustment(
-            data_loss=1.0,
-            physics_loss=2.0
-        )
+        new_weight = scheduler._adaptive_adjustment(data_loss=1.0, physics_loss=2.0)
         assert new_weight < scheduler.current_weight
 
     def test_adaptive_adjustment_no_change(self):
@@ -93,10 +87,7 @@ class TestDynamicPhysicsWeightScheduler:
         scheduler.current_weight = 1.0
 
         # 比例接近 1.0，应保持不变
-        new_weight = scheduler._adaptive_adjustment(
-            data_loss=1.0,
-            physics_loss=1.0
-        )
+        new_weight = scheduler._adaptive_adjustment(data_loss=1.0, physics_loss=1.0)
         assert new_weight == scheduler.current_weight
 
     def test_performance_based_adjustment_improving(self):
@@ -122,17 +113,11 @@ class TestDynamicPhysicsWeightScheduler:
 
     def test_combined_strategy(self):
         """测试组合策略"""
-        scheduler = DynamicPhysicsWeightScheduler(
-            adjustment_strategy="combined"
-        )
+        scheduler = DynamicPhysicsWeightScheduler(adjustment_strategy="combined")
 
         # 组合策略应该结合 stage, adaptive, performance
         new_weight = scheduler._compute_new_weight(
-            data_loss=1.5,
-            physics_loss=1.0,
-            val_loss=1.0,
-            epoch=100,
-            stage=2
+            data_loss=1.5, physics_loss=1.0, val_loss=1.0, epoch=100, stage=2
         )
 
         # 权重应该在合理范围内
@@ -141,16 +126,11 @@ class TestDynamicPhysicsWeightScheduler:
     def test_weight_smoothing(self):
         """测试权重平滑处理"""
         scheduler = DynamicPhysicsWeightScheduler(
-            smoothing_factor=0.9,
-            adjustment_interval=1
+            smoothing_factor=0.9, adjustment_interval=1
         )
 
         old_weight = scheduler.current_weight
-        scheduler.update(
-            data_loss=2.0,
-            physics_loss=1.0,
-            val_loss=None
-        )
+        scheduler.update(data_loss=2.0, physics_loss=1.0, val_loss=None)
 
         # 权重变化应该被平滑
         weight_change = abs(scheduler.current_weight - old_weight)
@@ -159,17 +139,11 @@ class TestDynamicPhysicsWeightScheduler:
     def test_weight_bounds(self):
         """测试权重边界限制"""
         scheduler = DynamicPhysicsWeightScheduler(
-            min_weight=0.01,
-            max_weight=5.0,
-            adjustment_interval=1
+            min_weight=0.01, max_weight=5.0, adjustment_interval=1
         )
 
         # 测试极端情况
-        scheduler.update(
-            data_loss=1e-10,
-            physics_loss=1e10,
-            val_loss=None
-        )
+        scheduler.update(data_loss=1e-10, physics_loss=1e10, val_loss=None)
 
         # 权重应该在边界内
         assert 0.01 <= scheduler.current_weight <= 5.0
@@ -179,11 +153,7 @@ class TestDynamicPhysicsWeightScheduler:
         scheduler = DynamicPhysicsWeightScheduler()
         initial_count = scheduler.step_count
 
-        scheduler.update(
-            data_loss=1.0,
-            physics_loss=1.0,
-            val_loss=None
-        )
+        scheduler.update(data_loss=1.0, physics_loss=1.0, val_loss=None)
 
         assert scheduler.step_count == initial_count + 1
 
@@ -191,42 +161,29 @@ class TestDynamicPhysicsWeightScheduler:
         """测试损失历史记录"""
         scheduler = DynamicPhysicsWeightScheduler()
 
-        scheduler.update(
-            data_loss=1.0,
-            physics_loss=2.0,
-            val_loss=3.0
-        )
+        scheduler.update(data_loss=1.0, physics_loss=2.0, val_loss=3.0)
 
         history = scheduler.get_loss_history()
-        assert len(history['data_loss']) == 1
-        assert len(history['physics_loss']) == 1
-        assert len(history['val_loss']) == 1
-        assert history['data_loss'][0] == 1.0
-        assert history['physics_loss'][0] == 2.0
-        assert history['val_loss'][0] == 3.0
+        assert len(history["data_loss"]) == 1
+        assert len(history["physics_loss"]) == 1
+        assert len(history["val_loss"]) == 1
+        assert history["data_loss"][0] == 1.0
+        assert history["physics_loss"][0] == 2.0
+        assert history["val_loss"][0] == 3.0
 
     def test_adjustment_interval(self):
         """测试调整间隔"""
         scheduler = DynamicPhysicsWeightScheduler(
-            initial_weight=0.1,
-            adjustment_interval=100
+            initial_weight=0.1, adjustment_interval=100
         )
 
         # 前 99 步权重不应改变
         for i in range(99):
-            scheduler.update(
-                data_loss=2.0,
-                physics_loss=1.0,
-                val_loss=None
-            )
+            scheduler.update(data_loss=2.0, physics_loss=1.0, val_loss=None)
         assert scheduler.current_weight == 0.1
 
         # 第 100 步权重应该改变
-        scheduler.update(
-            data_loss=2.0,
-            physics_loss=1.0,
-            val_loss=None
-        )
+        scheduler.update(data_loss=2.0, physics_loss=1.0, val_loss=None)
         assert scheduler.current_weight != 0.1
 
     def test_reset(self):
@@ -235,11 +192,7 @@ class TestDynamicPhysicsWeightScheduler:
 
         # 运行一些更新
         for i in range(10):
-            scheduler.update(
-                data_loss=1.0,
-                physics_loss=1.0,
-                val_loss=1.0
-            )
+            scheduler.update(data_loss=1.0, physics_loss=1.0, val_loss=1.0)
 
         # 重置
         scheduler.reset()
@@ -247,11 +200,11 @@ class TestDynamicPhysicsWeightScheduler:
         # 检查所有状态已重置
         assert scheduler.current_weight == scheduler.initial_weight
         assert scheduler.step_count == 0
-        assert scheduler.best_val_loss == float('inf')
+        assert scheduler.best_val_loss == float("inf")
         assert scheduler.steps_without_improvement == 0
-        assert len(scheduler.loss_history['data_loss']) == 0
-        assert len(scheduler.loss_history['physics_loss']) == 0
-        assert len(scheduler.loss_history['val_loss']) == 0
+        assert len(scheduler.loss_history["data_loss"]) == 0
+        assert len(scheduler.loss_history["physics_loss"]) == 0
+        assert len(scheduler.loss_history["val_loss"]) == 0
 
 
 class TestPhysicsWeightIntegration:
@@ -269,16 +222,14 @@ class TestPhysicsWeightIntegration:
         """测试乘法集成方法"""
         scheduler = DynamicPhysicsWeightScheduler(initial_weight=2.0)
         integration = PhysicsWeightIntegration(
-            scheduler,
-            integration_method="multiplicative"
+            scheduler, integration_method="multiplicative"
         )
 
         physics_loss = torch.tensor(1.0)
         data_loss = torch.tensor(2.0)
 
         result = integration.apply_dynamic_weight(
-            base_physics_loss=physics_loss,
-            data_loss=data_loss
+            base_physics_loss=physics_loss, data_loss=data_loss
         )
 
         expected = physics_loss * 2.0
@@ -287,17 +238,13 @@ class TestPhysicsWeightIntegration:
     def test_additive_integration(self):
         """测试加法集成方法"""
         scheduler = DynamicPhysicsWeightScheduler(initial_weight=2.0)
-        integration = PhysicsWeightIntegration(
-            scheduler,
-            integration_method="additive"
-        )
+        integration = PhysicsWeightIntegration(scheduler, integration_method="additive")
 
         physics_loss = torch.tensor(1.0)
         data_loss = torch.tensor(2.0)
 
         result = integration.apply_dynamic_weight(
-            base_physics_loss=physics_loss,
-            data_loss=data_loss
+            base_physics_loss=physics_loss, data_loss=data_loss
         )
 
         expected = physics_loss + 2.0
@@ -320,8 +267,7 @@ class TestPhysicsWeightIntegration:
         data_loss = 2.0
 
         result = integration.apply_dynamic_weight(
-            base_physics_loss=physics_loss,
-            data_loss=data_loss
+            base_physics_loss=physics_loss, data_loss=data_loss
         )
 
         assert isinstance(result, torch.Tensor)
@@ -333,16 +279,15 @@ class TestPhysicsWeightIntegration:
 
         # CUDA 设备测试（如果可用）
         if torch.cuda.is_available():
-            device = torch.device('cuda')
+            device = torch.device("cuda")
         else:
-            device = torch.device('cpu')
+            device = torch.device("cpu")
 
         physics_loss = torch.tensor(1.0, device=device)
         data_loss = torch.tensor(2.0, device=device)
 
         result = integration.apply_dynamic_weight(
-            base_physics_loss=physics_loss,
-            data_loss=data_loss
+            base_physics_loss=physics_loss, data_loss=data_loss
         )
 
         assert result.device == physics_loss.device

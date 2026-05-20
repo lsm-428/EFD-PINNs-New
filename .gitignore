@@ -1,6 +1,4 @@
-# ============================================================================
-# Python Standard & Build Artifacts
-# ============================================================================
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -24,9 +22,7 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# ============================================================================
-# Virtual Environments
-# ============================================================================
+# Virtual environments
 .env
 .venv
 env/
@@ -35,9 +31,7 @@ ENV/
 env.bak/
 venv.bak/
 
-# ============================================================================
-# Testing & Quality Assurance
-# ============================================================================
+# Testing
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -50,45 +44,26 @@ coverage.xml
 *.cover
 *.py,cover
 
-# ============================================================================
-# IDE & Editors
-# ============================================================================
-# VS Code
+# IDE / Editors
 .vscode/
-*.code-workspace
-
-# JetBrains / IntelliJ
 .idea/
-*.iml
-
-# Trae
 .trae/
-
-# OpenCode
 .opencode/
-
-# Mac OS
 .DS_Store
-
-# Vim / Emacs
+*.code-workspace
+*.iml
 *.swp
 *.swo
 *~
 \#*\#
 
-# ============================================================================
-# Jupyter Notebooks
-# ============================================================================
+# Jupyter
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
 profile_default/
 ipython_config.py
 
-# ============================================================================
-# Project Outputs (Training, Logs, Results)
-# ============================================================================
-# outputs/  <- Temporarily commented out to allow upload
-# outputs_*/  <- Commented out to allow outputs directory
+# Outputs
 output/
 results*/
 train_results/
@@ -98,28 +73,10 @@ performance_reports/
 logs/
 *.log
 
-# ============================================================================
-# Custom Ignores (User-defined)
-# ============================================================================
-# CLAUDE.md       # ← 保留：项目工作指南，用于AI协作
-papers/                           # 论文投稿材料不上传
-papers/*                            # 确保papers目录下所有内容都不上传
-*.pdf                               # 所有PDF文件不上传
-*.docx                              # 所有Word文件不上传
-*.doc                               # 所有Word文件不上传
-*.png                               # 所有图片文件不上传
-!assets/*.png                       # 但保留assets目录下的png
-!docs/*.png                         # 但保留docs目录下的png
-
-# ============================================================================
-# Data & Large Binary Files
-# ============================================================================
-# Models
+# Models & Data
 *.pth
 *.pt
 *.ckpt
-
-# Data
 *.npz
 *.npy
 *.pkl
@@ -130,33 +87,27 @@ data/levelset/
 levelset/data/*
 !levelset/data/.gitkeep
 
-# Generated Figures & Documents
+# Media & Documents (keep assets/ and docs/ images)
+*.pdf
+*.docx
+*.doc
 *.png
 *.jpg
 *.jpeg
 *.gif
-*.pdf
 *.svg
-!assets/*.png  # Allow keeping assets for README if they exist
-!docs/*.png    # Allow documentation images
+!assets/*.png
+!docs/*.png
 
-# Temporary & Backup
+# Temp & Backup
 *.tmp
 *.temp
 *.bak
 *.backup
 *.pid
 
-# ============================================================================
-# EFD3D Project Specific
-# ============================================================================
-# Experimental code (not for production)
-# experimental/  <- Uncommented to allow pushing
-
-# Paper drafts and figures
-# paper/     # ← 保留：草稿
-
-# Experiments module auto-generated files
+# Project-specific
+.papers/
 experiments/experiments/
 experiments/comparison_figures/
 experiments/reports/
@@ -164,23 +115,17 @@ experiments/configs/exp_*.json
 experiments/configs/config_*.json
 experiments/configs/train_config_*.json
 experiments/configs/version_history.json
-
-# LevelSet specific
-# levelset/outputs_*/  <- Commented out to allow levelset outputs
 levelset/nohup.out
-
-# Local Execution Scripts (not for repo)
 run_stage2_optimized.sh
 run_stage2_training.sh
 check_optimization_ready.sh
 
-# Agent / Tool Temporary Files
+# Tools
 .sisyphus/
 .claude/
-
-# Package Managers
-uv.lock
 .uv/
-
-# Git Worktrees
+uv.lock
 .worktrees/
+
+# Experimental
+.experimental/

@@ -17,10 +17,19 @@ uv run train_two_phase.py --config config/v4.5-standard.json --resume_from outpu
 
 ### Evaluation & Visualization
 ```bash
-# Run evaluation and generate visualizations
+# Full evaluation (generates dashboard, phi grid, 3D interface, dynamic curves, etc.)
 uv run evaluate.py outputs/train/pinn_YYYYMMDD_HHMMSS/
 
-# Launch interactive dashboard
+# Evaluate specific checkpoint (best, latest, final, both, or path-to-pth)
+uv run evaluate.py outputs/train/pinn_YYYYMMDD_HHMMSS/ --ckpt best
+
+# Compare last 2 trained models
+uv run evaluate.py --compare
+
+# Statistical significance test (best vs final model)
+uv run evaluate.py outputs/train/pinn_YYYYMMDD_HHMMSS/ --stat-test
+
+# Launch interactive Streamlit dashboard
 uv run scripts/dashboard.py
 
 # Run ablation study
@@ -38,7 +47,7 @@ uv run pytest tests/ -v
 # Run specific test module
 uv run pytest tests/test_pinn_complete.py -v
 
-# Run tests with detailed output
+# Run tests with detailed traceback
 uv run pytest tests/ -v --tb=short
 
 # Generate coverage report
@@ -49,207 +58,239 @@ uv run pytest tests/ --cov=src --cov-report=html
 
 ## 🏗️ Project Architecture
 
-EFD3D is a Physics-Informed Neural Network (PINN) framework for 3D two-phase flow simulation in electrowetting applications.
+EFD3D is a Physics-Informed Neural Network (PINN) framework for 3D two-phase flow simulation in electrowetting applications (electronic paper displays).
 
 ### Core Architecture
-- **Two-Stage Design**: Stage 1 (analytical contact angle model) + Stage 2 (PINN for full flow field)
-- **6D Triad Input**: `[x, y, z, V_from, V_to, t_since]` - enables arbitrary voltage sequence simulation
-- **Physics Constraints**: Navier-Stokes equations + VOF interface tracking + electrowetting forces
-- **Hybrid Training**: Geometry → Kinematics → Full Physics stages
+- **Two-Stage Design**: Stage 1 (analytical contact angle model, `EnhancedApertureModel`) + Stage 2 (PINN for full flow field, `TwoPhasePINN`)
+- **6D Triad Input**: `[x, y, z, V_from, V_to, t_since]` — enables arbitrary voltage sequence simulation from a single model
+- **Physics Constraints**: Navier-Stokes equations + VOF interface tracking + electrowetting forces + mass conservation
+- **Progressive Training**: 3-stage curriculum with dynamic loss weight scheduling:
+  - **Stage 1** (Geometry, ~1500 epochs): Learn basic phase distribution from analytical contact angle model; active losses: `L_interface`, `L_data`
+  - **Stage 2** (Kinematics, ~4000 epochs): Introduce velocity field and mass conservation; adds `L_continuity`, `L_vof`
+  - **Stage 3** (Full Physics, ~60000 epochs): Full Navier-Stokes + electrowetting forces; adds `L_ns_momentum`, `L_electrowetting`, `L_volume`
 
-### Key Directories
+### Source Layout
 ```
-EFD3D/
-├── src/                           # Core source code (21 modules)
-│   ├── models/                   # Neural network models
-│   │   ├── pinn_two_phase.py     # Main PINN model (TwoPhasePINN + Trainer)
-│   │   └── aperture_model.py     # Stage 1 analytical model
-│   ├── physics/                  # Physics constraint engine
-│   │   └── constraints.py        # Navier-Stokes, VOF, continuity equations
-│   ├── training/                 # Training infrastructure
-│   │   ├── scheduler.py          # Dynamic loss weight scheduling
-│   │   ├── stabilizer.py         # NaN recovery, gradient clipping
-│   │   └── components.py         # Training utilities
-│   ├── config/                   # Configuration management
-│   │   ├── __init__.py           # PHYSICS parameters export
-│   │   └── physics_config.py     # Type-safe configuration
-│   └── utils/                    # Utilities
-│       ├── model_utils.py        # Model loading and prediction extraction
-│       └── logging_config.py     # Unified logging configuration
-│
-├── config/                       # Training configurations
-│   ├── v4.5-standard.json        # Recommended config (proven convergence)
-│   └── device_calibrated_physics.json # Physics calibration
-│
-├── scripts/                      # User-facing tools
-│   ├── dashboard.py              # Streamlit interactive dashboard
-│   └── run_ablation.sh           # Ablation study script
-│
-├── tests/                        # Test suite (15 modules)
-├── outputs/                      # Training outputs
-│   └── train/                    # Model checkpoints and logs
-│
-└── docs/                         # Documentation
+src/
+├── models/                       # Neural network models
+│   ├── pinn_two_phase.py         # TwoPhasePINN + DataGenerator + Trainer (main module)
+│   └── aperture_model.py         # EnhancedApertureModel (Stage 1 analytical model)
+├── data/
+│   └── physics_sampling.py       # PhysicsBasedSampler: voltage/time/spatial sampling
+├── physics/
+│   └── constraints.py            # PhysicsConstraints (NS, VOF, continuity, electrowetting)
+├── training/
+│   ├── scheduler.py              # DynamicPhysicsWeightScheduler (adaptive loss balancing)
+│   ├── stabilizer.py             # TrainingStabilizer (NaN recovery, gradient clipping)
+│   └── components.py             # Shared training utilities
+├── config/
+│   ├── __init__.py               # Exports PHYSICS dict, PhysicsConfig, path helpers
+│   ├── physics_config.py         # Type-safe physics configuration
+│   └── paths.py                  # PROJECT_ROOT, CONFIG_PATH, OUTPUT_DIR (env-overridable)
+├── dashboard/                    # Streamlit dashboard engine (16 modules)
+│   ├── app.py                    # Main dashboard app
+│   ├── datastore.py              # Shared data state
+│   ├── model_manager.py          # Model loading/caching
+│   ├── inference.py              # Inference engine
+│   ├── plotter.py                # Visualization routines
+│   ├── benchmark_panel.py        # Performance benchmarking
+│   ├── compare_panel.py          # Multi-model comparison
+│   ├── stage1_panel.py           # Stage 1 diagnostics
+│   ├── training_output_analyzer.py # Training log analysis
+│   ├── reports/                  # HTML/Markdown report generation
+│   └── monitor/                  # Real-time training log watching
+├── predictors/
+│   ├── hybrid_predictor.py       # Stage 1 + Stage 2 integration
+│   └── pinn_aperture.py          # PINN-based aperture prediction
+├── solvers/
+│   └── flow_solver.py            # Traditional CFD solver (for verification)
+└── utils/
+    ├── model_utils.py            # Checkpoint loading with architecture mismatch handling
+    └── logging_config.py         # Unified logging (EFD_LOG_LEVEL env var)
 ```
 
-### Critical File Dependencies
-- **Entry Points**: `train_two_phase.py`, `evaluate.py`, `scripts/dashboard.py`
-- **Core Model**: `src/models/pinn_two_phase.py` (TwoPhasePINN class)
-- **Physics Engine**: `src/physics/constraints.py` (PhysicsConstraints class)
-- **Configuration**: `src/config/__init__.py` (PHYSICS parameters), `src/config/physics_config.py`
-- **Training Control**: `src/training/scheduler.py`, `src/training/stabilizer.py`
-- **Predictors**: `src/predictors/hybrid_predictor.py`, `src/predictors/pinn_aperture.py`
-- **Utilities**: `src/utils/model_utils.py` (model loading), `src/utils/logging_config.py` (logging setup)
+### Experimental Modules (`experimental/`)
+- **levelset/** — Level Set method alternative to VOF for interface tracking
+- **end_to_end/** — End-to-end training without Stage 1 dependency
+- **lstm_pinn/** — LSTM + PINN hybrid for temporal dynamics
+- **test/** — Experimental tests (not part of main test suite)
+
+### Entry Points
+- `train_two_phase.py` — delegates to `src.models.pinn_two_phase.main()`
+- `evaluate.py` — `PINNEvaluator` class: 7 visualization types + statistical comparison
+- `scripts/dashboard.py` — lightweight launcher for `src.dashboard.app`
+
+### Key Classes
+- `TwoPhasePINN` (nn.Module) — dual-branch MLP: velocity branch + phase branch; key methods: `forward()`, `forward_triplet()`
+- `DataGenerator` — generates training points (interior, boundary, interface, collocation); houses `generate_all_data()`
+- `PhysicsLoss` — orchestrates computation of all physics loss components
+- `Trainer` — data generation, physics loss, optimization loop, checkpointing; key method: `train()`
+- `PhysicsConstraints` — computes NS residuals, VOF transport, continuity, electrowetting forces, volume conservation
+- `PhysicsBasedSampler` — physics-informed voltage/time/spatial sampling in `src/data/physics_sampling.py`
+- `DynamicPhysicsWeightScheduler` — ramps physics loss weights during training stages
+- `TrainingStabilizer` — detects NaN, clips gradients, restores stable checkpoints
 
 ---
 
 ## ⚙️ Configuration System
 
-### Physics Parameters
-All physics parameters are centrally managed via the `PHYSICS` dictionary:
-```python
-from src.config import PHYSICS
+### Environment Variables
+| Variable | Effect | Default |
+|---|---|---|
+| `EFD_CONFIG_PATH` | Override physics config path | `config/device_calibrated_physics.json` |
+| `EFD_OUTPUT_DIR` | Override output directory | `outputs/` |
+| `EFD_LOG_LEVEL` | Logging level | `INFO` |
+| `EFD_LOG_FILE` | Log file path | (stderr only) |
+| `EFD_LOG_VERBOSE` | Verbose format (`1/0, true/false`) | `0` |
 
-# Device geometry
+### Two config types (don't confuse them)
+
+**Physics defaults** — loaded automatically from `config/device_calibrated_physics.json` (set by `src/config/paths.py` as `DEFAULT_CONFIG_PATH`). Override with `EFD_CONFIG_PATH` env var. Contains device geometry, material properties, initial conditions.
+
+**Training config** — passed explicitly via `--config`. Primary: `config/v4.5-standard.json`. Contains epochs, learning rate, batch sizes, physics loss weights, training stages.
+
+```python
+from src.config import PHYSICS, get_config_path
+
+# Physics parameters (from device_calibrated_physics.json)
 Lx = PHYSICS["Lx"]          # Pixel width: 174μm
 dielectric_thickness = PHYSICS["dielectric_thickness"]  # 400nm
-
-# Material properties
 gamma = PHYSICS["gamma"]    # Surface tension: 0.015 N/m
-rho_ink = PHYSICS["rho_ink"] # Ink density: 1000 kg/m³
-
-# Initial conditions
 theta0 = PHYSICS["theta0"]  # Initial contact angle: 120°
+
+# Path helpers
+from src.config.paths import PROJECT_ROOT, OUTPUT_DIR, get_output_dir
 ```
 
-### Training Configuration
-Primary config: `config/v4.5-standard.json`
-
-Key parameters:
-- `training.epochs`: Total training epochs
-- `training.stage1_epochs`: Geometry stage epochs
-- `training.stage2_epochs`: Kinematics stage epochs
-- `physics.vof_weight`: VOF transport equation weight
-- `physics.sharpening`: Interface sharpening coefficient
+### Available config files
+```
+config/
+├── v4.5-standard.json              # Recommended training config (proven convergence)
+├── v4.5-physics-sampling.json      # Physics-informed sampling variant
+├── device_calibrated_physics.json  # Default physics calibration
+└── ablation/                       # Ablation study configs
+    ├── no_continuity.json
+    ├── no_interface.json
+    ├── no_vof.json
+    ├── single_stage.json
+    └── smaller_network.json
+```
 
 ---
 
-## 🧪 Testing Strategy
+## 🧪 Testing
 
 ### Test Organization
 ```
 tests/
 ├── test_pinn_complete.py              # End-to-end PINN training pipeline
-├── test_physics_sanity.py             # Physics validation checks
-├── test_vof_transport.py              # VOF equation verification
-├── test_hybrid_predictor.py           # Stage 1+2 integration
-├── test_enhanced_aperture_properties.py # Stage 1 model validation
-├── test_dynamic_weights.py            # Loss weight scheduling
-├── test_flow_solver_properties.py     # CFD solver verification
-├── test_two_phase_data_generator.py   # Data generation tests
+├── test_physics_sanity.py             # Physics constraint validation
+├── test_vof_transport.py              # VOF advection equation verification
 ├── test_vof_3d.py                     # 3D VOF implementation
-├── test_curvature_computation.py      # Curvature calculations
-├── test_vof_sensitivity.py            # VOF sensitivity analysis
+├── test_vof_sensitivity.py            # VOF parameter sensitivity
+├── test_hybrid_predictor.py           # Stage 1 + Stage 2 integration
+├── test_enhanced_aperture_properties.py # Stage 1 analytical model checks
+├── test_curvature_computation.py      # Interface curvature calculations
+├── test_dynamic_weights.py            # Loss weight scheduler behavior
+├── test_flow_solver_properties.py     # CFD solver verification
 ├── test_model_dimensions.py           # Model architecture validation
-├── test_scripts_framework.py          # Script functionality
-├── test_3d_visualization_properties.py # 3D visualization
+├── test_two_phase_data_generator.py   # Training data generation
+├── test_3d_visualization_properties.py # 3D visualization checks
+├── test_scripts_framework.py          # Script entry point tests
 └── test_code_changes.py               # Code modification tracking
 ```
 
-### Common Test Patterns
-- **Physics Validation**: Verify governing equation residuals < 1e-3
-- **Conservation Laws**: Mass/volume conservation error < 1%
-- **Boundary Conditions**: No-slip walls, interface continuity
-- **Stage Integration**: Stage 1 → Stage 2 compatibility
+### Test Patterns
+- **Physics validation**: governing equation residuals < 1e-3
+- **Conservation laws**: mass/volume conservation error < 1%
+- **Boundary conditions**: no-slip walls, interface continuity
+- **Stage integration**: Stage 1 → Stage 2 compatibility
 
 ---
 
-## 📊 Development Workflows
+## 📊 Key Workflows
 
 ### Training Pipeline
-1. **Configuration**: Select/config training parameters in `config/`
-2. **Training**: Run `train_two_phase.py` with chosen config
-3. **Monitoring**: Use dashboard for visualization or TensorBoard for detailed metrics
-4. **Evaluation**: Run `evaluate.py` for detailed analysis
-5. **Testing**: Verify with `test_pinn_complete.py`
+1. Select training config in `config/`
+2. Run `uv run train_two_phase.py --config config/v4.5-standard.json`
+3. Monitor: TensorBoard (`tensorboard --logdir outputs/train/pinn_*/runs/`) or dashboard
+4. Evaluate: `uv run evaluate.py outputs/train/pinn_YYYYMMDD_HHMMSS/`
+5. Verify: `uv run pytest tests/test_pinn_complete.py -v`
 
-### Model Development
-1. **Physics Changes**: Modify `src/physics/constraints.py`
-2. **Architecture Changes**: Update `src/models/pinn_two_phase.py`
-3. **Training Logic**: Adjust `src/training/` components
-4. **Configuration**: Update `config/v4.5-standard.json`
-5. **Testing**: Add/modify tests in `tests/`
+### Debugging
+- **Training instability**: Check `TrainingStabilizer` logs for NaN recovery events
+- **Physics violations**: Run `test_physics_sanity.py` for equation-level diagnostics
+- **Interface quality**: Validate VOF transport with `test_vof_transport.py`
+- **Performance**: Use dashboard benchmark panel or TensorBoard GPU metrics
 
-### Debugging Strategy
-- **Training Instability**: Check `TrainingStabilizer` logs for NaN recovery
-- **Physics Violations**: Use `test_physics_sanity.py` for equation validation
-- **Performance Issues**: Profile with dashboard performance metrics
-- **Interface Problems**: Validate with `test_vof_transport.py`
-
----
-
-## 🔍 Key Code Navigation Tips
-
-### Finding Physics Implementation
-- Navier-Stokes: `src/physics/constraints.py` lines 120-180
-- VOF Transport: `src/physics/constraints.py` lines 200-250
-- Electrowetting Forces: `src/physics/constraints.py` lines 300-350
-
-### Training Pipeline Flow
-1. `train_two_phase.py` → `main()`
-2. `src/models/pinn_two_phase.py` → `Trainer.__init__()`
-3. `src/models/pinn_two_phase.py` → `Trainer.train()`
-4. `src/training/scheduler.py` → `DynamicPhysicsWeightScheduler`
-
-### Model Architecture
-- Input Processing: `TwoPhasePINN.forward()` lines 150-200
-- Dual-Branch MLP: `TwoPhasePINN.__init__()` lines 80-120
-- Loss Computation: `PhysicsConstraints.compute_all_losses()`
+### Model Development Flow
+- Physics changes → `src/physics/constraints.py`
+- Architecture changes → `src/models/pinn_two_phase.py` (TwoPhasePINN class)
+- Training logic → `src/training/` (scheduler, stabilizer, components)
+- Configuration → update relevant JSON in `config/`
+- Tests → add/modify in `tests/`
 
 ---
 
-## 📚 Documentation References
+## 🛠️ Development Environment
 
-For detailed information, consult:
-- **Quick Start**: `docs/guides/quickstart.md`
-- **Physics Theory**: `docs/guides/physics_and_device_guide.md`
-- **Configuration**: `docs/guides/configuration_guide.md`
-- **Training Guide**: `docs/guides/training_guide.md`
-- **API Reference**: `docs/api/README.md`
-
----
-
-## 🛠️ Development Tools
-
-### Environment Management
-- **Package Manager**: `uv` (see `pyproject.toml`)
-- **Python Version**: 3.12-3.13
-- **GPU Acceleration**: CUDA 11.8 (PyTorch 2.7.1)
-
-### Code Quality
-- **Linting**: `ruff` (configured in `pyproject.toml`)
-- **Formatting**: `black` (line length 88)
+- **Package manager**: `uv` (see `pyproject.toml`)
+- **Python**: 3.12–3.13
+- **GPU**: CUDA 11.8, PyTorch 2.7.1
+- **Linting**: `ruff` (line-length 88)
+- **Formatting**: `black` (line-length 88)
 - **Testing**: `pytest` + `hypothesis`
-
-### Utility Functions
-- **Model Loading**: `src/utils/model_utils.py` - Handle checkpoint loading with architecture mismatch
-- **Logging**: `src/utils/logging_config.py` - Unified logging setup with environment variable support
-
-### Monitoring & Visualization
-- **TensorBoard Integration**: `src/models/pinn_two_phase.py` - Complete training monitoring with loss curves, gradients, and network architecture visualization
+- **Dependency groups**: `dev`, `testing`, `monitoring`, `web`, `full`, `dashboard`
 
 ### Output Structure
-Training outputs are organized as:
 ```
 outputs/train/pinn_YYYYMMDD_HHMMSS/
 ├── best_model.pth               # Best model weights
 ├── best_model_epoch_XXXXX.pth   # Epoch-specific checkpoints
+├── final_model.pth              # Final epoch weights
 ├── training.log                 # Training progress log
-├── interface_3d_steady.png      # 3D interface visualization
+├── runs/                        # TensorBoard event files
+├── pro_dashboard_best.png       # 4-panel evaluation dashboard
+├── phi_grid_evolution_best.png  # 7×6 voltage/time grid
+├── interface_3d_steady_best.png # 3D interface isosurface
+├── dynamic_curves_best.png      # Dynamic response curves
+├── response_times_best.png      # Response time analysis
+├── mass_conservation_best.png   # Volume conservation check
+├── z_profile_best.png           # Vertical phase profile
 ├── training_curve.png           # Loss curves
 └── config.json                  # Training configuration snapshot
 ```
 
 ---
 
-*Last updated: 2026-04-18 | Version: v4.5.0*
+## 📚 Documentation References
+
+Key docs for deeper context:
+- **Quick Start**: `docs/guides/quickstart.md`
+- **Physics & Device Guide**: `docs/guides/physics_and_device_guide.md`
+- **Configuration Guide**: `docs/guides/configuration_guide.md`
+- **Training Guide**: `docs/guides/training_guide.md`
+- **API Reference**: `docs/api/README.md`
+- **Architecture**: `docs/architecture/system_design.md`
+- **Project Overview**: `docs/PROJECT_OVERVIEW.md`
+
+---
+
+## ⌨️ Slash Commands
+
+Quick shortcuts for the most frequent workflows. All commands use `uv run`.
+
+| Command | Action |
+|---|---|
+| `/train [config]` | Train with config (default: `config/v4.5-standard.json`) |
+| `/eval <target>` | Evaluate: `best`, `latest`, `final`, `compare`, or a checkpoint path |
+| `/test [scope]` | Run tests: `quick` (skip slow), `all`, or specify a test file |
+| `/lint` | Check formatting (`ruff check && black --check`) |
+| `/fmt` | Auto-fix formatting (`ruff check --fix && black`) |
+| `/monitor` | Launch Streamlit dashboard |
+| `/validate-config` | Check config files for missing keys |
+| `/clean-outputs` | List or remove stale training output directories |
+
+---
+
+*Last updated: 2026-05-19 | Version: v4.5*

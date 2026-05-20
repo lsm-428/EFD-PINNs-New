@@ -18,8 +18,8 @@ import json
 import tempfile
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple, Callable
-from unittest.mock import patch, MagicMock
+from typing import Dict, List, Any, Tuple, Callable
+from unittest.mock import MagicMock
 import pytest
 
 # Add project root to path
@@ -271,9 +271,9 @@ class FunctionTestCase:
 
         sig = inspect.signature(func)
         actual_params = list(sig.parameters.keys())
-        assert actual_params == expected_params, (
-            f"Expected parameters {expected_params}, got {actual_params}"
-        )
+        assert (
+            actual_params == expected_params
+        ), f"Expected parameters {expected_params}, got {actual_params}"
 
     def assert_return_type(self, func: Callable, *args, expected_type: type):
         """
@@ -285,9 +285,9 @@ class FunctionTestCase:
             expected_type: Expected return type
         """
         result = func(*args)
-        assert isinstance(result, expected_type), (
-            f"Expected return type {expected_type}, got {type(result)}"
-        )
+        assert isinstance(
+            result, expected_type
+        ), f"Expected return type {expected_type}, got {type(result)}"
         return result
 
     def assert_raises(self, func: Callable, *args, exception: type):
@@ -311,9 +311,9 @@ class FunctionTestCase:
             expected_shape: Expected shape tuple
         """
         if hasattr(result, "shape"):
-            assert result.shape == expected_shape, (
-                f"Expected shape {expected_shape}, got {result.shape}"
-            )
+            assert (
+                result.shape == expected_shape
+            ), f"Expected shape {expected_shape}, got {result.shape}"
         else:
             raise TypeError("Result has no shape attribute")
 
@@ -380,9 +380,9 @@ class IntegrationTestCase:
         """
         for dir_name in expected_dirs:
             dir_path = os.path.join(base_path, dir_name)
-            assert os.path.isdir(dir_path), (
-                f"Expected directory {dir_path} does not exist"
-            )
+            assert os.path.isdir(
+                dir_path
+            ), f"Expected directory {dir_path} does not exist"
 
     def assert_output_files(self, expected_files: List[str]):
         """
@@ -392,9 +392,9 @@ class IntegrationTestCase:
             expected_files: List of expected file paths
         """
         for filepath in expected_files:
-            assert os.path.exists(filepath), (
-                f"Expected output file {filepath} does not exist"
-            )
+            assert os.path.exists(
+                filepath
+            ), f"Expected output file {filepath} does not exist"
 
     def assert_plot_saved(self, filepath: str):
         """
@@ -416,9 +416,9 @@ class IntegrationTestCase:
         """
         with open(log_path, "r") as f:
             content = f.read()
-        assert expected_text in content, (
-            f"Expected text '{expected_text}' not found in log {log_path}"
-        )
+        assert (
+            expected_text in content
+        ), f"Expected text '{expected_text}' not found in log {log_path}"
 
 
 @pytest.fixture
@@ -517,9 +517,9 @@ class PerformanceTestCase:
             **kwargs: Keyword arguments
         """
         elapsed, _ = self.measure_execution_time(func, *args, **kwargs)
-        assert elapsed < max_seconds, (
-            f"Function took {elapsed:.2f}s, expected < {max_seconds}s"
-        )
+        assert (
+            elapsed < max_seconds
+        ), f"Function took {elapsed:.2f}s, expected < {max_seconds}s"
 
 
 # ============================================================================

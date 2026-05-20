@@ -17,7 +17,7 @@ import sys
 if __name__ == "__main__":
     # 导入并运行两相流训练
     from src.models.pinn_two_phase import main
-    
+
     if len(sys.argv) == 1:
         print("=" * 60)
         print("第三阶段：两相流 PINN 训练")
@@ -30,5 +30,5 @@ if __name__ == "__main__":
         print("  python train_two_phase.py --epochs 30000")
         print("  python train_two_phase.py --config config/two_phase_config.json")
         print("=" * 60)
-    
+
     main()

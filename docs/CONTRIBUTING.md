@@ -89,12 +89,12 @@ def calculate_contact_angle(
 ) -> float:
     """
     计算接触角。
-    
+
     Args:
         voltage: 施加电压 (V)
         theta0: 初始接触角 (度)
         epsilon_r: 相对介电常数
-        
+
     Returns:
         接触角 (度)
     """
@@ -150,7 +150,7 @@ class TestEnhancedApertureModel:
         model = EnhancedApertureModel()
         result = model.get_contact_angle(voltage=15.0)
         assert 60 <= result <= 130
-    
+
     @given(st.floats(min_value=0, max_value=30))
     def test_voltage_range(self, voltage):
         """属性测试：电压范围"""

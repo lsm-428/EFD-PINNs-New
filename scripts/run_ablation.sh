@@ -58,7 +58,7 @@ print_help() {
 check_config() {
     local config_name="$1"
     local config_path="$CONFIG_DIR/${config_name}.json"
-    
+
     if [[ ! -f "$config_path" ]]; then
         echo -e "${RED}错误: 配置文件不存在: $config_path${NC}"
         return 1
@@ -72,7 +72,7 @@ run_experiment() {
     local config_path="$CONFIG_DIR/${config_name}.json"
     local timestamp=$(date +%Y%m%d_%H%M%S)
     local exp_output_dir="$OUTPUT_DIR/${config_name}_${timestamp}"
-    
+
     echo ""
     echo -e "${BLUE}============================================${NC}"
     echo -e "${BLUE}实验: $config_name${NC}"
@@ -81,19 +81,19 @@ run_experiment() {
     echo -e "输出: $exp_output_dir"
     echo -e "开始时间: $(date '+%Y-%m-%d %H:%M:%S')"
     echo ""
-    
+
     # 创建输出目录
     mkdir -p "$exp_output_dir"
-    
+
     # 复制配置文件到输出目录
     cp "$config_path" "$exp_output_dir/config.json"
-    
+
     # 切换到项目目录
     cd "$PROJECT_ROOT"
-    
+
     # 运行训练
     echo -e "${YELLOW}开始训练...${NC}"
-    
+
     # 检查是否有GPU
     if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
         echo -e "${GREEN}检测到GPU，使用CUDA...${NC}"
@@ -102,9 +102,9 @@ run_experiment() {
         echo -e "${YELLOW}未检测到GPU，使用CPU (速度较慢)...${NC}"
         python train_two_phase.py --config "$config_path" 2>&1 | tee "$exp_output_dir/training.log"
     fi
-    
+
     local exit_code=${PIPESTATUS[0]}
-    
+
     if [[ $exit_code -eq 0 ]]; then
         echo ""
         echo -e "${GREEN}✓ 实验完成: $config_name${NC}"
@@ -114,7 +114,7 @@ run_experiment() {
         echo ""
         echo -e "${RED}✗ 实验失败: $config_name (exit code: $exit_code)${NC}"
     fi
-    
+
     return $exit_code
 }
 
@@ -124,22 +124,22 @@ generate_report() {
     echo -e "${BLUE}============================================${NC}"
     echo -e "${BLUE}生成消融实验对比报告${NC}"
     echo -e "${BLUE}============================================${NC}"
-    
+
     local report_path="$OUTPUT_DIR/ablation_report.txt"
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    
+
     echo "EFD3D 消融实验对比报告" > "$report_path"
     echo "生成时间: $timestamp" >> "$report_path"
     echo "=======================================" >> "$report_path"
     echo "" >> "$report_path"
-    
+
     for exp in "${ABLATIONS[@]}"; do
         # 查找最新的实验目录
         local exp_dir=$(ls -dt "$OUTPUT_DIR/${exp}_"* 2>/dev/null | head -1)
         if [[ -d "$exp_dir" ]]; then
             local final_loss=$(grep -oP "Final Loss: \K[0-9.]+" "$exp_dir/training.log" 2>/dev/null | tail -1 || echo "N/A")
             local volume_error=$(grep -oP "Volume Error: \K[0-9.]+%" "$exp_dir/training.log" 2>/dev/null | tail -1 || echo "N/A")
-            
+
             echo "实验: $exp" >> "$report_path"
             echo "  输出目录: $exp_dir" >> "$report_path"
             echo "  最终损失: $final_loss" >> "$report_path"
@@ -151,7 +151,7 @@ generate_report() {
             echo "" >> "$report_path"
         fi
     done
-    
+
     echo -e "${GREEN}报告已生成: $report_path${NC}"
     cat "$report_path"
 }
@@ -159,7 +159,7 @@ generate_report() {
 # 主程序
 main() {
     local action="${1:-help}"
-    
+
     case "$action" in
         "all")
             echo -e "${GREEN}运行所有消融实验...${NC}"
@@ -170,7 +170,7 @@ main() {
                 echo "已取消"
                 exit 0
             fi
-            
+
             for exp in "${ABLATIONS[@]}"; do
                 if check_config "$exp"; then
                     run_experiment "$exp" || true

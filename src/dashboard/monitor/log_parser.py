@@ -16,7 +16,6 @@ import os
 import json
 from typing import Dict, List, Any, Optional, Tuple
 
-import numpy as np
 
 from src.dashboard.monitor.log_parsing import (
     parse_training_log,

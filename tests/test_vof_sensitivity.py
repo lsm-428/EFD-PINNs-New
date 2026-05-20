@@ -17,7 +17,6 @@ VOF Sensitivity Tests
 import sys
 from pathlib import Path
 
-import numpy as np
 import pytest
 import torch
 import torch.nn as nn
@@ -217,17 +216,17 @@ class TestCompressionSensitivity:
             compression_factors.append(factor.mean().item())
 
         # 验证: phi=0.5时压缩因子最大，phi=0或1时为0
-        assert max(compression_factors) == compression_factors[2], (
-            "Maximum compression should be at phi=0.5"
-        )
+        assert (
+            max(compression_factors) == compression_factors[2]
+        ), "Maximum compression should be at phi=0.5"
         assert compression_factors[0] == 0.0, "Compression at phi=0 should be 0"
         assert compression_factors[4] == 0.0, "Compression at phi=1 should be 0"
-        assert compression_factors[2] > compression_factors[1], (
-            "Compression at phi=0.5 > phi=0.25"
-        )
-        assert compression_factors[2] > compression_factors[3], (
-            "Compression at phi=0.5 > phi=0.75"
-        )
+        assert (
+            compression_factors[2] > compression_factors[1]
+        ), "Compression at phi=0.5 > phi=0.25"
+        assert (
+            compression_factors[2] > compression_factors[3]
+        ), "Compression at phi=0.5 > phi=0.75"
 
     def test_interface_region_activation(self):
         """
@@ -248,18 +247,18 @@ class TestCompressionSensitivity:
         factor = c_alpha * vel_mag * phi * (1 - phi)
 
         # 验证: 所有factor应该在[0, 0.25]范围内
-        assert factor.max() <= 0.25, (
-            f"Max factor should be 0.25, got {factor.max().item()}"
-        )
+        assert (
+            factor.max() <= 0.25
+        ), f"Max factor should be 0.25, got {factor.max().item()}"
         assert factor.min() >= 0.0, f"Min factor should be 0, got {factor.min().item()}"
 
         # 验证: 0和1附近的factor接近0
         near_interface = (phi > 0.3) & (phi < 0.7)
         near_pure = (phi < 0.1) | (phi > 0.9)
 
-        assert factor[near_interface].mean() > factor[near_pure].mean(), (
-            "Interface region should have higher compression"
-        )
+        assert (
+            factor[near_interface].mean() > factor[near_pure].mean()
+        ), "Interface region should have higher compression"
 
 
 class TestSamplingSensitivity:

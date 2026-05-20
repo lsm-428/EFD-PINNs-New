@@ -121,13 +121,13 @@ V_to_norm = V_to / 30     # [0, 1]
 def generate_training_data():
     # 采用 0.5V 步进采样策略 (61 个电压状态点)
     voltages = np.linspace(0, 30, 61)
-    
+
     # 1. 升压采样 (0 -> V)
     # 覆盖 0.5V 间隔的 61 个目标电压
-    
+
     # 2. 降压采样 (V -> 0)
     # 覆盖从 0.5V 到 30V 的 60 个初始电压状态
-    
+
     # 3. 稳态采样 (V -> V)
     # 确保模型在 t_since 较大时收敛到静态物理场
 ```
@@ -152,7 +152,7 @@ def measure_rise_time(model, V_target):
     η_steady = get_steady_aperture(V_target)
     η_10 = 0.1 * η_steady
     η_90 = 0.9 * η_steady
-    
+
     for t_since in np.linspace(0, 0.030, 100):
         η = compute_aperture(model, t_since, V_from=0, V_to=V_target)
         if η >= η_90:
@@ -165,7 +165,7 @@ def measure_fall_time(model, V_initial):
     η_initial = get_steady_aperture(V_initial)
     η_90 = 0.9 * η_initial
     η_10 = 0.1 * η_initial
-    
+
     for t_since in np.linspace(0, 0.030, 100):
         η = compute_aperture(model, t_since, V_from=V_initial, V_to=0)
         if η <= η_10:
@@ -180,12 +180,12 @@ def plot_cv_curve(model):
     """绘制稳态开口率 vs 电压曲线"""
     voltages = np.linspace(0, 30, 31)
     apertures = []
-    
+
     for V in voltages:
         # 稳态: V_from = V_to = V, t_since 足够大
         η = compute_aperture(model, t_since=0.030, V_from=V, V_to=V)
         apertures.append(η)
-    
+
     plt.plot(voltages, apertures)
     plt.xlabel('Voltage (V)')
     plt.ylabel('Aperture Ratio η')
@@ -197,13 +197,13 @@ def plot_cv_curve(model):
 def plot_dynamic_response(model, V_target):
     """绘制升压/降压动态响应"""
     times = np.linspace(0, 0.030, 100)
-    
+
     # 升压响应
     η_rise = [compute_aperture(model, t, V_from=0, V_to=V_target) for t in times]
-    
+
     # 降压响应
     η_fall = [compute_aperture(model, t, V_from=V_target, V_to=0) for t in times]
-    
+
     plt.plot(times*1000, η_rise, label='Rise (0→V)')
     plt.plot(times*1000, η_fall, label='Fall (V→0)')
 ```

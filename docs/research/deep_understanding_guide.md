@@ -1,8 +1,8 @@
 # EFD3D PINN 深度理解指南
 
-**最后更新**: 2026-04-13  
-**目的**: 为论文撰写和实验验证提供深度技术理解  
-**受众**: 项目开发者、论文审阅者、后续研究者  
+**最后更新**: 2026-04-13
+**目的**: 为论文撰写和实验验证提供深度技术理解
+**受众**: 项目开发者、论文审阅者、后续研究者
 
 详细参数说明请参见[物理理论与器件规格指南](../guides/physics_and_device_guide.md#physics-parameters) 和 [配置系统指南](../guides/configuration_guide.md)。
 
@@ -165,7 +165,7 @@ class TwoPhasePINN(nn.Module):
     def __init__(self):
         # φ 网络：学习界面场
         self.phi_net = MLP(6 → [64,64,64,32] → 1)
-        
+
         # 速度网络：学习流场 (以 φ 为条件)
         self.vel_net = MLP(7 → [64,64,32] → 4)
 ```
@@ -230,12 +230,12 @@ u_xx = g_u_x[:,0]
 ```python
 def continuity_residual(u, v, w, coords):
     # 自动微分计算散度
-    u_x = torch.autograd.grad(u.sum(), coords, 
+    u_x = torch.autograd.grad(u.sum(), coords,
                                grad_outputs=torch.ones_like(u),
                                create_graph=True)[0][:,0]
     v_y = ...  # 同理
     w_z = ...  # 同理
-    
+
     div_u = u_x + v_y + w_z
     return div_u  # 残差应接近 0
 ```
@@ -246,13 +246,13 @@ def continuity_residual(u, v, w, coords):
 def vof_residual(phi, u, v, w, coords):
     # 时间导数 (t_since 在索引 5)
     phi_t = torch.autograd.grad(phi.sum(), coords)[0][:,5]
-    
+
     # 空间梯度
     grad_phi = torch.autograd.grad(phi.sum(), coords)[0][:,0:3]
-    
+
     # 对流项
     advection = u * grad_phi[:,0] + v * grad_phi[:,1] + w * grad_phi[:,2]
-    
+
     return phi_t + advection
 ```
 
@@ -364,7 +364,7 @@ L_cont^φ-weighted = (1/N) Σ φ(x_i,t_i)² |∇·u(x_i,t_i)|²
 class DynamicPhysicsWeightScheduler:
     def update(self, data_loss, physics_loss, epoch):
         ratio = data_loss / physics_loss
-        
+
         if ratio > 2.0:
             # 数据损失主导，增加物理权重
             return current_weight * 1.2
@@ -395,12 +395,12 @@ Stage 1 (0-5000 epochs):
   目标：学习界面基本形状
   损失：interface + ic + bc (纯数据)
   物理权重：0
-  
+
 Stage 2 (5000-17000 epochs):
   目标：引入物理约束
   损失：数据 + 连续性+VOF
   物理权重：0.1 (平滑过渡)
-  
+
 Stage 3 (5500-60000 epochs):
   目标：完整物理约束
   损失：数据 + 连续性+VOF+NS
@@ -424,18 +424,18 @@ Stage 3 (5500-60000 epochs):
 def get_physics_weights(epoch):
     if epoch < stage1_epochs:
         return {"continuity": 0.0, "vof": 0.0, "ns": 0.0}
-    
+
     elif epoch < stage2_epochs:
         # Sigmoid 平滑过渡
         progress = (epoch - stage1_epochs) / (stage2_epochs - stage1_epochs)
         smooth_factor = 0.5 * (1 + np.tanh(4 * (progress - 0.5)))
-        
+
         return {
             "continuity": 0.1 * smooth_factor,
             "vof": 0.1 * smooth_factor,
             "ns": 0.01 * smooth_factor
         }
-    
+
     else:
         return {"continuity": 0.1, "vof": 0.1, "ns": 0.01}
 ```
@@ -476,11 +476,11 @@ class TrainingStabilizer:
         if torch.isnan(loss) or torch.isinf(loss):
             # 1. 恢复到最后有效状态
             model.load_state_dict(last_valid_state)
-            
+
             # 2. 减半学习率
             for param_group in optimizer.param_groups:
                 param_group['lr'] *= 0.5
-            
+
             return True
         return False
 ```
@@ -699,7 +699,7 @@ activation: Tanh + Linear
 PINN:      u(x) ≈ NN(x; θ), NN 是连续函数
 ```
 
-**优势**: 
+**优势**:
 - 任意位置可求值（无需插值）
 - 自动满足连续性（NN 是光滑函数）
 
@@ -771,8 +771,8 @@ VOF 方程：∂φ/∂t + u·∇φ = 0  (局部守恒)
 
 ---
 
-**版本**: v2.1 (同步更新版)  
-**最后更新**: 2026-03-02  
-**维护者**: EFD3D Development Team  
-**更新说明**: 同步更新以匹配论文 v2.0 和实际训练结果 (pinn_20260205_174333)  
+**版本**: v2.1 (同步更新版)
+**最后更新**: 2026-03-02
+**维护者**: EFD3D Development Team
+**更新说明**: 同步更新以匹配论文 v2.0 和实际训练结果 (pinn_20260205_174333)
 **维护者**: EFD3D Development Team

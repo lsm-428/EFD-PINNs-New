@@ -12,14 +12,13 @@ import glob
 from pathlib import Path
 
 # Add project root to sys.path
-project_root = str(Path(__file__).resolve().parent.parent)
+project_root = str(Path(__file__).resolve().parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from matplotlib.gridspec import GridSpec
 from matplotlib.colors import LinearSegmentedColormap
 from typing import Dict, List, Optional, Tuple, Any
-from mpl_toolkits.mplot3d import Axes3D
 
 # =============================================================================
 # IEEE Publication Standard Configuration (Added 2026-02-05)
@@ -288,26 +287,14 @@ class PINNEvaluator:
         ax2.set_ylabel("z (μm)")
         plt.colorbar(im2, ax=ax2, label="φ")
 
-        # 3. Dynamic Response (0->30->0V)
+        # 3. Dynamic Response (0->30->0V) — raw PINN vs Stage1
         ax3 = fig.add_subplot(gs[1, :2])
         t_max = PHYSICS.get("t_max", 0.05)
         times = np.linspace(0, t_max, 100)
         t_rise, t_fall = t_max * 0.1, t_max * 0.5  # 10% 处上升，50% 处下降
 
-        # [Hybrid Correction Setup]
-        V_dashboard = 30.0
-        eta_dyn_end = self.compute_aperture(
-            model, V_dashboard, t_fall - t_rise, 0.0
-        )  # Approx t_switch
-        eta_static = self.compute_aperture(model, V_dashboard, 0.050, V_dashboard)
-        scale_factor = 1.0
-        if eta_dyn_end > 0.01 and eta_static > eta_dyn_end:
-            scale_factor = eta_static / eta_dyn_end
-            scale_factor = min(scale_factor, 2.0)
-
         pinn_etas = []
         s1_etas = []
-        last_on_eta = 0.0
 
         for t in times:
             if t < t_rise:
@@ -317,34 +304,10 @@ class PINNEvaluator:
                 # ON Phase
                 Vf, Vt, ts = 0.0, 30.0, t - t_rise
                 eta = self.compute_aperture(model, Vt, ts, Vf)
-                eta *= scale_factor
-
-                # Monotonicity Latch
-                if len(pinn_etas) > 0 and t > t_rise + 0.001:  # Small buffer
-                    eta = max(eta, pinn_etas[-1])
-                    if eta < pinn_etas[-1] + 1e-4:
-                        eta = pinn_etas[-1]
-
-                last_on_eta = eta
             else:
                 # OFF Phase
                 Vf, Vt, ts = 30.0, 0.0, t - t_fall
-
-                # Use OFF Phase Correction Logic
-                eta_off_raw = self.compute_aperture(model, 0.0, ts, 30.0)
-
-                eta_on_end_corrected = (
-                    last_on_eta if last_on_eta > 0 else (eta_dyn_end * scale_factor)
-                )
-                eta_off_start_raw = self.compute_aperture(model, 0.0, 0.0, 30.0)
-
-                offset = eta_on_end_corrected - eta_off_start_raw
-                decay_factor = np.exp(-ts / 0.010)
-                eta = eta_off_raw + offset * decay_factor
-
-                # Forced Decay for 30V
-                tau_off_forced = 0.005
-                eta = eta_on_end_corrected * np.exp(-ts / tau_off_forced)
+                eta = self.compute_aperture(model, Vt, ts, Vf)
 
             eta = max(0.0, min(1.0, eta))
             pinn_etas.append(eta)
@@ -357,7 +320,7 @@ class PINNEvaluator:
         ax3.axhline(
             self.eta_max, color="gray", linestyle=":", label=f"Limit ({self.eta_max})"
         )
-        ax3.set_title(f"Dynamic Step Response (0V → 30V → 0V)")
+        ax3.set_title("Dynamic Step Response (0V → 30V → 0V)")
         ax3.set_xlabel("Time (ms)")
         ax3.set_ylabel("Aperture Ratio")
         ax3.legend(loc="upper right")
@@ -550,7 +513,7 @@ class PINNEvaluator:
                     alpha=0.1,
                 )
 
-        except Exception as e:
+        except Exception:
             # 静默处理（通常是因为没有界面，这是正常的物理状态）
             pass
 
@@ -626,82 +589,32 @@ class PINNEvaluator:
             etas = []
             analytical_etas = []  # 解析解 (Stage 1)
 
-            # [Hybrid Correction] Calculate steady-state scaling factor
-            scale_factor = 1.0
-            if v_target > 0:
-                # 1. PINN's prediction for dynamic ON at t=t_switch (should be steady)
-                eta_dyn_end = self.compute_aperture(model, v_target, t_switch, 0.0)
-                # 2. PINN's prediction for static ON (ground truth for model capability)
-                eta_static = self.compute_aperture(model, v_target, 0.050, v_target)
-
-                # If dynamic prediction is significantly lower than static capability (underfitting dynamics),
-                # apply a correction factor to recover the full range for visualization.
-                if eta_dyn_end > 0.01 and eta_static > eta_dyn_end:
-                    scale_factor = eta_static / eta_dyn_end
-                    # Cap scaling to avoid artifacts
-                    scale_factor = min(scale_factor, 2.0)
-
-            last_on_eta = 0.0
-
             for t in times:
-                # PINN 预测
+                # Raw PINN prediction — no post-processing
                 if v_target == 0:  # Static 0V
                     eta = self.compute_aperture(model, 0.0, t, 0.0)
                 else:
                     if t <= t_switch:
                         # ON Phase: 0 -> V_target
                         eta = self.compute_aperture(model, v_target, t, 0.0)
-                        # Apply hybrid correction
-                        eta *= scale_factor
-
-                        # [Refactored] Removed hardcoded 30V fix.
-                        # Rely on model prediction and general continuity correction.
-
-                        last_on_eta = eta
                     else:
                         # OFF Phase: V_target -> 0
                         t_since_off = t - t_switch
                         eta = self.compute_aperture(model, 0.0, t_since_off, v_target)
 
-                        # OFF phase correction strategy:
-                        # Use the ACTUAL last ON value (which includes latching/scaling) to ensure continuity
-                        eta_on_end_corrected = (
-                            last_on_eta
-                            if last_on_eta > 0
-                            else (eta_dyn_end * scale_factor)
-                        )
-
-                        # Calculate the raw starting point of OFF phase
-                        eta_off_start_raw = self.compute_aperture(
-                            model, 0.0, 0.0, v_target
-                        )
-
-                        # Calculate the offset needed to match continuity
-                        offset = eta_on_end_corrected - eta_off_start_raw
-
-                        # Apply offset that decays over time
-                        decay_factor = np.exp(
-                            -t_since_off / 0.010
-                        )  # 10ms decay constant
-                        eta += offset * decay_factor
-
-                        # [Refactored] Removed hardcoded 30V OFF phase override.
-
                 # Clip to physical range [0, 1]
                 eta = max(0.0, min(1.0, eta))
                 etas.append(eta)
 
-                # Stage 1 解析解预测
+                # Stage 1 analytical prediction
                 if v_target == 0:
                     _, a_eta = self.stage1_model.theta_eta_from_triad(0, 0, t)
                 else:
                     if t <= t_switch:
-                        # ON: 0 -> V_target
                         _, a_eta = self.stage1_model.theta_eta_from_triad(
                             0, v_target, t
                         )
                     else:
-                        # OFF: V_target -> 0
                         t_since_off = t - t_switch
                         _, a_eta = self.stage1_model.theta_eta_from_triad(
                             v_target, 0, t_since_off
@@ -709,27 +622,12 @@ class PINNEvaluator:
 
                 analytical_etas.append(a_eta)
 
-            # 绘制 PINN 预测曲线 (实线)
+            # Plot raw PINN prediction (solid)
             plt.plot(
                 times * 1000, etas, label=f"{label} (PINN)", color=color, linewidth=2
             )
 
-            # [Added] Plot PINN Steady State Limit as a dot at the end of ON phase
-            if v_target > 0:
-                # Calculate what PINN thinks the steady state is (using V_from = V_to = V_target)
-                # Use a sufficiently large time, e.g., 50ms, or just the current t_switch if we assume quasi-steady
-                eta_ss_pinn = self.compute_aperture(model, v_target, 0.050, v_target)
-                plt.scatter(
-                    [t_switch * 1000],
-                    [eta_ss_pinn],
-                    color=color,
-                    marker="*",
-                    s=60,
-                    zorder=10,
-                    label=f"{label} SS Limit" if (v_target == 30.0) else None,
-                )  # Only label one to avoid clutter
-
-            # 绘制 Stage 1 解析解曲线 (虚线)
+            # Plot Stage 1 analytical (dashed)
             if v_target > 0:
                 plt.plot(
                     times * 1000,
@@ -740,7 +638,7 @@ class PINNEvaluator:
                     alpha=0.5,
                 )
 
-                # Calculate RMSE
+                # RMSE: raw PINN vs Stage1
                 rmse = np.sqrt(
                     np.mean((np.array(etas) - np.array(analytical_etas)) ** 2)
                 )
@@ -776,44 +674,24 @@ class PINNEvaluator:
         for V, color in zip(voltages, colors):
             etas = []
 
-            # [Hybrid Correction] Calculate steady-state scaling factor
-            scale_factor = 1.0
-            if V > 0:
-                eta_dyn_end = self.compute_aperture(model, V, t_switch, 0.0)
-                eta_static = self.compute_aperture(model, V, 0.050, V)
-                if eta_dyn_end > 0.01 and eta_static > eta_dyn_end:
-                    scale_factor = eta_static / eta_dyn_end
-                    scale_factor = min(scale_factor, 2.0)
+            # Use raw PINN steady-state for target calculation
+            eta_steady_on = self.compute_aperture(model, V, 0.050, V) if V > 0 else 0.0
 
-            # Use corrected steady state for target calculation
-            eta_steady_on = eta_static if V > 0 else 0.0
-
-            # 计算 ON 响应时间 (到达 90% 稳态值所需时间)
+            # t_on: time to reach 90% of steady-state
             target_on = 0.9 * eta_steady_on
             t_on = np.nan
-            t_on_val = np.nan  # 具体时间值
+            t_on_val = np.nan
 
-            # 计算 OFF 响应时间 (从稳态降至 10% 稳态值所需时间)
+            # t_off: time to drop to 10% of steady-state
             target_off = 0.1 * eta_steady_on
             t_off = np.nan
             t_off_val = np.nan
 
-            last_on_eta = 0.0
-
             for t in times:
+                # Raw PINN prediction — no post-processing
                 if t <= t_switch:
                     # ON Phase
                     eta = self.compute_aperture(model, V, t, 0.0)
-                    eta *= scale_factor
-
-                    # [Monotonicity Latch]
-                    if V >= 25.0 and len(etas) > 0:
-                        eta = max(eta, etas[-1])
-                        # Force strict monotonicity if it's very close
-                        if eta < etas[-1] + 1e-4:
-                            eta = etas[-1]
-
-                    last_on_eta = eta
 
                     if np.isnan(t_on) and eta >= target_on:
                         t_on = eta
@@ -823,33 +701,18 @@ class PINNEvaluator:
                     t_since_off = t - t_switch
                     eta = self.compute_aperture(model, 0.0, t_since_off, V)
 
-                    # [Continuity & Forced Decay]
-                    eta_on_end_corrected = (
-                        last_on_eta if last_on_eta > 0 else (eta_dyn_end * scale_factor)
-                    )
-                    eta_off_start_raw = self.compute_aperture(model, 0.0, 0.0, V)
-                    offset = eta_on_end_corrected - eta_off_start_raw
-                    decay_factor = np.exp(-t_since_off / 0.010)
-                    eta += offset * decay_factor
-
-                    if V >= 25.0:
-                        tau_off_forced = 0.005
-                        eta = eta_on_end_corrected * np.exp(
-                            -t_since_off / tau_off_forced
-                        )
-
                     if np.isnan(t_off) and eta <= target_off:
                         t_off = eta
                         t_off_val = t_since_off
 
-                # Clip
+                # Clip to physical range [0, 1]
                 eta = max(0.0, min(1.0, eta))
                 etas.append(eta)
 
-            # 绘制曲线
+            # Plot curve
             plt.plot(times * 1000, etas, label=f"{int(V)}V", color=color, linewidth=2)
 
-            # 标记 t_on 点
+            # Mark t_on point
             if not np.isnan(t_on_val):
                 plt.scatter(t_on_val * 1000, t_on, color=color, s=50, zorder=5)
                 plt.text(
@@ -862,7 +725,7 @@ class PINNEvaluator:
                     fontweight="bold",
                 )
 
-            # 标记 t_off 点
+            # Mark t_off point
             if not np.isnan(t_off_val):
                 abs_time = t_switch + t_off_val
                 plt.scatter(
@@ -992,10 +855,10 @@ class PINNEvaluator:
         min_error = np.min(errors)
 
         print("=== Volume Conservation Results ===")
-        print(f"Training log Vol value: 0.317 (Epoch 58000)")
+        print("Training log Vol value: 0.317 (Epoch 58000)")
         print(f"Calculated final_vol: {final_vol:.6f}")
         print()
-        print(f"Volume error statistics:")
+        print("Volume error statistics:")
         print(f"  Average error: {avg_error:.2f}%")
         print(f"  Max error: {max_error:.2f}%")
         print(f"  Min error: {min_error:.2f}%")
@@ -1093,6 +956,9 @@ class PINNEvaluator:
         """
         if V_from is None:
             V_from = V_to
+
+        # Fix seed for reproducible statistical tests
+        np.random.seed(42)
 
         # Sample multiple positions
         aperture_values = []
@@ -1275,7 +1141,7 @@ class PINNEvaluator:
         print(f"✅ Statistical comparison saved: {output_path}")
 
         # Print summary
-        print(f"\nPaired t-test Results:")
+        print("\nPaired t-test Results:")
         print(f"  t-statistic: {t_stat:.4f}")
         print(f"  p-value: {p_value:.6f}")
         print(f"  Cohen's d: {cohens_d:.4f}")
@@ -1338,7 +1204,7 @@ def main():
             )
             return
 
-        print(f"Loading models for statistical comparison...")
+        print("Loading models for statistical comparison...")
         model1, _ = evaluator.load_model(best_ckpt)
         model2, _ = evaluator.load_model(final_ckpt)
 
@@ -1367,7 +1233,7 @@ def main():
             model, _ = evaluator.load_model(ckpt)
             if model:
                 out = os.path.join(d, "pro_dashboard.png")
-                evaluator.plot_dashboard(model, out, model_name=d)
+                evaluator.plot_dashboard(model, out, model_name=os.path.basename(d))
     else:
         # Single model evaluation (or multiple checkpoints in one dir)
         if args.model_dir is None:
@@ -1414,14 +1280,14 @@ def main():
                 continue
 
             print(f"Loading {ckpt_type} model from {ckpt_path}...")
-            model, _ = evaluator.load_model(ckpt_path)
+            model, config = evaluator.load_model(ckpt_path)
 
             if model:
                 # 1. Professional Dashboard
                 out = os.path.join(args.model_dir, f"pro_dashboard_{suffix}.png")
-                evaluator.plot_dashboard(
-                    model, out, model_name=f"{args.model_dir} ({suffix})"
-                )
+                # Use version from config for reproducible rendering
+                model_label = config.get("metadata", {}).get("version", "PINN")
+                evaluator.plot_dashboard(model, out, model_name=model_label)
 
                 # 2. Phi Grid Evolution
                 grid_out = os.path.join(

@@ -20,12 +20,12 @@ EFD3D 统一物理参数配置模块
     # 方式1：直接使用全局 PHYSICS 字典（简单场景）
     from src.config import PHYSICS
     theta0 = PHYSICS["theta0"]
-    
+
     # 方式2：使用 PhysicsConfig 类（需要从 JSON 加载或自定义）
     from src.config import get_physics_config
     config = get_physics_config("config/device_calibrated_physics.json")
     theta0 = config.theta0
-    
+
     # 方式3：获取 materials_params 格式（兼容 PhysicsConstraints）
     materials = config.to_materials_params()
 
@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # 默认配置路径 - 从 paths 模块导入
 # ============================================================================
-from .paths import DEFAULT_CONFIG_PATH, get_config_path
+from .paths import DEFAULT_CONFIG_PATH
 
 # ============================================================================
 # 统一物理常量字典（全局单例）
@@ -54,63 +54,60 @@ from .paths import DEFAULT_CONFIG_PATH, get_config_path
 
 PHYSICS: Dict[str, Any] = {
     # ========== 几何参数 ==========
-    "Lx": 174e-6,           # 像素宽度 (m)
-    "Ly": 174e-6,           # 像素高度 (m)
-    "Lz": 20e-6,            # 围堰/流体层高度 (m)
-    "h_ink": 3e-6,          # 油墨层厚度 (m)
-    "h_polar": 17e-6,       # 极性液体层厚度 (m)
+    "Lx": 174e-6,  # 像素宽度 (m)
+    "Ly": 174e-6,  # 像素高度 (m)
+    "Lz": 20e-6,  # 围堰/流体层高度 (m)
+    "h_ink": 3e-6,  # 油墨层厚度 (m)
+    "h_polar": 17e-6,  # 极性液体层厚度 (m)
     "wall_height": 3.5e-6,  # 围堰高度 (m)，实际器件
-    
     # ========== 流体属性 ==========
     # 油墨（非极性，深色）
-    "rho_oil": 800.0,       # 油墨密度 (kg/m³)
-    "mu_oil": 0.003,        # 油墨动力粘度 (Pa·s)
-    "density_ink": 800.0,   # 别名，兼容 constraints.py
-    "viscosity_ink": 0.003, # 别名，兼容 constraints.py
-    
-    # 极性液体（透明，导电）
-    "rho_polar": 1000.0,    # 极性液体密度 (kg/m³)
-    "mu_polar": 0.001,      # 极性液体动力粘度 (Pa·s)
-    "density_polar": 1000.0,    # 别名
-    "viscosity_polar": 0.001,   # 别名
-    
+    "rho_oil": 763.0,  # 油墨密度 (kg/m³)，实测
+    "mu_oil": 9.41e-4,  # 油墨动力粘度 (Pa·s)，实测
+    "density_ink": 763.0,  # 别名，兼容 constraints.py
+    "viscosity_ink": 9.41e-4,  # 别名，兼容 constraints.py
+    # 极性液体（水+乙二醇 38:62）
+    "rho_polar": 998.0,  # 极性液体密度 (kg/m³)
+    "mu_polar": 1.01e-3,  # 极性液体动力粘度 (Pa·s)
+    "density_polar": 998.0,  # 别名
+    "viscosity_polar": 1.01e-3,  # 别名
     # 界面张力
-    "sigma": 0.045,         # 油墨-极性液体界面张力 (N/m)
-    "gamma": 0.015,         # 极性液体表面张力 (N/m)，用于 Young-Lippmann
-    "surface_tension_polar_ink": 0.045,  # 别名
-    
+    "sigma": 0.02505,  # 油墨-极性液体界面张力 (N/m)，实测
+    "gamma": 0.048,  # 极性液体表面张力 (N/m)，水+EG 38:62实测
+    "surface_tension_polar_ink": 0.02505,  # 别名
     # ========== 电学参数 ==========
-    "epsilon_0": 8.854e-12, # 真空介电常数 (F/m)
-    "epsilon_r": 12.0,      # 介电层有效相对介电常数（考虑极性液体渗透）
-    "epsilon_h": 1.9,       # 疏水层相对介电常数 (Teflon AF)
-    "d_dielectric": 4e-7,   # 介电层厚度 (m) = 400nm (SU-8)
+    "epsilon_0": 8.854e-12,  # 真空介电常数 (F/m)
+    "epsilon_r": 3.28,  # SU-8 相对介电常数（实测值）
+    "epsilon_h": 1.934,  # Teflon AF 相对介电常数（实测值）
+    "d_dielectric": 4e-7,  # 介电层厚度 (m) = 400nm (SU-8)
     "d_hydrophobic": 4e-7,  # 疏水层厚度 (m) = 400nm (Teflon)
-    
     # ========== 接触角参数 ==========
-    "theta0": 120.0,        # 本征接触角 (度)，无电压时
-    "theta_wall": 71.0,     # 围堰壁接触角 (度)
-    "theta_min": 60.0,      # 最小接触角 (度)，物理下限
+    "theta0": 120.0,  # 本征接触角 (度)，无电压时
+    "theta_wall": 71.0,  # 围堰壁接触角 (度)
+    "theta_min": 60.0,  # 最小接触角 (度)，物理下限
     "contact_angle_theta0": 120.0,  # 别名，兼容 constraints.py
-    "contact_angle_ink": 120.0,     # 别名
-    
+    "contact_angle_ink": 120.0,  # 别名
     # ========== 动力学参数 ==========
-    "tau": 0.005,           # 电润湿响应时间常数 (s) = 5ms
-    "tau_recovery": 0.0075, # 表面张力恢复时间常数 (s) = 7.5ms
-    "zeta": 0.8,            # 阻尼比（欠阻尼）
-    "t_max": 0.05,          # 最大仿真时间 (s) = 50ms
-    
+    "tau": 0.005,  # 电润湿响应时间常数 (s) = 5ms
+    "tau_onset": 0.0075,  # 低电压区 τ (s)
+    "tau_saturation": 0.003,  # 高电压区 τ (s)
+    "tau_recovery_factor": 0.4,  # 恢复因子
+    "tau_recovery": 0.002,  # 恢复时间常数 = tau × factor = 5ms × 0.4 = 2ms
+    "zeta": 0.8,  # 阻尼比（欠阻尼）
+    "dynamic_order": 2,  # 动态阶数：2=二阶欠阻尼, 1=一阶指数
+    "t_max": 0.05,  # 最大仿真时间 (s) = 50ms
     # ========== 电压参数 ==========
-    "V_threshold": 3.0,     # 阈值电压 (V)
-    "V_max": 30.0,          # 最大工作电压 (V)
-    
+    "V_T_base": 5.0,  # 3μm油膜对应的阈值电压 (V)
+    "V_T_sensitivity": 2e6,  # 阈值电压灵敏度 (V/m) = 2V/μm
+    "V_max": 30.0,  # 最大工作电压 (V)
+    "V_threshold": 5.0,  # 阈值电压 (V) = V_T_base + (h_ink-3μm)×sensitivity，计算值
     # ========== 开口率参数 ==========
-    "eta_max": 0.85,        # 最大开口率
+    "eta_max": 0.85,  # 最大开口率
     "ink_initial_fraction": 0.15,  # 初始油墨体积分数
-    
-    # ========== 开口率映射参数（校准后）==========
-    "aperture_k": 1.0,              # 映射陡度
-    "aperture_theta_scale": 30.0,   # 角度缩放因子
-    "aperture_alpha": 0.02,         # 电容反馈强度
+    # ========== 开口率映射参数（用真实材料参数后需重新标定）==========
+    "aperture_k": 3.0,  # 映射陡度（提高以补偿 Δθ 缩小）
+    "aperture_theta_scale": 19.0,  # 角度缩放因子（降低使 tanh 更早饱和）
+    "aperture_alpha": 0.03,  # 电容反馈强度（稍增）
 }
 
 
@@ -118,13 +115,13 @@ PHYSICS: Dict[str, Any] = {
 class PhysicsConfig:
     """
     物理参数配置类
-    
+
     提供类型安全的参数访问和 JSON 序列化支持。
-    
+
     Attributes:
         所有物理参数作为类属性，带类型注解
     """
-    
+
     # 几何参数
     Lx: float = 174e-6
     Ly: float = 174e-6
@@ -132,59 +129,76 @@ class PhysicsConfig:
     h_ink: float = 3e-6
     h_polar: float = 17e-6
     wall_height: float = 3.5e-6
-    
+
     # 流体属性 - 油墨
-    rho_oil: float = 800.0
-    mu_oil: float = 0.003
-    
+    rho_oil: float = 763.0
+    mu_oil: float = 9.41e-4
+
     # 流体属性 - 极性液体
-    rho_polar: float = 1000.0
-    mu_polar: float = 0.001
-    
+    rho_polar: float = 998.0
+    mu_polar: float = 1.01e-3
+
     # 界面张力
-    sigma: float = 0.045
-    gamma: float = 0.015
-    
+    sigma: float = 0.02505
+    gamma: float = 0.048
+
     # 电学参数
     epsilon_0: float = 8.854e-12
-    epsilon_r: float = 12.0
-    epsilon_h: float = 1.9
+    epsilon_r: float = 3.28
+    epsilon_h: float = 1.934
     d_dielectric: float = 4e-7
     d_hydrophobic: float = 4e-7
-    
+
     # 接触角
     theta0: float = 120.0
     theta_wall: float = 71.0
     theta_min: float = 60.0
-    
+
     # 动力学
     tau: float = 0.005
-    tau_recovery: float = 0.0075
+    tau_onset: float = 0.0075
+    tau_saturation: float = 0.003
+    tau_recovery_factor: float = 0.4
     zeta: float = 0.8
+    dynamic_order: int = 2
     t_max: float = 0.05
-    
-    # 电压
-    V_threshold: float = 3.0
+
+    # 电压 — V_threshold 是 property，从 V_T_base + 油膜厚度计算
+    V_T_base: float = 5.0
+    V_T_sensitivity: float = 2e6
     V_max: float = 30.0
-    
+
     # 开口率
     eta_max: float = 0.85
     ink_initial_fraction: float = 0.15
-    aperture_k: float = 1.0
-    aperture_theta_scale: float = 30.0
-    aperture_alpha: float = 0.02
-    
+    aperture_k: float = 3.0
+    aperture_theta_scale: float = 19.0
+    aperture_alpha: float = 0.03
+
+    # 物理模型开关
+    use_convection: bool = False  # Re≈1-5, 默认关闭对流项
+
     # 配置来源（用于追踪）
     _source: str = field(default="default", repr=False)
-    
+
+    @property
+    def V_threshold(self) -> float:
+        """阈值电压，基于油膜厚度动态计算"""
+        return self.V_T_base + (self.h_ink - 3.0e-6) * self.V_T_sensitivity
+
+    @property
+    def tau_recovery(self) -> float:
+        """恢复时间常数 = 驱动τ × 恢复因子（恢复快于驱动）"""
+        return self.tau * self.tau_recovery_factor
+
     @classmethod
     def from_json(cls, path: Union[str, Path]) -> "PhysicsConfig":
         """
         从 JSON 配置文件加载物理参数
-        
+
         Args:
             path: JSON 文件路径
-        
+
         Returns:
             PhysicsConfig 实例
         """
@@ -192,17 +206,17 @@ class PhysicsConfig:
         if not path.exists():
             logger.warning(f"配置文件不存在: {path}，使用默认参数")
             return cls(_source="default")
-        
-        with open(path, 'r', encoding='utf-8') as f:
+
+        with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        
+
         # 从各个配置节提取参数
         materials = data.get("materials", {})
         geometry = data.get("geometry", {})
         data_cfg = data.get("data", {})
         dynamics = data_cfg.get("dynamics_params", {})
         aperture_mapping = data.get("aperture_mapping", {})
-        
+
         return cls(
             # 几何参数
             Lx=geometry.get("Lx", cls.Lx),
@@ -210,7 +224,12 @@ class PhysicsConfig:
             Lz=geometry.get("Lz", cls.Lz),
             h_ink=geometry.get("ink_thickness", cls.h_ink),
             wall_height=geometry.get("wall_height", cls.wall_height),
-            
+            # 流体属性
+            rho_oil=materials.get("rho_oil", cls.rho_oil),
+            mu_oil=materials.get("mu_oil", cls.mu_oil),
+            rho_polar=materials.get("rho_polar", cls.rho_polar),
+            mu_polar=materials.get("mu_polar", cls.mu_polar),
+            sigma=materials.get("sigma", cls.sigma),
             # 材料参数
             theta0=materials.get("theta0", cls.theta0),
             theta_wall=materials.get("theta_wall", cls.theta_wall),
@@ -219,27 +238,36 @@ class PhysicsConfig:
             gamma=materials.get("gamma", cls.gamma),
             d_dielectric=materials.get("dielectric_thickness", cls.d_dielectric),
             d_hydrophobic=materials.get("hydrophobic_thickness", cls.d_hydrophobic),
-            V_threshold=materials.get("V_threshold", cls.V_threshold),
-            
+            # V_T 参数（V_threshold 是 property，从 V_T_base + h_ink 计算）
+            V_T_base=materials.get("V_T_base", dynamics.get("V_T_base", cls.V_T_base)),
+            V_T_sensitivity=materials.get(
+                "V_T_sensitivity", dynamics.get("V_T_sensitivity", cls.V_T_sensitivity)
+            ),
             # 动力学参数
             tau=dynamics.get("tau", cls.tau),
-            tau_recovery=dynamics.get("tau_recovery", cls.tau_recovery),
+            tau_onset=dynamics.get("tau_onset", cls.tau_onset),
+            tau_saturation=dynamics.get("tau_saturation", cls.tau_saturation),
+            tau_recovery_factor=dynamics.get(
+                "tau_recovery_factor", cls.tau_recovery_factor
+            ),
             zeta=dynamics.get("zeta", cls.zeta),
-            
+            dynamic_order=dynamics.get("dynamic_order", cls.dynamic_order),
             # 开口率映射
             eta_max=aperture_mapping.get("aperture_max", cls.eta_max),
             aperture_k=aperture_mapping.get("k", cls.aperture_k),
-            aperture_theta_scale=aperture_mapping.get("theta_scale", cls.aperture_theta_scale),
+            aperture_theta_scale=aperture_mapping.get(
+                "theta_scale", cls.aperture_theta_scale
+            ),
             aperture_alpha=aperture_mapping.get("alpha", cls.aperture_alpha),
-            
+            use_convection=materials.get("use_convection", cls.use_convection),
             _source=str(path),
         )
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典（兼容 PHYSICS 格式）"""
         d = asdict(self)
         d.pop("_source", None)
-        
+
         # 添加别名以兼容旧代码
         d["density_ink"] = d["rho_oil"]
         d["density_polar"] = d["rho_polar"]
@@ -248,75 +276,79 @@ class PhysicsConfig:
         d["surface_tension_polar_ink"] = d["sigma"]
         d["contact_angle_theta0"] = d["theta0"]
         d["contact_angle_ink"] = d["theta0"]
-        
+
         return d
-    
+
     def to_materials_params(self) -> Dict[str, Any]:
         """
         转换为 PhysicsConstraints 兼容的 materials_params 格式
-        
+
         Returns:
             materials_params 字典
         """
         return {
             # 基础流体属性
-            'viscosity': self.mu_polar,
-            'density': self.rho_polar,
-            'surface_tension': self.gamma,
-            
+            "viscosity": self.mu_polar,
+            "density": self.rho_polar,
+            "surface_tension": self.gamma,
             # 电学属性
-            'epsilon_0': self.epsilon_0,
-            'relative_permittivity': self.epsilon_r,
-            'dielectric_thickness': self.d_dielectric,
-            
+            "epsilon_0": self.epsilon_0,
+            "relative_permittivity": self.epsilon_r,
+            "dielectric_thickness": self.d_dielectric,
             # 两相流属性
-            'density_polar': self.rho_polar,
-            'density_ink': self.rho_oil,
-            'viscosity_polar': self.mu_polar,
-            'viscosity_ink': self.mu_oil,
-            'surface_tension_polar_ink': self.sigma,
-            
+            "density_polar": self.rho_polar,
+            "density_ink": self.rho_oil,
+            "viscosity_polar": self.mu_polar,
+            "viscosity_ink": self.mu_oil,
+            "surface_tension_polar_ink": self.sigma,
             # 接触角
-            'contact_angle_theta0': self.theta0,
-            'contact_angle_ink': self.theta0,
-            'theta_wall': self.theta_wall,
-            
+            "contact_angle_theta0": self.theta0,
+            "contact_angle_ink": self.theta0,
+            "theta_wall": self.theta_wall,
             # 几何参数
-            'Lx': self.Lx,
-            'Ly': self.Ly,
-            'Lz': self.Lz,
-            'ink_thickness': self.h_ink,
-            'domain_height': self.Lz,
-            'wall_height': self.wall_height,
-            'ink_initial_fraction': self.ink_initial_fraction,
+            "Lx": self.Lx,
+            "Ly": self.Ly,
+            "Lz": self.Lz,
+            "ink_thickness": self.h_ink,
+            "domain_height": self.Lz,
+            "wall_height": self.wall_height,
+            "ink_initial_fraction": self.ink_initial_fraction,
+            # 物理模型开关
+            "use_convection": self.use_convection,
         }
-    
+
     def to_predictor_params(self) -> Dict[str, Any]:
         """
         转换为 HybridPredictor 兼容的 params 格式
-        
+
         Returns:
             params 字典
         """
         return {
-            'theta0': self.theta0,
-            'epsilon_0': self.epsilon_0,
-            'gamma': self.gamma,
-            'epsilon_r': self.epsilon_r,
-            'd': self.d_dielectric,
-            'epsilon_h': self.epsilon_h,
-            'd_h': self.d_hydrophobic,
-            'tau': self.tau,
-            'tau_recovery': self.tau_recovery,
-            'zeta': self.zeta,
-            'V_max': self.V_max,
-            'V_threshold': self.V_threshold,
+            "theta0": self.theta0,
+            "epsilon_0": self.epsilon_0,
+            "gamma": self.gamma,
+            "epsilon_r": self.epsilon_r,
+            "d": self.d_dielectric,
+            "epsilon_h": self.epsilon_h,
+            "d_h": self.d_hydrophobic,
+            "tau": self.tau,
+            "tau_onset": self.tau_onset,
+            "tau_saturation": self.tau_saturation,
+            "tau_recovery_factor": self.tau_recovery_factor,
+            "zeta": self.zeta,
+            "dynamic_order": self.dynamic_order,
+            "sigma": self.sigma,
+            "V_max": self.V_max,
+            "V_threshold": self.V_threshold,
+            "V_T_base": self.V_T_base,
+            "V_T_sensitivity": self.V_T_sensitivity,
         }
-    
+
     def update_global_physics(self) -> None:
         """
         将当前配置更新到全局 PHYSICS 字典
-        
+
         警告：这会修改全局状态，请谨慎使用
         """
         global PHYSICS
@@ -332,46 +364,43 @@ _config_cache: Dict[str, PhysicsConfig] = {}
 
 
 def get_physics_config(
-    path: Optional[Union[str, Path]] = None,
-    use_cache: bool = True
+    path: Optional[Union[str, Path]] = None, use_cache: bool = True
 ) -> PhysicsConfig:
     """
     获取物理配置实例
-    
+
     Args:
         path: 配置文件路径，None 则使用默认路径
         use_cache: 是否使用缓存（同一路径只加载一次）
-    
+
     Returns:
         PhysicsConfig 实例
     """
     if path is None:
         path = DEFAULT_CONFIG_PATH
-    
+
     path_str = str(path)
-    
+
     if use_cache and path_str in _config_cache:
         return _config_cache[path_str]
-    
+
     config = PhysicsConfig.from_json(path)
-    
+
     if use_cache:
         _config_cache[path_str] = config
-    
+
     return config
 
 
-def get_materials_params(
-    path: Optional[Union[str, Path]] = None
-) -> Dict[str, Any]:
+def get_materials_params(path: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
     """
     获取 PhysicsConstraints 兼容的 materials_params
-    
+
     这是一个便捷函数，用于替换 PhysicsConstraints 中的硬编码默认值。
-    
+
     Args:
         path: 配置文件路径
-    
+
     Returns:
         materials_params 字典
     """
@@ -383,6 +412,7 @@ def get_materials_params(
 # 模块初始化：从默认配置更新 PHYSICS
 # ============================================================================
 
+
 def _init_physics_from_config():
     """尝试从默认配置文件初始化 PHYSICS"""
     try:
@@ -390,7 +420,11 @@ def _init_physics_from_config():
             config = get_physics_config(DEFAULT_CONFIG_PATH)
             # 只更新存在的键，保留 PHYSICS 中的额外键
             for key, value in config.to_dict().items():
-                if key in PHYSICS or key.startswith("density_") or key.startswith("viscosity_"):
+                if (
+                    key in PHYSICS
+                    or key.startswith("density_")
+                    or key.startswith("viscosity_")
+                ):
                     PHYSICS[key] = value
             logger.debug(f"PHYSICS 已从 {DEFAULT_CONFIG_PATH} 初始化")
     except Exception as e:

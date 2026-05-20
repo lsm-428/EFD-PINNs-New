@@ -123,14 +123,14 @@ def forward(self, x):
     x_norm = x[:, 0:1] / self.Lx   # 174e-6
     y_norm = x[:, 1:2] / self.Ly   # 174e-6
     z_norm = x[:, 2:3] / self.Lz   # 20e-6
-    
+
     # 时间
     t_norm = x[:, 5:6] / self.t_max  # 0.05s
-    
+
     # 电压
     V_from_norm = x[:, 3:4] / 30.0
     V_to_norm = x[:, 4:5] / 30.0
-    
+
     # 组合归一化输入
     x_input = torch.cat([x_norm, y_norm, z_norm, V_from_norm, V_to_norm, t_norm], dim=-1)
 ```
@@ -299,7 +299,7 @@ class TwoPhasePINN(nn.Module):
     def __init__(self, config):
         # φ 网络: 输入 6 维，输出 1 维
         self.phi_net = self._build_network(6, 1, hidden_phi)
-        
+
         # 速度网络: 输入 7 维 (6 + φ)，输出 4 维
         self.vel_net = self._build_network(7, 4, hidden_vel)
 ```
@@ -312,7 +312,7 @@ def forward(self, x):
     # 提取输入
     x_coord, y_coord, z_coord = x[:, 0:1], x[:, 1:2], x[:, 2:3]
     V_from, V_to, t_since = x[:, 3:4], x[:, 4:5], x[:, 5:6]
-    
+
     # 归一化
     x_norm = x_coord / self.Lx
     y_norm = y_coord / self.Ly
@@ -320,17 +320,17 @@ def forward(self, x):
     t_norm = t_since / self.t_max
     V_from_norm = V_from / 30.0
     V_to_norm = V_to / 30.0
-    
+
     # φ 预测
     phi_input = torch.cat([x_norm, y_norm, z_norm, V_from_norm, V_to_norm, t_norm], dim=-1)
     phi_raw = self.phi_net(phi_input)
     phi = torch.sigmoid(phi_raw)  # 限制在 [0, 1]
-    
+
     # 速度预测
     vel_input = torch.cat([x_norm, y_norm, z_norm, V_from_norm, V_to_norm, t_norm, phi], dim=-1)
     vel_out = self.vel_net(vel_input)
     u, v, w, p = vel_out[:, 0:1], vel_out[:, 1:2], vel_out[:, 2:3], vel_out[:, 3:4]
-    
+
     return torch.cat([u, v, w, p, phi], dim=-1)
 ```
 

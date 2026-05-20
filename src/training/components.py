@@ -10,7 +10,6 @@
 
 import numpy as np
 import torch
-import torch.nn as nn
 
 try:
     from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
@@ -20,7 +19,7 @@ except ImportError:
 
 class DataNormalizer:
     """增强版数据标准化器"""
-    
+
     def __init__(self, method: str = "standard", config: dict = None):
         self.method = method
         self.config = config or {}
@@ -30,7 +29,7 @@ class DataNormalizer:
         self.min_val = None
         self.max_val = None
         self.output_normalizer = None  # 用于输出反归一化
-        
+
         if method == "standard" and StandardScaler:
             self.scaler = StandardScaler()
         elif method == "minmax" and MinMaxScaler:
@@ -79,24 +78,26 @@ class DataNormalizer:
 
 class LossStabilizer:
     """高级损失稳定器，支持多种权重策略"""
-    
+
     def __init__(self, config=None):
         self.config = config or {}
-        self.loss_type = self.config.get('loss_type', 'mse')
-        self.epsilon = self.config.get('epsilon', 1e-8)
-        self.weight_strategy = self.config.get('weight_strategy', 'fixed')
-        self.history_size = self.config.get('history_size', 100)
+        self.loss_type = self.config.get("loss_type", "mse")
+        self.epsilon = self.config.get("epsilon", 1e-8)
+        self.weight_strategy = self.config.get("weight_strategy", "fixed")
+        self.history_size = self.config.get("history_size", 100)
         self.loss_history = []
-        self.early_stopping_patience = self.config.get('early_stopping_patience', 20)
-        self.early_stopping_min_delta = self.config.get('early_stopping_min_delta', 1e-5)
-        self.best_loss = float('inf')
+        self.early_stopping_patience = self.config.get("early_stopping_patience", 20)
+        self.early_stopping_min_delta = self.config.get(
+            "early_stopping_min_delta", 1e-5
+        )
+        self.best_loss = float("inf")
         self.patience_counter = 0
-        self.base_physics_weight = self.config.get('base_physics_weight', 1.0)
-        self.max_physics_weight = self.config.get('max_physics_weight', 10.0)
-    
+        self.base_physics_weight = self.config.get("base_physics_weight", 1.0)
+        self.max_physics_weight = self.config.get("max_physics_weight", 10.0)
+
     def safe_mse_loss(self, pred, target):
         return torch.mean(torch.clamp((pred - target) ** 2, max=1e8))
-    
+
     def compute_loss(self, pred, target, physics_loss=None, physics_weight=0.0):
         base_loss = self.safe_mse_loss(pred, target)
         if physics_loss is not None:
@@ -107,7 +108,7 @@ class LossStabilizer:
         if len(self.loss_history) > self.history_size:
             self.loss_history.pop(0)
         return total_loss
-    
+
     def check_early_stopping(self):
         if not self.loss_history:
             return False
@@ -119,11 +120,11 @@ class LossStabilizer:
         else:
             self.patience_counter += 1
             return self.patience_counter >= self.early_stopping_patience
-    
+
     def get_dynamic_physics_weight(self, epoch=0):
-        if self.weight_strategy == 'fixed':
+        if self.weight_strategy == "fixed":
             return self.base_physics_weight
-        elif self.weight_strategy == 'adaptive' and len(self.loss_history) >= 10:
+        elif self.weight_strategy == "adaptive" and len(self.loss_history) >= 10:
             recent_avg = np.mean(self.loss_history[-10:])
             earlier_avg = np.mean(self.loss_history[:10])
             if earlier_avg > 0:
@@ -135,25 +136,29 @@ class LossStabilizer:
 
 class EnhancedDataAugmenter:
     """增强型数据增强器"""
-    
+
     def __init__(self, config=None):
         self.config = config or {}
-        self.noise_level = self.config.get('noise_level', 0.01)
-        self.enable_noise = self.config.get('enable_noise_augmentation', True)
-        self.enable_scaling = self.config.get('enable_scaling', True)
-        self.scaling_range = self.config.get('scaling_range', [0.95, 1.05])
-    
+        self.noise_level = self.config.get("noise_level", 0.01)
+        self.enable_noise = self.config.get("enable_noise_augmentation", True)
+        self.enable_scaling = self.config.get("enable_scaling", True)
+        self.scaling_range = self.config.get("scaling_range", [0.95, 1.05])
+
     def augment(self, x, y=None):
         if self.enable_noise and self.noise_level > 0:
             noise = torch.randn_like(x) * self.noise_level
             x = x + noise
-        
+
         if self.enable_scaling:
-            scale = torch.rand(1, device=x.device) * (self.scaling_range[1] - self.scaling_range[0]) + self.scaling_range[0]
+            scale = (
+                torch.rand(1, device=x.device)
+                * (self.scaling_range[1] - self.scaling_range[0])
+                + self.scaling_range[0]
+            )
             x = x * scale
-        
+
         return x, y
-    
+
     def __call__(self, x, y=None):
         return self.augment(x, y)
 

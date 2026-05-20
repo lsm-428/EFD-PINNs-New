@@ -1,9 +1,8 @@
 import torch
 import numpy as np
 import logging
-from typing import Dict, Optional, Tuple, Union, Callable
+from typing import Dict, Tuple, Callable
 import json
-import os
 from pathlib import Path
 
 # Project imports

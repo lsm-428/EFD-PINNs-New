@@ -19,15 +19,15 @@ from .paths import (
 
 __all__ = [
     # 物理配置
-    'PhysicsConfig',
-    'get_physics_config',
-    'get_materials_params',
-    'PHYSICS',
+    "PhysicsConfig",
+    "get_physics_config",
+    "get_materials_params",
+    "PHYSICS",
     # 路径管理
-    'PROJECT_ROOT',
-    'CONFIG_PATH',
-    'DEFAULT_CONFIG_PATH',
-    'OUTPUT_DIR',
-    'get_config_path',
-    'get_output_dir',
+    "PROJECT_ROOT",
+    "CONFIG_PATH",
+    "DEFAULT_CONFIG_PATH",
+    "OUTPUT_DIR",
+    "get_config_path",
+    "get_output_dir",
 ]

@@ -248,7 +248,7 @@ ffmpeg: command not found
 # Ubuntu/Debian
 sudo apt-get install ffmpeg
 
-# macOS  
+# macOS
 brew install ffmpeg
 
 # Conda

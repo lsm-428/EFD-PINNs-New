@@ -106,24 +106,32 @@
     }
   },
   "materials": {
-    "epsilon_r": 12.0,
-    "epsilon_hydrophobic": 1.9,
-    "gamma": 0.015,
+    "epsilon_r": 3.28,
+    "epsilon_hydrophobic": 1.934,
+    "gamma": 0.048,
+    "sigma": 0.02505,
+    "rho_oil": 763.0,
+    "mu_oil": 9.41e-4,
+    "rho_polar": 998.0,
+    "mu_polar": 1.01e-3,
     "dielectric_thickness": 4e-07,
     "hydrophobic_thickness": 4e-07,
-    "V_threshold": 3.0,
-    "_comment_materials": "有效介电常数ε=12(考虑极性液体渗透), γ=15mN/m(乙二醇混合液), 使20V时Δθ≈21°",
+    "V_T_base": 5.0,
+    "V_T_sensitivity": 2.0e6,
+    "use_convection": false,
+    "_comment_convection": "Re≈1-5, Stage 3后期可设为true引入对流项u·∇u",
+    "_comment_materials": "SU-8(ε=3.28,400nm)+Teflon AF(ε=1.934,400nm)双层串联用于Young-Lippmann;油膜(ε=4,3μm)在calculate_capacitance()中处理;极性液体(ε≈80)不参与串联(双电层屏蔽);参数均为实测值",
     "theta0": 120.0,
     "theta_wall": 71.0,
     "wall_influence_threshold": 0.6,
     "_comment_wall": "极性液体环境中:油墨亲疏水层(底部Teflon),不亲像素墙(亲水),油墨贴底收缩,20V以上翻墙"
   },
   "aperture_mapping": {
-    "k": 1.0,
-    "theta_scale": 30.0,
-    "alpha": 0.02,
+    "k": 3.0,
+    "theta_scale": 19.0,
+    "alpha": 0.03,
     "aperture_max": 0.85,
-    "_comment": "开口率映射: η = η_max × tanh(k × Δθ / θ_scale), 基于物理合理的接触角变化(20V时Δθ≈21°→η≈60%)"
+    "_comment": "开口率映射(真实材料参数后重新标定): η=η_max×tanh(k×Δθ/theta_scale); Δθ@30V≈11°(旧拟合值Δθ≈52°); k和theta_scale调大以补偿Δθ缩小"
   },
   "physics_mechanism": {
     "_1_electrowetting": "电润湿作用在极性液体上，使其润湿疏水层(Teflon)",
@@ -170,9 +178,14 @@
     "voltage_sequence": "square_wave",
     "dynamics_params": {
       "tau": 0.005,
-      "tau_recovery": 0.0075,
+      "tau_onset": 0.0075,
+      "tau_saturation": 0.003,
+      "tau_recovery_factor": 0.4,
       "zeta": 0.8,
-      "_comment": "tau=电润湿响应时间常数, tau_recovery=表面张力恢复时间常数(油墨铺展)"
+      "dynamic_order": 2,
+      "V_T_base": 5.0,
+      "V_T_sensitivity": 2.0e6,
+      "_comment": "tau=电润湿响应(电压依赖:低V→7.5ms,中V→5ms,高V→3ms); tau_recovery=τ_drive×0.4(恢复快于驱动); zeta=0.8(二阶欠阻尼); V_threshold=V_T_base+(h_ink-3μm)×2e6"
     },
     "use_physics": true
   },

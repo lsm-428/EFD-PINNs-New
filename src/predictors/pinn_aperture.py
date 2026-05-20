@@ -71,13 +71,14 @@ class PINNAperturePredictor:
         self._init_physics()
 
     def _init_physics(self):
-        """初始化物理参数"""
-        # 默认物理参数
+        """初始化物理参数 — 统一从 physics_config 读取"""
+        from src.config import PHYSICS
+
         self.physics = {
-            "Lx": 174e-6,  # 像素宽度 (m)
-            "Ly": 174e-6,  # 像素高度 (m)
-            "Lz": 20e-6,  # 围堰高度 (m)
-            "t_max": 0.02,  # 最大时间 (s)
+            "Lx": PHYSICS["Lx"],
+            "Ly": PHYSICS["Ly"],
+            "Lz": PHYSICS["Lz"],
+            "t_max": PHYSICS["t_max"],
         }
 
     def _auto_load_model(self):
