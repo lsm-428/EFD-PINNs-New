@@ -245,16 +245,4 @@ MIT License - 详见 [`LICENSE`](LICENSE) 文件
 - **Python版本**: 3.12-3.13
 - **GPU加速**: CUDA 11.8 (PyTorch 2.7.1)
 - **代码质量**: `ruff` (linting), `black` (formatting, 行长度88)
-- **测试框架**: `pytest` + `hypothesis`
-
-### 依赖管理
-详细依赖列表和版本要求请参考: [`docs/guides/dependencies.md`](docs/guides/dependencies.md)
-
----
-
-*Copyright © 2026 SCNU EFD Team. All Rights Reserved.*
-*Powered by PyTorch & Physics-Informed Neural Networks.*
-
----
-
-*最后更新: 2026-04-13 | Version: v4.5*
+- **测试
