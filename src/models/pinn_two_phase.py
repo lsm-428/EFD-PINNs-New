@@ -2117,8 +2117,8 @@ class Trainer:
             )
             losses.update(phys_losses)
 
-        # 9. 降压过程：开口率恢复约束（阶段2及以后）
-        if epoch >= self.stage1_epochs:
+        # 9. 降压过程：开口率恢复约束（S2 中期及以后，S1/S2 初期模型未学好基本形状）
+        if epoch >= int(self.stage1_epochs + (self.stage2_epochs - self.stage1_epochs) * 0.5):
             losses["eta_recovery"] = self.eta_recovery_constraint_loss()
 
         # 10. 连续性约束：升压→降压转换时刻必须连续（方案B新增）
@@ -2319,7 +2319,7 @@ class Trainer:
         count_cap = 0
         for v in v_cap:
             for t in t_cap:
-                eta = self.compute_aperture_ratio(0.0, v, t, n_grid=25)
+                eta = self.compute_aperture_ratio(0.0, v, t, n_grid=15)
                 loss_cap = loss_cap + F.relu(eta - eta_max) ** 2
                 count_cap += 1
         if count_cap > 0:
@@ -2327,25 +2327,7 @@ class Trainer:
         else:
             res["eta_ceiling"] = torch.tensor(0.0, device=self.device)
 
-        # Stage1 Match - 覆盖完整时间范围，随机采样以消除 artifact
-        if self.stage1_model and self.enable_stage1_tutor:
-            # 随机采样 (0-40ms)，覆盖暂态和稳态
-            t_samples = np.random.uniform(0.001, 0.040, 15).tolist()
-            v_match = [10.0, 15.0, 20.0, 25.0, 30.0]
-
-            loss_s1 = 0
-            count = 0
-
-            for v in v_match:
-                for t in t_samples:
-                    _, eta_s1 = self.stage1_model.theta_eta_from_triad(0.0, v, t)
-                    eta_pred = self.compute_aperture_ratio(0.0, v, t, n_grid=25)
-                    loss_s1 += (eta_pred - eta_s1) ** 2
-                    count += 1
-
-            # Stage1 仅提供参考 η(V), PINN 自主学习接触线位置
-            # eta_stage1 tutor 已移除 — 接触线由物理约束唯一确定
-            pass
+        # Stage1 tutor 已移除 -- 接触线由物理约束唯一确定
 
         # Monotonic
         v_smooth = [5.0, 10.0, 15.0, 20.0, 25.0, 30.0]
