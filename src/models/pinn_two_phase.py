@@ -218,6 +218,13 @@ class TwoPhasePINN(nn.Module):
         vel_input = spatial_features + 4
         self.vel_net = self._build_network(vel_input, 4, hidden_vel)
 
+        # 硬约束配置
+        hard_cfg = config.get("hard_constraints", {})
+        self.use_hard_constraints = hard_cfg.get("enable", False)
+        self.h_ink = hard_cfg.get("h_ink", 3e-6)
+        self.hard_ic_width = hard_cfg.get("ic_width", 1e-6)
+        self.sigmoid_temperature = hard_cfg.get("sigmoid_temperature", 1.0)
+
         self.apply(self._init_weights)
 
     def _build_network(
@@ -242,16 +249,19 @@ class TwoPhasePINN(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        前向传播
+        前向传播 (支持硬约束编码)
 
         Args:
             x: (batch, 6) - (x, y, z, V_from, V_to, t_since)
 
         Returns:
             (batch, 5) - (u, v, w, p, phi)
+
+        硬约束 (通过构造保证, 不需loss):
+          - 顶面 BC: φ(z=Lz) = 0  →  φ *= (1 - z/Lz)
+          - 初始条件: φ(t=0) = φ_IC(z)  →  φ = φ_IC + t/t_max * (φ_learned - φ_IC)
         """
-        # 确保输入是 (batch, 6)
-        if x.shape[1] != 6:
+        if not torch.jit.is_tracing() and x.shape[1] != 6:
             raise ValueError("TwoPhasePINN expects input of shape (batch, 6).")
         x_coord = x[:, 0:1]
         y_coord = x[:, 1:2]
@@ -282,7 +292,33 @@ class TwoPhasePINN(nn.Module):
         # Phi 预测
         phi_input = phi_features
         phi_raw = self.phi_net(phi_input)
-        phi = torch.sigmoid(phi_raw)  # 限制在 [0, 1]
+        sigmoid_T = getattr(self, "sigmoid_temperature", 1.0)
+        phi_learned = torch.sigmoid(sigmoid_T * phi_raw)  # 限制在 [0, 1]
+
+        # --- 硬约束编码 ---
+        if getattr(self, "use_hard_constraints", False):
+            # 1. 顶面 BC: φ(z=Lz) = 0 (纯极性液体)
+            phi = phi_learned * (1.0 - z_norm)
+
+            # 2. 初始条件: φ(t=0) = φ_IC(z)
+            #    φ_IC: tanh 平滑台阶, 油墨(z<h_ink)→1, 极性液体(z>h_ink)→0
+            z_phys = z_coord  # 物理单位 (m)
+            h_ink = getattr(self, "h_ink", 3e-6)
+            delta_ic = getattr(self, "hard_ic_width", 1e-6)
+            phi_ic = 0.5 * (1.0 + torch.tanh((h_ink - z_phys) / delta_ic))
+
+            #    Blend: 混合 phi_ic（初始条件）和 phi（模型预测+顶面BC）
+            #      公式：phi = (1 - blend) * phi_ic + blend * phi
+            #      blend = 0 → phi = phi_ic（完全约束到初始条件）
+            #      blend = 1 → phi = phi（完全自由）
+            #      设计：
+            #        z=0 底面：blend ≡ 1（永远自由，不约束 xy 径向分布）
+            #        z>0：blend = t_norm（t=0→0 完全IC，t>0→逐渐自由）
+            z_mask = (z_norm > 1e-6).float()  # z=0→0, z>0→1
+            blend = 1.0 - z_mask * (1.0 - t_norm)  # z=0→1, z>0→t_norm
+            phi = (1.0 - blend) * phi_ic + blend * phi
+        else:
+            phi = phi_learned
 
         # 速度预测 - 使用 Fourier 特征 + phi
         vel_input = torch.cat([phi_features, phi], dim=-1)
@@ -495,7 +531,9 @@ class PhysicsLoss:
             "volume_conservation": 0.3,
             "explicit_volume": 1.0,
             "sharpening": 0.0,
+            "bottom_wetting": 0.5,
             "wall_wetting": 0.1,
+            "phase_field_wetting": 10.0,
             "temporal_smoothness": 0.1,
             "dielectric_charge": 0.05,
             "contact_line_dynamics": 0.1,
@@ -1044,37 +1082,66 @@ class DataGenerator:
                 eta = self.get_opening_rate(V, t)
 
         # 界面宽度
-        interface_width = 1.5e-6  # 1.5 μm (方案B: 减小界面宽度提高精度)
+        interface_width = 1.5e-6  # 1.5 μm
 
-        # 简化模型：只使用中心开口模式（不使用 corner 模式）
-        # 这样可以保证中心始终是透明的，边缘是油墨
+        # 开口率阈值：超过此值从中心开口切换到单角墨滴
+        # 物理上 η≈50% 是环形分布→角落汇聚的质变点
+        # 取 0.45 让过渡更平缓，减少 PINN 训练难度
+        eta_threshold = 0.45
 
         if eta < 0.01:
-            # 无开口：初始状态
+            # 无开口：初始状态，油墨均匀铺在底部
             phi_z = 0.5 * (1 - np.tanh((z - h_ink) / (interface_width / 3)))
 
-        else:
+        elif eta < eta_threshold:
             # ============================================================
-            # z=0 底面: Stage1 提供接触线位置 (r_open)
-            # z>0: 简单平铺油膜 — 3D 界面形貌由 PINN 物理约束决定
+            # 中心开口模式 (η < 50%)：油墨环形分布
             # ============================================================
             r = np.sqrt((x - self.cx) ** 2 + (y - self.cy) ** 2)
             r_open = np.sqrt(eta * self.Lx * self.Ly / np.pi)
-
-            # z=0: Stage1 提供接触线位置 (r_open)
-            # z>0: 体积守恒推算油墨堆高 (h_edge = h_ink / (1-η))
-            #       3D 界面形貌由 PINN 物理约束精修
             radial_factor = 0.5 * (1 + np.tanh((r - r_open) / interface_width))
-            h_edge = h_ink / max(1.0 - eta, 0.15)  # 体积守恒堆高
+            h_edge = h_ink / max(1.0 - eta, 0.15)
 
             if r < r_open - interface_width:
-                phi_z = 0.5 * (1 - np.tanh((z - 0.0) / (interface_width / 3)))
+                phi_z = 0.0  # 开口区: 极性液体柱
             elif r > r_open + interface_width:
                 phi_z = 0.5 * (1 - np.tanh((z - h_edge) / (interface_width / 2)))
             else:
-                phi_center = 0.5 * (1 - np.tanh((z - 0.0) / (interface_width / 3)))
+                phi_center = 0.0
                 phi_edge = 0.5 * (1 - np.tanh((z - h_edge) / (interface_width / 2)))
                 phi_z = phi_center * (1 - radial_factor) + phi_edge * radial_factor
+
+        else:
+            # ============================================================
+            # 单角墨滴模式 (η ≥ 50%)：油墨汇聚到 (0,0) 角落
+            #
+            # 物理：底面疏油 + 侧壁亲油 → 油墨沿壁面流动
+            #       单 blob 表面能 < 多 blob → 汇聚到单角落
+            #       角落三面夹持（底面+两面壁）→ 最深毛细势阱
+            #
+            # 模型：以角落为中心的 1/4 超椭球 blob
+            #       ink_volume = Lx * Ly * h_ink（守恒）
+            #       等效半径 r_blob = sqrt(4 * V_ink / (π * h_edge))
+            # ============================================================
+            corner_x, corner_y = 0.0, 0.0  # 固定 (0,0) 角落
+
+            # 油墨堆高（体积守恒，可超过围堰形成凸面）
+            h_edge = h_ink / max(1.0 - eta, 0.15)
+
+            # blob 等效半径：1/4 圆柱近似
+            ink_volume = self.Lx * self.Ly * h_ink
+            r_blob = np.sqrt(4.0 * ink_volume / (np.pi * h_edge))
+
+            # 到角落的距离
+            r_c = np.sqrt((x - corner_x) ** 2 + (y - corner_y) ** 2)
+
+            # 径向分布：角落处 φ=1，远离角落 φ=0
+            radial = 0.5 * (1 - np.tanh((r_c - r_blob) / interface_width))
+
+            # z 分布：堆高 h_edge 以下 φ=1，以上 φ=0
+            phi_z = radial * 0.5 * (1 - np.tanh((z - h_edge) / (interface_width / 2)))
+
+            # 不截断 z：油墨可堆高到围堰以上（凸面），由 PINN 物理约束决定最终形貌
 
         return np.clip(phi_z, 0, 1)
 
@@ -1319,6 +1386,28 @@ class DataGenerator:
         logger.info(f"  界面数据点: {len(interface_points)}")
 
         # ============================================================
+        # 1b. 底面数据点 (z=0) — 关键: 直接告诉模型底面开口率
+        # ============================================================
+        n_bottom = data_cfg.get("n_bottom", 10000)
+        bottom_added = 0
+        for _ in range(n_bottom):
+            x = np.random.uniform(0, self.Lx)
+            y = np.random.uniform(0, self.Ly)
+            z = 0.0
+            V_from = np.random.uniform(0, 30.0)
+            V_to = np.random.uniform(0, 30.0)
+            # 偏向稳态 (80%稳态, 20%瞬态)
+            if np.random.random() < 0.8:
+                V_to = V_from  # 稳态
+            t = sample_continuous_times(1)[0]
+            phi = self.target_phi_3d(x, y, z, t, V_to, V_prev=V_from)
+            interface_points.append([x, y, z, V_from, V_to, t])
+            interface_targets.append(phi)
+            bottom_added += 1
+
+        logger.info(f"  底面数据点 (z=0): +{bottom_added}")
+
+        # ============================================================
         # 2. 初始条件：t=0 时油墨均匀铺在底部 3μm
         # ============================================================
         n_ic = data_cfg.get("n_initial", 10000)
@@ -1433,7 +1522,7 @@ class DataGenerator:
         for V_from, V_to, t in dom_scenarios:
             x = np.random.uniform(0, self.Lx)
             y = np.random.uniform(0, self.Ly)
-            z = np.random.uniform(0, self.h_ink * 2)
+            z = np.random.uniform(0, self.Lz)
             domain_points.append([x, y, z, V_from, V_to, t])
 
         logger.info(f"  域内配点: {len(domain_points)}")
@@ -1618,6 +1707,12 @@ class Trainer:
         self.physics_loss = PhysicsLoss(self.device)
         self.physics_constraints = PhysicsConstraints()
 
+        # 统一相场润湿模式: 用自然BC替代碎片化壁面约束
+        if self.config.get("physics", {}).get("use_unified_wetting", False):
+            self.physics_loss.materials_params["use_unified_wetting"] = True
+            self.physics_loss.physics_constraints.materials_params["use_unified_wetting"] = True
+            logger.info("✅ 启用统一相场润湿BC (use_unified_wetting=True)")
+
         # Stage 1 模型 - 使用统一配置路径
         if HAS_APERTURE:
             from src.config import CONFIG_PATH
@@ -1637,6 +1732,8 @@ class Trainer:
         # 渐进式训练阶段
         self.stage1_epochs = training_cfg.get("stage1_epochs", 5000)
         self.stage2_epochs = training_cfg.get("stage2_epochs", 15000)
+        # S3 物理约束平滑过渡跨度 (epoch), 默认5000适配60000epoch训练
+        self.s3_smooth_span = float(training_cfg.get("s3_smooth_span", 5000))
 
         # 优化器
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
@@ -1666,6 +1763,8 @@ class Trainer:
             "pinn_sidewall_contact_angle": [],
             "pinn_interface_energy": [],
             "pinn_wall_wetting": [],
+            "pinn_bottom_wetting": [],
+            "pinn_phase_field_wetting": [],
             "pinn_dielectric_charge": [],
             "pinn_contact_line_dynamics": [],
             "pinn_top_boundary": [],
@@ -1710,15 +1809,16 @@ class Trainer:
 
             self.output_dir = str(get_output_dir(f"train/pinn_{timestamp}"))
 
-        # 添加文件日志处理器，将日志同时输出到文件
+        # 添加文件日志处理器到 root logger, 捕获所有模块日志
         log_file = os.path.join(self.output_dir, "training.log")
         file_handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
         file_handler.setFormatter(
             logging.Formatter(
-                "[%(asctime)s] %(levelname)s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+                "[%(asctime)s] %(levelname)s | %(name)s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
             )
         )
-        logger.addHandler(file_handler)
+        logging.getLogger().addHandler(file_handler)
+        logging.getLogger().setLevel(logging.INFO)
         logger.info(f"日志文件: {log_file}")
 
         # 初始化 TensorBoard writer
@@ -1767,66 +1867,62 @@ class Trainer:
 
     def _plot_curves(self, epoch: int = None):
         """
-        绘制并保存训练曲线
+        绘制并保存训练曲线 — 所有 loss 在一张图上
         """
         try:
-            fig, (ax, ax2) = plt.subplots(2, 1, figsize=(12, 10))
+            fig, ax = plt.subplots(1, 1, figsize=(16, 8))
+            ep = self.history["epoch"]
+            h = self.history
 
-            # === 上层: 主要约束 (Total, IF, C, AC, EW, θ, Vol) ===
-            ax.semilogy(self.history["epoch"], self.history["loss"], label="Total", alpha=0.9, lw=1.5)
-            ax.semilogy(self.history["epoch"], self.history["interface"], label="IF(data)", alpha=0.5)
-            ax.semilogy(self.history["epoch"], self.history["pinn_continuity"], label="C(continuity)", alpha=0.45)
-            ax.semilogy(self.history["epoch"], self.history["pinn_vof"], label="AC(vof)", alpha=0.4)
-            ax.semilogy(self.history["epoch"], self.history["pinn_electrowetting"], label="EW(electrowetting)", alpha=0.4, linestyle=":")
-            ax.semilogy(self.history["epoch"], self.history["contact_angle"], label="θ(contact)", alpha=0.35, linestyle="--")
-            ax.semilogy(self.history["epoch"], self.history["volume"], label="Vol", alpha=0.3, linestyle="--")
+            # (history_key, label, alpha, lw, color, linestyle)
+            curve_specs = [
+                ("loss",              "Total",            1.0, 2.0, "black", "-"),
+                ("interface",         "IF(data)",         0.7, 0.8, "C0",    "-"),
+                ("contact_angle",     "θ(contact)",       0.5, 0.6, "C1",    "--"),
+                ("volume",            "Vol",              0.5, 0.6, "C2",    "--"),
+                ("pinn_continuity",   "C(∇·u=0)",         0.6, 0.7, "C3",    "-"),
+                ("pinn_vof",          "AC(vof)",          0.5, 0.6, "C4",    ":"),
+                ("pinn_momentum_u",   "NS_u",             0.3, 0.4, "C5",    ":"),
+                ("pinn_momentum_w",   "NS_w",             0.3, 0.4, "C6",    ":"),
+                ("pinn_electrowetting","EW",              0.5, 0.6, "C7",    "-."),
+                ("pinn_laplace_pressure","LP",            0.4, 0.5, "C8",    ":"),
+                ("pinn_sidewall_contact_angle","SW",      0.4, 0.5, "C9",    "-."),
+                ("pinn_interface_energy","IE",            0.3, 0.5, "C10",   ":"),
+                ("pinn_wall_wetting", "WW",               0.3, 0.4, "C11",   "-."),
+                ("pinn_bottom_wetting", "BW",             0.3, 0.4, "C12",   "--"),
+                ("pinn_phase_field_wetting","PFW",        0.3, 0.5, "C13",   "-"),
+                ("pinn_contact_line_dynamics","CLD",      0.3, 0.4, "C14",   "-."),
+                ("pinn_dielectric_charge","DC",           0.2, 0.4, "C15",   ":"),
+                ("pinn_top_boundary","TB",                0.2, 0.4, "C16",   "-."),
+                ("pinn_temporal_smoothness","TS",         0.1, 0.3, "C17",   ":"),
+            ]
+            for key, label, alpha, lw, color, ls in curve_specs:
+                ax.semilogy(ep, h[key], label=label, alpha=alpha, lw=lw, color=color, linestyle=ls)
 
+            # 阶段分界线
             if len(self.history["epoch"]) > 0:
-                if self.stage1_epochs < self.history["epoch"][-1]:
-                    ax.axvline(x=self.stage1_epochs, color="r", linestyle="--", alpha=0.4, label="S2")
-                if self.stage2_epochs < self.history["epoch"][-1]:
-                    ax.axvline(x=self.stage2_epochs, color="g", linestyle="--", alpha=0.4, label="S3")
-            ax.set_ylabel("Loss (primary)")
-            ax.legend(loc="upper right", ncol=4, fontsize=7)
-            ax.grid(True, alpha=0.2)
+                last_ep = self.history["epoch"][-1]
+                if self.stage1_epochs < last_ep:
+                    ax.axvline(x=self.stage1_epochs, color="r", linestyle="--", alpha=0.5, lw=1.0, label="S1→S2")
+                if self.stage2_epochs < last_ep:
+                    ax.axvline(x=self.stage2_epochs, color="g", linestyle="--", alpha=0.5, lw=1.0, label="S2→S3")
 
-            # === 下层: 界面/壁面/BC 约束 ===
-            ax2.semilogy(self.history["epoch"], self.history["pinn_laplace_pressure"], label="LP(laplace)", alpha=0.4, linestyle=":")
-            ax2.semilogy(self.history["epoch"], self.history["pinn_sidewall_contact_angle"], label="SW(sidewall)", alpha=0.4, linestyle=":")
-            ax2.semilogy(self.history["epoch"], self.history["pinn_interface_energy"], label="IE(interface)", alpha=0.4, linestyle=":")
-            ax2.semilogy(self.history["epoch"], self.history["pinn_wall_wetting"], label="WW(wall)", alpha=0.35, linestyle="-.")
-            ax2.semilogy(self.history["epoch"], self.history["pinn_contact_line_dynamics"], label="CLD(dynamics)", alpha=0.35, linestyle="-.")
-            ax2.semilogy(self.history["epoch"], self.history["pinn_dielectric_charge"], label="DC(charge)", alpha=0.35, linestyle=":")
-            ax2.semilogy(self.history["epoch"], self.history["pinn_top_boundary"], label="TB(top BC)", alpha=0.3, linestyle="-.")
-            ax2.semilogy(self.history["epoch"], self.history["pinn_temporal_smoothness"], label="TS(smooth)", alpha=0.3, linestyle=":")
+            ax.set_xlabel("Epoch")
+            ax.set_ylabel("Loss (log scale)")
+            ax.legend(loc="upper right", ncol=3, fontsize=6.5, framealpha=0.8)
+            ax.grid(True, alpha=0.15)
 
-            if len(self.history["epoch"]) > 0:
-                if self.stage1_epochs < self.history["epoch"][-1]:
-                    ax2.axvline(x=self.stage1_epochs, color="r", linestyle="--", alpha=0.4)
-                if self.stage2_epochs < self.history["epoch"][-1]:
-                    ax2.axvline(x=self.stage2_epochs, color="g", linestyle="--", alpha=0.4)
-            ax2.set_xlabel("Epoch")
-            ax2.set_ylabel("Loss (secondary)")
-            ax2.legend(loc="upper right", ncol=4, fontsize=7)
-            ax2.grid(True, alpha=0.2)
-
-            title = "Training Loss (two-panel)"
+            title = "Training Loss (all constraints)"
             if epoch is not None:
-                title += f" (Epoch {epoch})"
-            fig.suptitle(title, fontsize=12)
+                title += f"  (Epoch {epoch})"
+            ax.set_title(title, fontsize=12)
 
-            filename = (
-                "training_curve.png"
-                if epoch is None
-                else f"training_curve_epoch_{epoch}.png"
-            )
-            # 始终更新最新的曲线图
+            filename = "training_curve.png" if epoch is None else f"training_curve_epoch_{epoch}.png"
+            plt.tight_layout()
             plt.savefig(os.path.join(self.output_dir, "training_curve.png"), dpi=150)
-            # 里程碑保存 (0, 5k, 10k, 20k, 30k, 40k, 50k, 60k)
             milestones = {0, 5000, 10000, 20000, 30000, 40000, 50000, 60000}
             if epoch is not None and epoch in milestones:
                 plt.savefig(os.path.join(self.output_dir, filename), dpi=150)
-
             plt.close()
         except Exception as e:
             logger.warning(f"保存训练曲线失败: {e}")
@@ -1845,9 +1941,13 @@ class Trainer:
                 "continuity": 0.0, "vof": 0.0, "ns": 0.0,
                 "electrowetting": 0.0, "laplace_pressure": 0.0,
                 "sidewall_contact_angle": 0.0, "interface_energy": 0.0,
-                "wall_wetting": 0.0, "temporal_smoothness": 0.0,
+                "wall_wetting": 0.0, "bottom_wetting": 0.0,
+                "phase_field_wetting": 0.0,
+                "temporal_smoothness": 0.0,
                 "dielectric_charge": 0.0, "contact_line_dynamics": 0.0,
                 "top_boundary": 0.0,
+                "explicit_volume": 0.0,
+                "sharpening": 0.0,
             }
 
         elif epoch < self.stage2_epochs:
@@ -1870,14 +1970,20 @@ class Trainer:
                 "sidewall_contact_angle": 0.0,
                 "interface_energy": 0.0,
                 "wall_wetting": 0.0,
+                "bottom_wetting": 0.0,
+                "phase_field_wetting": 0.0,
                 "temporal_smoothness": 0.0,
                 "dielectric_charge": 0.0,
                 "contact_line_dynamics": 0.0,
                 "top_boundary": 0.0,
+                "explicit_volume": physics_cfg.get("explicit_volume_weight", 0.0)
+                * smooth_factor * 0.1,
+                "sharpening": physics_cfg.get("sharpening_weight", 0.0)
+                * smooth_factor * 0.1,
             }
         else:
-            # 阶段3：完整物理约束（继续平滑增加）
-            progress = min(1.0, (epoch - self.stage2_epochs) / 5000.0)
+            # 阶段3：完整物理约束（平滑增加，跨度可配置）
+            progress = min(1.0, (epoch - self.stage2_epochs) / max(1.0, self.s3_smooth_span))
             smooth_factor = 0.5 * (1 + np.tanh(4 * (progress - 0.5)))
 
             return {
@@ -1895,6 +2001,10 @@ class Trainer:
                 * smooth_factor,
                 "wall_wetting": physics_cfg.get("wall_wetting_weight", 0.1)
                 * smooth_factor,
+                "bottom_wetting": physics_cfg.get("bottom_wetting_weight", 0.5)
+                * smooth_factor,
+                "phase_field_wetting": physics_cfg.get("phase_field_wetting_weight", 10.0)
+                * smooth_factor,
                 "temporal_smoothness": physics_cfg.get("temporal_smoothness_weight", 0.1)
                 * smooth_factor,
                 "dielectric_charge": physics_cfg.get("dielectric_charge_weight", 0.05)
@@ -1902,6 +2012,10 @@ class Trainer:
                 "contact_line_dynamics": physics_cfg.get("contact_line_dynamics_weight", 0.1)
                 * smooth_factor,
                 "top_boundary": physics_cfg.get("top_boundary_weight", 0.05)
+                * smooth_factor,
+                "explicit_volume": physics_cfg.get("explicit_volume_weight", 0.0)
+                * smooth_factor,
+                "sharpening": physics_cfg.get("sharpening_weight", 0.0)
                 * smooth_factor,
             }
 
@@ -2313,9 +2427,10 @@ class Trainer:
                 )
 
                 phi_center = self.model(pts_center)[:, 4]
-                # 中心应该是透明的：φ < 0.3 (软阈值, sigmoid平滑)
+                # 中心应该是透明的：φ < 0.3
+                # relu²: 约束满足时梯度=0, 违反时梯度∝偏差量 (sigmoid会饱和→梯度消失)
                 loss = loss + torch.mean(
-                    torch.sigmoid((phi_center - 0.3) / 0.05)
+                    torch.relu(phi_center - 0.3) ** 2
                 )
                 count += 1
 
@@ -2348,9 +2463,10 @@ class Trainer:
                 )
 
                 phi_edge = self.model(pts_edge)[:, 4]
-                # 边缘应该是油墨：φ > 0.7 (软阈值, sigmoid平滑)
+                # 边缘应该是油墨：φ > 0.7
+                # relu²: 约束满足时梯度=0, 违反时梯度∝偏差量
                 loss = loss + torch.mean(
-                    torch.sigmoid((0.7 - phi_edge) / 0.05)
+                    torch.relu(0.7 - phi_edge) ** 2
                 )
                 count += 1
 
@@ -2418,8 +2534,8 @@ class Trainer:
                     dim=1,
                 )
                 phi = self.model(pts)[:, 4]
-                # 中心透明区: φ<0.2 (sigmoid软阈值)
-                loss = loss + torch.mean(torch.sigmoid((phi - 0.2) / 0.05))
+                # 中心透明区: φ<0.2 (relu², 避免sigmoid饱和梯度消失)
+                loss = loss + torch.mean(torch.relu(phi - 0.2) ** 2)
                 count += 1
 
             r_edge_min = min(r_open + margin, 0.9 * min(cx, cy))
@@ -2447,9 +2563,9 @@ class Trainer:
                     dim=1,
                 )
                 phi_ink = self.model(pts_ink)[:, 4]
-                # 边缘油墨区: φ>0.8 (sigmoid软阈值)
+                # 边缘油墨区: φ>0.8 (relu², 避免sigmoid饱和梯度消失)
                 loss = loss + torch.mean(
-                    torch.sigmoid((0.8 - phi_ink) / 0.05)
+                    torch.relu(0.8 - phi_ink) ** 2
                 )
                 count += 1
 
@@ -2673,7 +2789,7 @@ class Trainer:
                 [
                     torch.rand(n_needed, device=self.device) * PHYSICS["Lx"],
                     torch.rand(n_needed, device=self.device) * PHYSICS["Ly"],
-                    torch.rand(n_needed, device=self.device) * PHYSICS["h_ink"] * 2,
+                    torch.rand(n_needed, device=self.device) * PHYSICS["Lz"],
                     torch.rand(n_needed, device=self.device) * 30.0,  # V_from (随机)
                     torch.rand(n_needed, device=self.device) * 30.0,  # V_to
                     torch.rand(n_needed, device=self.device)
@@ -2699,13 +2815,17 @@ class Trainer:
                 "sidewall_contact_angle": float(weights.get("sidewall_contact_angle", 5.0)),
                 "interface_energy": float(weights.get("interface_energy", 0.05)),
                 "wall_wetting": float(weights.get("wall_wetting", 0.1)),
+                "bottom_wetting": float(weights.get("bottom_wetting", 0.5)),
+                "phase_field_wetting": float(weights.get("phase_field_wetting", 10.0)),
                 "temporal_smoothness": float(weights.get("temporal_smoothness", 0.1)),
                 "dielectric_charge": float(weights.get("dielectric_charge", 0.05)),
                 "contact_line_dynamics": float(weights.get("contact_line_dynamics", 0.1)),
                 "top_boundary": float(weights.get("top_boundary", 0.05)),
-                "volume_conservation": 0.0,
-                "explicit_volume": float(weights.get("explicit_volume_weight", 0.0)),
-                "sharpening": float(weights.get("sharpening_weight", 0.0)),
+                "volume_conservation": float(
+                    self.config.get("physics", {}).get("volume_conservation_weight", 0.0)
+                ),
+                "explicit_volume": float(weights.get("explicit_volume", 0.0)),
+                "sharpening": float(weights.get("sharpening", 0.0)),
             }
 
             # 分阶段权重调度: 相对于S3物理训练窗口
@@ -2736,6 +2856,8 @@ class Trainer:
             phys_weights["interface_energy"] *= ac_mult
             phys_weights["sidewall_contact_angle"] *= contact_mult
             phys_weights["wall_wetting"] *= contact_mult
+            phys_weights["bottom_wetting"] *= contact_mult
+            phys_weights["phase_field_wetting"] *= contact_mult
             phys_weights["temporal_smoothness"] *= ns_mult
             phys_weights["dielectric_charge"] *= ns_mult
             phys_weights["contact_line_dynamics"] *= contact_mult
@@ -2765,6 +2887,8 @@ class Trainer:
                     "laplace_pressure",
                     "interface_energy",
                     "wall_wetting",
+                    "bottom_wetting",
+                    "phase_field_wetting",
                     "dielectric_charge",
                     "contact_line_dynamics",
                     "top_boundary",
@@ -3020,91 +3144,52 @@ class Trainer:
             def get_val(d, k):
                 return d.get(k, torch.tensor(0.0)).item()
 
-            # TensorBoard 日志记录
-            if epoch % 100 == 0:  # 每 100 轮记录一次到 TensorBoard
-                self.tb_writer.add_scalar("Loss/total", total_loss.item(), epoch)
-                self.tb_writer.add_scalar(
-                    "Loss/interface", get_val(losses, "interface"), epoch
-                )
-                self.tb_writer.add_scalar(
-                    "Loss/physics", get_val(losses, "pinn_physics"), epoch
-                )
-                self.tb_writer.add_scalar(
-                    "Learning_Rate", self.optimizer.param_groups[0]["lr"], epoch
-                )
+            # TensorBoard 日志记录 (每 100 epoch)
+            if epoch % 100 == 0:
+                e = epoch
+                w = self.tb_writer
+                w.add_scalar("Loss/total", total_loss.item(), e)
+                for tb_name, loss_key in [
+                    ("Loss/interface", "interface"),
+                    ("Loss/contact_angle", "contact_angle"),
+                    ("Loss/volume_conservation", "volume_conservation"),
+                    ("Loss/phi_spatial", "phi_spatial"),
+                    ("Loss/phi_geometry", "phi_geometry"),
+                    ("Loss/eta_ceiling", "eta_ceiling"),
+                    ("Loss/eta_monotonic", "eta_monotonic"),
+                    ("Loss/eta_recovery", "eta_recovery"),
+                    ("Loss/pinn_physics", "pinn_physics"),
+                    ("Loss/continuity", "pinn_continuity"),
+                    ("Loss/vof", "pinn_vof"),
+                    ("Loss/momentum_u", "pinn_momentum_u"),
+                    ("Loss/momentum_v", "pinn_momentum_v"),
+                    ("Loss/momentum_w", "pinn_momentum_w"),
+                    ("Loss/electrowetting", "pinn_electrowetting"),
+                    ("Loss/laplace_pressure", "pinn_laplace_pressure"),
+                    ("Loss/sidewall_contact_angle", "pinn_sidewall_contact_angle"),
+                    ("Loss/interface_energy", "pinn_interface_energy"),
+                    ("Loss/wall_wetting", "pinn_wall_wetting"),
+                    ("Loss/bottom_wetting", "pinn_bottom_wetting"),
+                    ("Loss/phase_field_wetting", "pinn_phase_field_wetting"),
+                    ("Loss/contact_line_dynamics", "pinn_contact_line_dynamics"),
+                    ("Loss/dielectric_charge", "pinn_dielectric_charge"),
+                    ("Loss/top_boundary", "pinn_top_boundary"),
+                    ("Loss/temporal_smoothness", "pinn_temporal_smoothness"),
+                ]:
+                    w.add_scalar(tb_name, get_val(losses, loss_key), e)
+                w.add_scalar("Learning_Rate", self.optimizer.param_groups[0]["lr"], e)
 
-                # 详细的物理损失
-                self.tb_writer.add_scalar(
-                    "Loss/pinn_continuity", get_val(losses, "pinn_continuity"), epoch
-                )
-                self.tb_writer.add_scalar(
-                    "Loss/pinn_vof", get_val(losses, "pinn_vof"), epoch
-                )
-                self.tb_writer.add_scalar(
-                    "Loss/pinn_momentum_u", get_val(losses, "pinn_momentum_u"), epoch
-                )
-                self.tb_writer.add_scalar(
-                    "Loss/pinn_momentum_v", get_val(losses, "pinn_momentum_v"), epoch
-                )
-                self.tb_writer.add_scalar(
-                    "Loss/pinn_momentum_w", get_val(losses, "pinn_momentum_w"), epoch
-                )
-                self.tb_writer.add_scalar(
-                    "Loss/pinn_electrowetting",
-                    get_val(losses, "pinn_electrowetting"),
-                    epoch,
-                )
-                self.tb_writer.add_scalar(
-                    "Loss/pinn_laplace_pressure",
-                    get_val(losses, "pinn_laplace_pressure"),
-                    epoch,
-                )
-                self.tb_writer.add_scalar(
-                    "Loss/pinn_sidewall_contact_angle",
-                    get_val(losses, "pinn_sidewall_contact_angle"),
-                    epoch,
-                )
-                self.tb_writer.add_scalar(
-                    "Loss/pinn_interface_energy",
-                    get_val(losses, "pinn_interface_energy"),
-                    epoch,
-                )
-                self.tb_writer.add_scalar(
-                    "Loss/pinn_temporal_smoothness",
-                    get_val(losses, "pinn_temporal_smoothness"),
-                    epoch,
-                )
-                self.tb_writer.add_scalar(
-                    "Loss/pinn_wall_wetting",
-                    get_val(losses, "pinn_wall_wetting"),
-                    epoch,
-                )
-                self.tb_writer.add_scalar(
-                    "Loss/pinn_dielectric_charge",
-                    get_val(losses, "pinn_dielectric_charge"),
-                    epoch,
-                )
-                self.tb_writer.add_scalar(
-                    "Loss/pinn_contact_line_dynamics",
-                    get_val(losses, "pinn_contact_line_dynamics"),
-                    epoch,
-                )
-                self.tb_writer.add_scalar(
-                    "Loss/pinn_top_boundary",
-                    get_val(losses, "pinn_top_boundary"),
-                    epoch,
-                )
-
-            # 记录梯度直方图 (每 1000 轮)
-            if epoch % 1000 == 0 and epoch > 0:
-                for name, param in self.model.named_parameters():
-                    if param.grad is not None:
-                        self.tb_writer.add_histogram(
-                            f"gradients/{name}", param.grad, epoch
-                        )
-                        self.tb_writer.add_histogram(
-                            f"weights/{name}", param.data, epoch
-                        )
+            # 梯度/权重直方图: 仅记录首层和末层, 每 5000 epoch
+            if epoch % 5000 == 0 and epoch > 0:
+                for name, param in [("phi_net.0.weight", self.model.phi_net[0].weight),
+                                     ("phi_net.last.weight", list(self.model.phi_net.modules())[-1].weight),
+                                     ("vel_net.0.weight", self.model.vel_net[0].weight)]:
+                    try:
+                        if param.grad is not None:
+                            self.tb_writer.add_histogram(f"grad/{name}", param.grad, epoch)
+                            self.tb_writer.add_histogram(f"weight/{name}", param.data, epoch)
+                    except Exception:
+                        pass
 
             # [2025-12-31] 物理损失统一从 pinn_physics 获取
             # 旧的 continuity, vof, ns, surface_tension 已不再单独计算
@@ -3138,6 +3223,12 @@ class Trainer:
             )
             self.history["pinn_wall_wetting"].append(
                 get_val(losses, "pinn_wall_wetting")
+            )
+            self.history["pinn_bottom_wetting"].append(
+                get_val(losses, "pinn_bottom_wetting")
+            )
+            self.history["pinn_phase_field_wetting"].append(
+                get_val(losses, "pinn_phase_field_wetting")
             )
             self.history["pinn_dielectric_charge"].append(
                 get_val(losses, "pinn_dielectric_charge")
@@ -3244,6 +3335,12 @@ class Trainer:
                 ww_val = losses.get("pinn_wall_wetting")
                 if ww_val is not None:
                     physics_str += f" | WW: {ww_val.item():.2e}"
+                bw_val = losses.get("pinn_bottom_wetting")
+                if bw_val is not None:
+                    physics_str += f" | BW: {bw_val.item():.2e}"
+                pfw_val = losses.get("pinn_phase_field_wetting")
+                if pfw_val is not None:
+                    physics_str += f" | PFW: {pfw_val.item():.2e}"
                 dc_val = losses.get("pinn_dielectric_charge")
                 if dc_val is not None:
                     physics_str += f" | DC: {dc_val.item():.2e}"
@@ -3285,9 +3382,12 @@ class Trainer:
             from evaluate import PINNEvaluator
 
             evaluator = PINNEvaluator()
-            best_ckpt = os.path.join(self.output_dir, "best_model.pth")
-            if os.path.exists(best_ckpt):
-                model, _ = evaluator.load_model(best_ckpt)
+            # 优先使用 final_model (含完整物理约束), 其次 best_model
+            eval_ckpt = os.path.join(self.output_dir, "final_model.pth")
+            if not os.path.exists(eval_ckpt):
+                eval_ckpt = os.path.join(self.output_dir, "best_model.pth")
+            if os.path.exists(eval_ckpt):
+                model, _ = evaluator.load_model(eval_ckpt)
                 if model:
                     evaluator.plot_dashboard(
                         model,
@@ -3304,7 +3404,7 @@ class Trainer:
                         0.02,
                         30.0,
                     )
-                    logger.info(f"✅ 专业评估套件已生成: {self.output_dir}/")
+                    logger.info(f"✅ 专业评估套件已生成 (model={os.path.basename(eval_ckpt)}): {self.output_dir}/")
         except Exception as e:
             logger.error(f"生成专业评估仪表盘失败: {e}")
 
