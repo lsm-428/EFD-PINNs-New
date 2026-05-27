@@ -1419,7 +1419,7 @@ class DataGenerator:
         for V in V_ic:
             x = np.random.rand() * self.Lx
             y = np.random.rand() * self.Ly
-            z = np.random.rand() * self.h_ink * 2
+            z = np.random.rand() * self.Lz  # 全域采样 [0, Lz]
 
             interface_width = 1e-6
             phi = 0.5 * (1 - np.tanh((z - self.h_ink) / interface_width))
@@ -2222,10 +2222,10 @@ class Trainer:
         """4. 早期时间 & 零电压约束"""
         res = {}
         n = self.batch_size // 4
-        # Early Time
+        # Early Time：全域采样，target 用 phi_IC(z) 而非全 1
         x = torch.rand(n, device=self.device) * PHYSICS["Lx"]
         y = torch.rand(n, device=self.device) * PHYSICS["Ly"]
-        z = torch.rand(n, device=self.device) * PHYSICS["h_ink"]
+        z = torch.rand(n, device=self.device) * PHYSICS["Lz"]
         t = torch.rand(n, device=self.device) * 0.002
         pts_early = torch.stack(
             [
@@ -2239,7 +2239,12 @@ class Trainer:
             dim=1,
         )
         phi_early = self.model(pts_early)[:, 4]
-        res["early_time"] = F.mse_loss(phi_early, torch.ones_like(phi_early)) * 300.0
+        # target: phi_IC(z) — 油墨区→1, 极性液体区→0
+        h_ink = PHYSICS["h_ink"]
+        delta_ic = getattr(self, "hard_ic_width", 1e-6)
+        z_phys = pts_early[:, 2]
+        phi_ic_target = 0.5 * (1.0 + torch.tanh((h_ink - z_phys) / delta_ic))
+        res["early_time"] = F.mse_loss(phi_early, phi_ic_target) * 300.0
 
         # Zero Voltage
         t_0v = torch.rand(n, device=self.device) * PHYSICS["t_max"]
