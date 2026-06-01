@@ -129,3 +129,6 @@ uv.lock
 
 # Experimental
 .experimental/
+
+# Outputs (训练输出、模型检查点)
+outputs/

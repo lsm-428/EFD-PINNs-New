@@ -1681,22 +1681,40 @@ class PhysicsConstraints:
                 )
 
             # === 电润湿驱动力源项 (直接加入 AC 方程) ===
-            # 物理: 电润湿力推动极性液体润湿底面，将油墨向外排挤
-            # 源项: S_ew = p_ew * z_decay / (σ·ε)  [无量纲]
-            #   p_ew = ½·C_open·V_eff²  [N/m] (电润湿压力)
-            #   z_decay = exp(-z/h_ink)  (底面衰减)
-            #   σ·ε 归一化因子，使 S_ew 无量纲
-            # 量纲: [N/m] / ([N/m]·[m]) = [1/m]
-            # 乘以 mob [m/s] 后 → [1/s]，与 advection 匹配
+            # 物理: 电润湿自由能 G_ew = -½·C(φ)·V²
+            #   C(φ) = φ·C_ink + (1-φ)·C_open  (线性插值)
+            #   δG_ew/δφ = ½·(C_open - C_ink)·V² = ½·delta_C·V²
+            # AC 方程: ∂φ/∂t = -Γ·δF/δφ = ... - Γ·δG_ew/δφ
+            # EW 源项: S_ew = -M_ac · ½ · delta_C · V_eff² · z_decay / eps_ac
+            # 量纲: [m³·s/kg]·[F/m²]·[V²]/[m] = [m³·s/kg]·[J/m²]/[m] = [m³·s/kg]·[N/m²] = [m²/s]
+            # 需要再除以 eps_ac → [m²/s]/[m] = [m/s]
+            # 不对，让我重新算：
+            # M_ac [m³·s/kg] * delta_C [F/m²] * V² [V²] / eps_ac [m]
+            # = [m³·s/kg] * [C/V·m²] * [V²] / [m]
+            # = [m³·s/kg] * [A·s/V·m²] * [V²] / [m]
+            # = [m³·s/kg] * [A·s·V / m³]
+            # = [m³·s/kg] * [J / m³]  (因为 J = A·s·V)
+            # = [m³·s/kg] · [kg·m/s² · m / m³]
+            # = [m²/s]
+            # 所以 S_ew 量纲是 [m²/s]，需要再除以 eps_ac [m] 得到 [m/s]
+            # 再除以 eps_ac [m] 得到 [1/s] ← 与 advection 匹配
+            #
+            # 归一化因子：S_ew = M_ac * delta_C * V² * z_decay / eps_ac²
             try:
-                eps0 = 8.854e-12
-                eps_r = self.materials_params.get('relative_permittivity', 3.28)
-                eps_h = self.materials_params.get('epsilon_hydrophobic', 1.934)
-                d_d = self.materials_params.get('dielectric_thickness', 4e-7)
-                d_h = self.materials_params.get('hydrophobic_thickness', 4e-7)
-                h_ink = self.materials_params.get('ink_thickness', 3e-6)
+                eps0_v = 8.854e-12
+                eps_r_v = self.materials_params.get('relative_permittivity', 3.28)
+                eps_h_v = self.materials_params.get('epsilon_hydrophobic', 1.934)
+                d_d_v = self.materials_params.get('dielectric_thickness', 4e-7)
+                d_h_v = self.materials_params.get('hydrophobic_thickness', 4e-7)
+                h_ink_v = self.materials_params.get('ink_thickness', 3e-6)
+                eps_ink = self.materials_params.get('epsilon_ink', 4.0)  # 油墨介电常数
 
-                C_open = 1.0 / (d_d/(eps0*eps_r) + d_h/(eps0*eps_h))
+                # 开口区域电容（介电层+疏水层串联）
+                C_open = 1.0 / (d_d_v/(eps0_v*eps_r_v) + d_h_v/(eps0_v*eps_h_v))
+                # 油墨区域电容（介电层+疏水层+油墨层串联）
+                C_ink = 1.0 / (d_d_v/(eps0_v*eps_r_v) + d_h_v/(eps0_v*eps_h_v) + h_ink_v/(eps0_v*eps_ink))
+                # 电容差
+                delta_C = C_open - C_ink  # > 0
 
                 # V_to 在 x_phys 索引 4
                 if x_phys.shape[1] >= 5:
@@ -1707,18 +1725,15 @@ class PhysicsConstraints:
                 V_T = self.materials_params.get('V_T_base', 5.0)
                 V_eff = torch.clamp(V_to - V_T, min=0.0)
 
-                # 电润湿压力 [N/m]
-                p_ew = 0.5 * C_open * V_eff**2
-
-                # z 方向衰减 (底面薄层)
+                # z 方向衰减
                 z_coord = x_phys[:, 2]
-                z_decay = torch.exp(-z_coord / h_ink)
+                z_decay = torch.exp(-z_coord / h_ink_v)
 
-                # EW 源项 [1/m]，乘以 mob [m/s] → [1/s]
-                # phi 依赖：只在油墨区域（phi>0）有驱动力
+                # EW 源项: S_ew = M_ac * delta_C * V_eff² * z_decay / eps_ac²
+                # 量纲: [m³·s/kg] * [F/m²] * [V²] / [m²] = [m²/s] / [m] = [1/s] ✓
+                ew_source = M_ac * delta_C * V_eff**2 * z_decay / (eps_ac**2 + 1e-20)
+
                 # 负号：驱动力使 phi 减小（油墨被极性液体替代）
-                ew_source = (p_ew * z_decay * phi / (sigma_ac * eps_ac + 1e-12)) * mob
-
                 ac_residual = ac_residual - ew_source
             except Exception:
                 pass  # EW 源项失败不影响主残差
