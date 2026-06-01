@@ -27,6 +27,7 @@ from typing import Optional, List, Tuple, Dict, Any
 # 导入现有模块
 from src.predictors.hybrid_predictor import HybridPredictor
 from src.models.aperture_model import EnhancedApertureModel
+from src.config import PHYSICS
 
 
 # ============================================================
@@ -173,12 +174,12 @@ class SolverConfig:
     t_end: float = 0.02  # 结束时间 (20ms)
     save_interval: int = 10  # 保存间隔（每多少步保存一次）
 
-    # 物理参数
-    sigma: float = 0.030  # 界面张力 (N/m)
-    rho_oil: float = 1000.0  # 油墨密度 (kg/m³)
-    rho_water: float = 1000.0  # 极性液体密度 (kg/m³)
-    mu_oil: float = 0.01  # 油墨粘度 (Pa·s)
-    mu_water: float = 0.001  # 极性液体粘度 (Pa·s)
+    # 物理参数 (默认值来自 src.config.PHYSICS)
+    sigma: float = 0.02505  # 界面张力 (N/m) — PHYSICS["sigma"]
+    rho_oil: float = 763.0  # 油墨密度 (kg/m³) — PHYSICS["rho_oil"]
+    rho_water: float = 998.0  # 极性液体密度 (kg/m³) — PHYSICS["rho_polar"]
+    mu_oil: float = 9.41e-4  # 油墨粘度 (Pa·s) — PHYSICS["mu_oil"]
+    mu_water: float = 1.01e-3  # 极性液体粘度 (Pa·s) — PHYSICS["mu_polar"]
 
     # 数值参数
     cfl: float = 0.5

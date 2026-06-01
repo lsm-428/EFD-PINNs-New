@@ -83,7 +83,9 @@ PHYSICS: Dict[str, Any] = {
     "d_hydrophobic": 4e-7,  # 疏水层厚度 (m) = 400nm (Teflon)
     # ========== 接触角参数 ==========
     "theta0": 120.0,  # 本征接触角 (度)，无电压时
-    "theta_wall": 71.0,  # 围堰壁接触角 (度)
+    "theta_wall": 71.0,  # 围堰壁接触角 (度), 原生SU-8, 极性液体润湿
+    "theta_wall_teflon": 110.0,  # Teflon污染侧壁接触角 (度), 油墨润湿
+    "wall_top_contact_angle": 71.0,  # 围堰顶面接触角 (度), 原生SU-8未污染
     "theta_min": 60.0,  # 最小接触角 (度)，物理下限
     "contact_angle_theta0": 120.0,  # 别名，兼容 constraints.py
     "contact_angle_ink": 120.0,  # 别名
@@ -101,9 +103,17 @@ PHYSICS: Dict[str, Any] = {
     "V_T_sensitivity": 2e6,  # 阈值电压灵敏度 (V/m) = 2V/μm
     "V_max": 30.0,  # 最大工作电压 (V)
     "V_threshold": 5.0,  # 阈值电压 (V) = V_T_base + (h_ink-3μm)×sensitivity，计算值
+    # ========== Allen-Cahn 相场参数 ==========
+    "ac_interface_width": 5e-6,  # 界面宽度 (m)
+    "ac_mobility": 1e-10,        # 迁移率 (m³·s/kg), mob≈0.1m/s, τ~0.05ms
     # ========== 开口率参数 ==========
     "eta_max": 0.85,  # 最大开口率
     "ink_initial_fraction": 0.15,  # 初始油墨体积分数
+    # ========== 电润湿 EW 力参数 ==========
+    "lambda_debye": 50e-9,  # 德拜屏蔽长度 [m] ~50nm，EW 力 z 方向衰减尺度
+    # ========== 物理模型开关 ==========
+    "use_convection": False,        # Re≈1-5, 默认关闭对流项
+    "use_unified_wetting": False,   # 统一相场润湿 BC (替代旧版 BW/WW/SW)
     # ========== 开口率映射参数（用真实材料参数后需重新标定）==========
     "aperture_k": 3.0,  # 映射陡度（提高以补偿 Δθ 缩小）
     "aperture_theta_scale": 19.0,  # 角度缩放因子（降低使 tanh 更早饱和）
@@ -175,8 +185,15 @@ class PhysicsConfig:
     aperture_theta_scale: float = 19.0
     aperture_alpha: float = 0.03
 
+    # 电润湿 EW 力参数
+    lambda_debye: float = 50e-9  # 德拜屏蔽长度 [m] ~50nm
+
     # 物理模型开关
-    use_convection: bool = False  # Re≈1-5, 默认关闭对流项
+    use_convection: bool = False        # Re≈1-5, 默认关闭对流项
+    use_unified_wetting: bool = False   # 统一相场润湿 BC (替代旧版 BW/WW/SW)
+
+    # 侧壁 Teflon 污染接触角 (°)
+    theta_wall_teflon: float = 110.0
 
     # 配置来源（用于追踪）
     _source: str = field(default="default", repr=False)
@@ -313,8 +330,12 @@ class PhysicsConfig:
             "domain_height": self.Lz,
             "wall_height": self.wall_height,
             "ink_initial_fraction": self.ink_initial_fraction,
+            # 电润湿 EW 力参数
+            "lambda_debye": self.lambda_debye,
             # 物理模型开关
             "use_convection": self.use_convection,
+            "use_unified_wetting": getattr(self, "use_unified_wetting", False),
+            "theta_wall_teflon": getattr(self, "theta_wall_teflon", 110.0),
         }
 
     def to_predictor_params(self) -> Dict[str, Any]:

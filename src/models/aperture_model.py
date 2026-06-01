@@ -67,16 +67,16 @@ class ApertureModel:
             Lz = config.Lz
             wall_height = config.wall_height
         else:
-            Lx = 174e-6
-            h_ink = 3e-6
-            theta0 = 120.0
-            theta_min = 60.0
-            epsilon_0 = 8.854e-12
-            epsilon_h = 1.934
-            d_dielectric = 4e-7
-            d_hydrophobic = 4e-7
-            Lz = 20e-6
-            wall_height = 3.5e-6
+            Lx = PHYSICS.get("Lx", 174e-6)
+            h_ink = PHYSICS.get("h_ink", 3e-6)
+            theta0 = PHYSICS.get("theta0", 120.0)
+            theta_min = PHYSICS.get("theta_min", 60.0)
+            epsilon_0 = PHYSICS.get("epsilon_0", 8.854e-12)
+            epsilon_h = PHYSICS.get("epsilon_h", 1.934)
+            d_dielectric = PHYSICS.get("d_dielectric", 4e-7)
+            d_hydrophobic = PHYSICS.get("d_hydrophobic", 4e-7)
+            Lz = PHYSICS.get("Lz", 20e-6)
+            wall_height = PHYSICS.get("wall_height", 3.5e-6)
 
         # 像素几何参数
         self.pixel_size = Lx  # 内沿尺寸 (m)
@@ -236,7 +236,7 @@ class ApertureModel:
         # 实验标定：θ_wall=71° 时 η_max≈68%
         # 有效壁高 = wall_height × K(θ_wall)，K(71°)=2.68
         wall_h = self.wall_height
-        theta_w = getattr(self, "theta_wall", 71.0)
+        theta_w = getattr(self, "theta_wall", PHYSICS.get("theta_wall", 71.0))
         K_wall = 2.68 * (theta_w / 71.0)  # 接触角修正因子
         effective_wall_h = wall_h * K_wall
         A_ink_min = self.ink_volume / effective_wall_h
@@ -255,9 +255,13 @@ class ApertureModel:
 
         # 从实例属性读取参数（如果有），否则使用默认值
         # 参数校准：6V开始有开口，20V时开口率≈67%（实验值）
-        k = getattr(self, "aperture_k", 3.0)  # 陡度参数
-        theta_scale = getattr(self, "aperture_theta_scale", 19.0)  # 角度缩放因子（度）
-        alpha = getattr(self, "aperture_alpha", 0.03)  # 电容反馈强度
+        k = getattr(self, "aperture_k", PHYSICS.get("aperture_k", 3.0))  # 陡度参数
+        theta_scale = getattr(
+            self,
+            "aperture_theta_scale",
+            PHYSICS.get("aperture_theta_scale", 19.0),
+        )  # 角度缩放因子（度）
+        alpha = getattr(self, "aperture_alpha", PHYSICS.get("aperture_alpha", 0.03))  # 电容反馈强度
 
         # 迭代求解（简单不动点迭代）
         eta = 0.0
@@ -475,7 +479,7 @@ class EnhancedApertureModel(ApertureModel):
         # 从配置更新材料参数
         materials = self.config.get("materials", {})
         self.theta_0 = materials.get("theta0", self.theta_0)
-        self.theta_wall = materials.get("theta_wall", 71.0)
+        self.theta_wall = materials.get("theta_wall", PHYSICS.get("theta_wall", 71.0))
         self.epsilon_r = materials.get("epsilon_r", 3.28)
         self.gamma = materials.get("gamma", 0.048)
         self.d = materials.get("dielectric_thickness", 4e-7)
@@ -496,10 +500,12 @@ class EnhancedApertureModel(ApertureModel):
 
         # 从配置更新开口率映射参数
         aperture_mapping = self.config.get("aperture_mapping", {})
-        self.aperture_k = aperture_mapping.get("k", 3.0)
-        self.aperture_theta_scale = aperture_mapping.get("theta_scale", 19.0)
-        self.aperture_alpha = aperture_mapping.get("alpha", 0.03)
-        self.aperture_max = aperture_mapping.get("aperture_max", 0.85)
+        self.aperture_k = aperture_mapping.get("k", PHYSICS.get("aperture_k", 3.0))
+        self.aperture_theta_scale = aperture_mapping.get(
+            "theta_scale", PHYSICS.get("aperture_theta_scale", 19.0)
+        )
+        self.aperture_alpha = aperture_mapping.get("alpha", PHYSICS.get("aperture_alpha", 0.03))
+        self.aperture_max = aperture_mapping.get("aperture_max", PHYSICS.get("eta_max", 0.85))
 
     def calibrate_with_experimental_data(
         self,
@@ -546,8 +552,10 @@ class EnhancedApertureModel(ApertureModel):
             theta_scale_range[0], theta_scale_range[1], num_theta_scale
         )
 
-        original_k = getattr(self, "aperture_k", 0.8)
-        original_theta_scale = getattr(self, "aperture_theta_scale", 6.0)
+        original_k = getattr(self, "aperture_k", PHYSICS.get("aperture_k", 0.8))
+        original_theta_scale = getattr(
+            self, "aperture_theta_scale", PHYSICS.get("aperture_theta_scale", 6.0)
+        )
 
         best_k = original_k
         best_theta_scale = original_theta_scale
