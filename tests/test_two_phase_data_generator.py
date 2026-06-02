@@ -7,13 +7,13 @@ Author: EFD-PINNs Team
 Date: 2025-12-12
 """
 
-import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 import numpy as np
+import pytest
 import torch
-from hypothesis import given, strategies as st, settings, HealthCheck
 
-from src.models.pinn_two_phase import DataGenerator, PHYSICS, DEFAULT_CONFIG
-
+from src.models.pinn_two_phase import DEFAULT_CONFIG, PHYSICS, DataGenerator
 
 # ============================================================
 # 测试策略

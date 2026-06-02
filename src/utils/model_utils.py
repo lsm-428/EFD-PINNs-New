@@ -5,9 +5,9 @@
 """
 
 import logging
+
 import torch
-import torch.nn as nn
-from typing import List, Tuple
+from torch import nn
 
 logger = logging.getLogger("EWP-ModelUtils")
 
@@ -36,8 +36,7 @@ def extract_predictions(raw_output) -> torch.Tensor:
             val = raw_output["main_predictions"]
             if isinstance(val, torch.Tensor):
                 return val
-            else:
-                raise ValueError("'main_predictions' 存在但不是 torch.Tensor")
+            raise ValueError("'main_predictions' 存在但不是 torch.Tensor")
 
         # 其次尝试 'prediction' 键（兼容旧名）
         if "prediction" in raw_output and isinstance(
@@ -58,7 +57,7 @@ def extract_predictions(raw_output) -> torch.Tensor:
 
 def load_model_with_mismatch_handling(
     model: nn.Module, checkpoint_path: str, strict: bool = False
-) -> Tuple[nn.Module, List[str], List[str]]:
+) -> tuple[nn.Module, list[str], list[str]]:
     """
     加载模型权重，处理架构不匹配
 

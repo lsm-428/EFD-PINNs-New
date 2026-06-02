@@ -21,10 +21,9 @@ import csv
 import glob
 import os
 import re
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Any
 
 import numpy as np
-
 
 # =============================================================================
 # Log Parsing Patterns (Module-level for reuse)
@@ -54,7 +53,7 @@ PATTERN_LR = re.compile(r"LR:\s*([0-9.eE+\-]+)")
 # =============================================================================
 
 
-def find_log_path(model_dir: Optional[str] = None) -> Tuple[str, str]:
+def find_log_path(model_dir: str | None = None) -> tuple[str, str]:
     """
     Find training log file.
 
@@ -114,7 +113,7 @@ def find_log_path(model_dir: Optional[str] = None) -> Tuple[str, str]:
 # =============================================================================
 
 
-def parse_training_log(log_path: str) -> Dict[str, List[Any]]:
+def parse_training_log(log_path: str) -> dict[str, list[Any]]:
     """
     Parse training log file.
 
@@ -140,7 +139,7 @@ def parse_training_log(log_path: str) -> Dict[str, List[Any]]:
     pattern_lr = PATTERN_LR
     tag_map = TAG_MAP
 
-    records: Dict[str, List[Any]] = {
+    records: dict[str, list[Any]] = {
         "epoch": [],
         "stage": [],
         "loss_total": [],
@@ -154,7 +153,7 @@ def parse_training_log(log_path: str) -> Dict[str, List[Any]]:
     line_count = 0
     matched_count = 0
 
-    with open(log_path, "r", encoding="utf-8") as f:
+    with open(log_path, encoding="utf-8") as f:
         for line in f:
             line_count += 1
             # Skip lines without loss information
@@ -215,7 +214,7 @@ def parse_training_log(log_path: str) -> Dict[str, List[Any]]:
 # =============================================================================
 
 
-def save_csv(records: Dict[str, List[Any]], csv_path: str) -> None:
+def save_csv(records: dict[str, list[Any]], csv_path: str) -> None:
     """
     Save parsed results to CSV file.
 

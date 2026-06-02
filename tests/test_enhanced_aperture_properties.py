@@ -9,16 +9,16 @@ EnhancedApertureModel 属性测试
 日期: 2025-12-02
 """
 
+import sys
+
+from hypothesis import given, settings
+from hypothesis import strategies as st
 import numpy as np
 import pytest
-from hypothesis import given, strategies as st, settings
-
-import sys
 
 sys.path.insert(0, ".")
 
 from src.models.aperture_model import EnhancedApertureModel
-
 
 # 配置 hypothesis 运行至少 100 次迭代
 settings.register_profile("ci", max_examples=100)
@@ -300,8 +300,8 @@ class TestConfigSerializationProperty:
         *For any* 有效的模型配置，保存后加载应产生等价配置：
         save_config(path) 后 from_config(path) 应产生相同参数
         """
-        import tempfile
         import os
+        import tempfile
 
         # 获取原始配置
         original_config = self.model.get_config()
@@ -334,8 +334,8 @@ class TestConfigSerializationProperty:
 
         测试不同 tau_rc 值的配置往返一致性
         """
-        import tempfile
         import os
+        import tempfile
 
         # 创建具有特定 tau_rc 的模型
         model = EnhancedApertureModel(tau_rc=tau_rc)

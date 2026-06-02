@@ -15,7 +15,6 @@ except ImportError:
 
 from src.dashboard.datastore import DataStore
 
-
 # Configure Panel with Material theme if available
 if PANEL_AVAILABLE:
     pn.extension(design="material")
@@ -63,8 +62,7 @@ def create_parameter_sweep_tab():
             return pn.Column(
                 pn.Row(voltage_min, voltage_max), pn.Row(time_step, button), plot_pane
             )
-        else:
-            return "Parameter Sweep Component (requires Panel)"
+        return "Parameter Sweep Component (requires Panel)"
 
     except Exception as e:
         return f"Parameter Sweep Error: {e}"
@@ -98,8 +96,7 @@ def create_model_comparison_tab():
             results_pane = pn.panel(pn.bind(compare_models, compare_button))
 
             return pn.Column(file_input, compare_button, results_pane)
-        else:
-            return "Model Comparison Component (requires Panel)"
+        return "Model Comparison Component (requires Panel)"
 
     except Exception as e:
         return f"Model Comparison Error: {e}"
@@ -187,8 +184,7 @@ def create_experiment_simulator_tab():
                 run_button,
                 results_pane,
             )
-        else:
-            return "Experiment Simulator Component (requires Panel)"
+        return "Experiment Simulator Component (requires Panel)"
 
     except Exception as e:
         return f"Experiment Simulator Error: {e}"
@@ -247,8 +243,7 @@ def create_training_monitor_tab():
                 metrics_display,
                 loss_plot,
             )
-        else:
-            return "Training Monitor Component (requires Panel)"
+        return "Training Monitor Component (requires Panel)"
 
     except Exception as e:
         return f"Training Monitor Error: {e}"

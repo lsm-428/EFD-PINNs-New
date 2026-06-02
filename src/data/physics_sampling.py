@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 物理优化采样器
 =================
@@ -14,9 +13,9 @@
 日期: 2026-04-26
 """
 
-import numpy as np
-from typing import Dict, Tuple, List, Optional
 import logging
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ class PhysicsBasedSampler:
     - 饱和区 (>4V_T): 采样权重可配置
     """
 
-    def __init__(self, config: Dict, stage1_predictor=None, stage1_aperture_model=None):
+    def __init__(self, config: dict, stage1_predictor=None, stage1_aperture_model=None):
         """
         初始化物理采样器
 
@@ -91,7 +90,7 @@ class PhysicsBasedSampler:
         logger.info(f"电压分区权重: {self.voltage_weights}")
         logger.info(f"阈值电压: {self.V_T_base}V (基础值, 3μm油膜)")
         if self._stage1_predictor is not None:
-            logger.info(f"使用 Stage1 模型进行精确开口率估算")
+            logger.info("使用 Stage1 模型进行精确开口率估算")
 
     def _calculate_threshold_voltage(self, oil_thickness: float) -> float:
         """
@@ -278,7 +277,7 @@ class PhysicsBasedSampler:
         return times
 
     def sample_spatial_physics_based(self, n_samples: int,
-                                   voltage: float, time: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+                                   voltage: float, time: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         基于物理机制的空间采样
 
@@ -380,7 +379,7 @@ class PhysicsBasedSampler:
         return width
 
 
-def create_physics_sampling_dataset(config: Dict, n_total: int = 100000) -> Dict[str, np.ndarray]:
+def create_physics_sampling_dataset(config: dict, n_total: int = 100000) -> dict[str, np.ndarray]:
     """
     创建完整的物理优化数据集
 
@@ -459,21 +458,21 @@ if __name__ == "__main__":
 
     # 测试电压采样
     voltages = sampler.sample_voltage_physics_based(1000)
-    print(f"电压采样统计:")
-    print(f"  最小值: {voltages.min():.2f}V")
-    print(f"  最大值: {voltages.max():.2f}V")
-    print(f"  平均值: {voltages.mean():.2f}V")
-    print(f"  阈值附近比例: {np.sum((voltages >= 4.5) & (voltages <= 6.5)) / len(voltages) * 100:.1f}%")
+    logger.info("电压采样统计:")
+    logger.info(f"  最小值: {voltages.min():.2f}V")
+    logger.info(f"  最大值: {voltages.max():.2f}V")
+    logger.info(f"  平均值: {voltages.mean():.2f}V")
+    logger.info(f"  阈值附近比例: {np.sum((voltages >= 4.5) & (voltages <= 6.5)) / len(voltages) * 100:.1f}%")
 
     # 测试时间采样
     times_up = sampler.sample_time_adaptive(100, 10.0, 0.0)  # 升压
     times_down = sampler.sample_time_adaptive(100, 0.0, 10.0)  # 降压
 
-    print(f"\n时间采样统计:")
-    print(f"  升压 - 平均时间: {times_up.mean()*1000:.2f}ms")
-    print(f"  降压 - 平均时间: {times_down.mean()*1000:.2f}ms")
+    logger.info("\n时间采样统计:")
+    logger.info(f"  升压 - 平均时间: {times_up.mean()*1000:.2f}ms")
+    logger.info(f"  降压 - 平均时间: {times_down.mean()*1000:.2f}ms")
 
     # 生成完整数据集
-    print(f"\n生成完整数据集...")
+    logger.info("\n生成完整数据集...")
     dataset = create_physics_sampling_dataset(test_config, 10000)
-    print(f"数据集大小: {len(dataset['interface_points'])} 界面点")
+    logger.info(f"数据集大小: {len(dataset['interface_points'])} 界面点")

@@ -5,9 +5,10 @@ LRU caching to optimize memory usage when switching between different
 checkpoint models in the dashboard.
 """
 
-import torch
-from typing import Dict, Optional, Any
 from pathlib import Path
+from typing import Any
+
+import torch
 
 from src.dashboard.inference import PINNInferenceEngine
 
@@ -24,7 +25,7 @@ class ModelManager:
 
     MAX_CACHED_MODELS = 5
 
-    def __init__(self, outputs_dir: Optional[str] = None):
+    def __init__(self, outputs_dir: str | None = None):
         """
         Initialize ModelManager.
 
@@ -36,7 +37,7 @@ class ModelManager:
             outputs_dir = str(Path(__file__).resolve().parent.parent / "outputs")
 
         self.outputs_dir = Path(outputs_dir)
-        self._cache: Dict[str, PINNInferenceEngine] = {}
+        self._cache: dict[str, PINNInferenceEngine] = {}
         self._access_order: list = []  # LRU tracking
 
         # Discover available models
@@ -83,7 +84,7 @@ class ModelManager:
             )
         return models
 
-    def get_latest_model(self) -> Optional[str]:
+    def get_latest_model(self) -> str | None:
         """
         Get path to the latest available model.
 
@@ -111,7 +112,7 @@ class ModelManager:
         self._access_order.append(path)
 
     def load_model(
-        self, path: Optional[str] = None, device: str = "auto"
+        self, path: str | None = None, device: str = "auto"
     ) -> PINNInferenceEngine:
         """
         Load a model from checkpoint with LRU caching.
@@ -165,7 +166,7 @@ class ModelManager:
         self._cache.clear()
         self._access_order.clear()
 
-    def get_cache_info(self) -> Dict[str, Any]:
+    def get_cache_info(self) -> dict[str, Any]:
         """
         Get cache statistics.
 
@@ -181,7 +182,7 @@ class ModelManager:
 
 
 # Convenience singleton for dashboard use
-_default_manager: Optional[ModelManager] = None
+_default_manager: ModelManager | None = None
 
 
 def get_default_manager() -> ModelManager:

@@ -18,12 +18,15 @@ Usage:
     watcher.stop()
 """
 
-import os
 from collections import deque
+from collections.abc import Callable
+import os
 from pathlib import Path
-from typing import Callable, Optional, Dict, Any, List
+from typing import Any
+
+from watchdog.events import FileModifiedEvent, FileSystemEventHandler
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileModifiedEvent
+
 from src.dashboard.monitor.log_parser import LogParser
 
 
@@ -39,7 +42,7 @@ class LogWatcherHandler(FileSystemEventHandler):
 
     def __init__(
         self,
-        callback: Callable[[Dict[str, List[Any]], int], None],
+        callback: Callable[[dict[str, list[Any]], int], None],
         parser: LogParser,
         log_filename: str = "training.log",
     ):
@@ -94,10 +97,10 @@ class LogWatcher:
 
     def __init__(
         self,
-        callback: Callable[[Dict[str, List[Any]], int], None],
+        callback: Callable[[dict[str, list[Any]], int], None],
         log_dir: str = "outputs/train",
         log_filename: str = "training.log",
-        state_dir: Optional[str] = None,
+        state_dir: str | None = None,
     ):
         self.log_dir = Path(log_dir).resolve()
         self.log_filename = log_filename

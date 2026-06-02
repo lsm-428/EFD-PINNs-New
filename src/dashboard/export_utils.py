@@ -5,11 +5,12 @@
 提供数据导出功能，支持导出分析结果、图表、配置等为各种格式。
 """
 
-import streamlit as st
-import pandas as pd
 import json
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any
+
+import pandas as pd
+import streamlit as st
 
 
 def export_dataframe_to_csv(
@@ -52,7 +53,7 @@ def export_dataframe_to_excel(
 
 
 def export_dict_to_json(
-    data: Dict[str, Any],
+    data: dict[str, Any],
     filename: str,
     output_dir: str = "exports",
     indent: int = 2,
@@ -97,7 +98,7 @@ def export_plotly_figure(
 
 def create_export_report(
     title: str,
-    data: Dict[str, Any],
+    data: dict[str, Any],
     output_dir: str = "exports",
 ) -> str:
     """创建综合导出报告
@@ -139,10 +140,10 @@ def download_button(
 
 
 def batch_export_metrics(
-    metrics_data: Dict[str, pd.DataFrame],
+    metrics_data: dict[str, pd.DataFrame],
     export_format: str = "csv",
     output_dir: str = "exports",
-) -> List[str]:
+) -> list[str]:
     """批量导出多个指标数据
 
     Args:
@@ -156,7 +157,7 @@ def batch_export_metrics(
     pass
 
 
-def zip_export_files(file_paths: List[str], zip_filename: str) -> str:
+def zip_export_files(file_paths: list[str], zip_filename: str) -> str:
     """将多个导出文件打包为 ZIP
 
     Args:

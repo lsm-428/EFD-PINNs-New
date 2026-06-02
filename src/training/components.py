@@ -12,7 +12,7 @@ import numpy as np
 import torch
 
 try:
-    from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
+    from sklearn.preprocessing import MinMaxScaler, RobustScaler, StandardScaler
 except ImportError:
     StandardScaler = MinMaxScaler = RobustScaler = None
 
@@ -48,14 +48,14 @@ class DataNormalizer:
     def transform(self, X: np.ndarray) -> np.ndarray:
         if self.scaler:
             return self.scaler.transform(X)
-        elif self.mean is not None and self.std is not None:
+        if self.mean is not None and self.std is not None:
             return (X - self.mean) / (self.std + 1e-8)
         return X
 
     def inverse_transform(self, X: np.ndarray) -> np.ndarray:
         if self.scaler:
             return self.scaler.inverse_transform(X)
-        elif self.mean is not None and self.std is not None:
+        if self.mean is not None and self.std is not None:
             return X * (self.std + 1e-8) + self.mean
         return X
 
@@ -117,14 +117,13 @@ class LossStabilizer:
             self.best_loss = current_loss
             self.patience_counter = 0
             return False
-        else:
-            self.patience_counter += 1
-            return self.patience_counter >= self.early_stopping_patience
+        self.patience_counter += 1
+        return self.patience_counter >= self.early_stopping_patience
 
     def get_dynamic_physics_weight(self, epoch=0):
         if self.weight_strategy == "fixed":
             return self.base_physics_weight
-        elif self.weight_strategy == "adaptive" and len(self.loss_history) >= 10:
+        if self.weight_strategy == "adaptive" and len(self.loss_history) >= 10:
             recent_avg = np.mean(self.loss_history[-10:])
             earlier_avg = np.mean(self.loss_history[:10])
             if earlier_avg > 0:

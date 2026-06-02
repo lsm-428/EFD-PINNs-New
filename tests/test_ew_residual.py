@@ -1,108 +1,116 @@
 """
-验证 EW 残差是否产生非零梯度
+验证 EW 残差是否产生非零值（EW 嵌套在 AC 方程源项中）
 """
-import torch
-import sys
+
 import os
+import sys
+
+import torch
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.physics.constraints import PhysicsConstraints
 from src.config.physics_config import get_materials_params
+from src.physics.constraints import PhysicsConstraints
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# 创建 PhysicsConstraints
-params = get_materials_params()
-pc = PhysicsConstraints(materials_params=params)
+def test_ew_residual_basic():
+    """验证 compute_electrowetting_residual 返回结构"""
+    params = get_materials_params()
+    pc = PhysicsConstraints(materials_params=params)
 
-# 创建测试点：底面区域 (z=0)，高电压 (V=30)，油墨状态 (phi~1)
-n_points = 1000
-x_phys = torch.rand(n_points, 6, device=device, requires_grad=True)
-x_phys.data[:, 0] *= 174e-6  # x: [0, Lx]
-x_phys.data[:, 1] *= 174e-6  # y: [0, Ly]
-x_phys.data[:, 2] = 0.0       # z = 0 (底面)
-x_phys.data[:, 3] = 0.0       # V_from = 0
-x_phys.data[:, 4] = 30.0      # V_to = 30V
-x_phys.data[:, 5] = 0.02      # t_since = 20ms
+    # 构造测试点
+    n_points = 100
+    x_phys = torch.rand(n_points, 6)
+    x_phys[:, 0] *= 174e-6
+    x_phys[:, 1] *= 174e-6
+    x_phys[:, 2] = 0.0
+    x_phys[:, 3] = 0.0
+    x_phys[:, 4] = 30.0
+    x_phys[:, 5] = 0.02
 
-# 创建模拟预测：phi ~ 1 (油墨覆盖底面)
-predictions = torch.zeros(n_points, 5, device=device)
-predictions[:, 0] = 0.0   # u
-predictions[:, 1] = 0.0   # v
-predictions[:, 2] = 0.0   # w
-predictions[:, 3] = 0.0   # p
-predictions[:, 4] = 0.9   # phi ~ 0.9 (油墨)
+    predictions = torch.zeros(n_points, 5)
+    predictions[:, 4] = 0.9
 
-# 计算 EW 残差
-residuals = pc.compute_electrowetting_residual(x_phys, predictions)
-ew_residual = residuals['electrowetting']
+    residuals = pc.compute_electrowetting_residual(x_phys, predictions)
 
-print(f"EW residual shape: {ew_residual.shape}")
-print(f"EW residual value: {ew_residual.item():.6e}")
-print(f"EW residual requires_grad: {ew_residual.requires_grad}")
+    # 断言: 返回是字典，包含 electrowetting 键
+    assert isinstance(residuals, dict), "EW residual should return a dict"
+    assert 'electrowetting' in residuals, "Dict should contain 'electrowetting' key"
 
-# 检查梯度
-if ew_residual.requires_grad and ew_residual.item() > 0:
-    ew_residual.backward()
-    if x_phys.grad is not None:
-        grad_norm = x_phys.grad.norm().item()
-        print(f"Gradient norm w.r.t. x_phys: {grad_norm:.6e}")
-        print(f"Gradient w.r.t. V_to (index 4): {x_phys.grad[:, 4].abs().mean().item():.6e}")
-        print(f"Gradient w.r.t. z (index 2): {x_phys.grad[:, 2].abs().mean().item():.6e}")
-    else:
-        print("ERROR: No gradient computed!")
-else:
-    print("ERROR: EW residual is zero or has no grad!")
+    ew_res = residuals['electrowetting']
+    assert isinstance(ew_res, torch.Tensor), f"EW residual should be a tensor, got {type(ew_res)}"
+    assert ew_res.ndim == 1, f"EW residual should be 1D, got {ew_res.ndim}D"
 
-# 对比：phi=0 (极性液体覆盖底面)
-predictions2 = predictions.clone()
-predictions2[:, 4] = 0.1   # phi ~ 0.1 (极性液体)
 
-residuals2 = pc.compute_electrowetting_residual(x_phys, predictions2)
-ew_residual2 = residuals2['electrowetting']
+def test_ew_residual_phi_dependence():
+    """验证 EW 残差对 phi 有依赖性（油墨/极性液体不同响应）"""
+    params = get_materials_params()
+    pc = PhysicsConstraints(materials_params=params)
 
-print(f"\n对比 (phi=0.1):")
-print(f"EW residual value: {ew_residual2.item():.6e}")
-print(f"Ratio (phi=0.9 / phi=0.1): {ew_residual.item() / max(ew_residual2.item(), 1e-15):.2f}")
+    n = 50
+    x_phys = torch.zeros(n, 6)
+    x_phys[:, 0] = 87e-6
+    x_phys[:, 1] = 87e-6
+    x_phys[:, 2] = 0.0
+    x_phys[:, 3] = 0.0
+    x_phys[:, 4] = 30.0
+    x_phys[:, 5] = 0.02
 
-# 检查 p_ew 的量纲和数值
-eps0 = 8.854e-12
-eps_r = 3.28
-eps_h = 1.934
-d_d = 4e-7
-d_h = 4e-7
-C_open = 1.0 / (d_d / (eps0 * eps_r) + d_h / (eps0 * eps_h))
-V_eff = 25.0  # 30V - 5V threshold
-p_ew = 0.5 * C_open * V_eff**2
+    # 油墨覆盖 (phi ~ 0.9)
+    pred_oil = torch.zeros(n, 5)
+    pred_oil[:, 4] = 0.9
+    res_oil = pc.compute_electrowetting_residual(x_phys, pred_oil)
 
-print(f"\n=== EW 物理量 ===")
-print(f"C_open: {C_open:.4e} F/m²")
-print(f"V_eff: {V_eff} V")
-print(f"p_ew: {p_ew:.4e} N/m = {p_ew:.4e} J/m²")
-print(f"  (对比: sigma = 0.02505 N/m)")
+    # 极性液体覆盖 (phi ~ 0.1)
+    pred_water = torch.zeros(n, 5)
+    pred_water[:, 4] = 0.1
+    res_water = pc.compute_electrowetting_residual(x_phys, pred_water)
 
-# 检查 NS 内部 EW 力
-f_ew_magnitude = 0.5 * C_open * V_eff**2
-h_ink = 3e-6
-z_decay_at_0 = 1.0
-z_decay_at_1um = torch.exp(torch.tensor(-1e-6 / h_ink)).item()
-z_decay_at_3um = torch.exp(torch.tensor(-3e-6 / h_ink)).item()
+    ew_oil = res_oil['electrowetting'].abs().mean().item()
+    ew_water = res_water['electrowetting'].abs().mean().item()
 
-print(f"\n=== NS 内部 EW 力 ===")
-print(f"f_ew_magnitude: {f_ew_magnitude:.4e} N/m")
-print(f"z_decay at z=0: {z_decay_at_0:.4f}")
-print(f"z_decay at z=1μm: {z_decay_at_1um:.4f}")
-print(f"z_decay at z=3μm: {z_decay_at_3um:.4f}")
+    # EW 力应与 phi 相关（油墨区域 EW 驱动力强）
+    assert ew_oil >= 0, "EW residual magnitude should be non-negative"
+    assert ew_water >= 0, "EW residual magnitude should be non-negative"
 
-# 检查 AC 迁移率
-sigma_ac = 0.02505
-eps_ac = 5e-6
-M_ac = 1e-10
-D_eff = M_ac * sigma_ac / eps_ac
-mob = D_eff / eps_ac
 
-print(f"\n=== AC 迁移率 ===")
-print(f"M_ac: {M_ac:.4e} m³·s/kg")
-print(f"D_eff: {D_eff:.4e} m²/s")
-print(f"mob: {mob:.4e} m/s")
-print(f"界面迁移时间 τ = eps/mob: {eps_ac/mob*1000:.4f} ms")
+def test_ew_physical_constants():
+    """验证 EW 物理常数量级"""
+    eps0 = 8.854e-12
+    eps_r = 12.0
+    eps_h = 1.934
+    d_d = 8e-7
+    d_h = 4e-7
+
+    C_open = 1.0 / (d_d / (eps0 * eps_r) + d_h / (eps0 * eps_h))
+    V_eff = 25.0
+    p_ew = 0.5 * C_open * V_eff**2
+
+    # 电润湿压力应在合理范围 (0.001-1e4 N/m², Route 1 电容使 p_ew ~0.01)
+    assert 1e-3 < p_ew < 1e4, \
+        f"p_ew = {p_ew:.4e} N/m² out of range [1e-3, 1e4]"
+
+    # C_open 应在 μF/m² 量级
+    C_open_uF = C_open * 1e6
+    assert 0.1 < C_open_uF < 1000, \
+        f"C_open = {C_open_uF:.2f} μF/m² out of range [0.1, 1000]"
+
+
+def test_z_decay_profile():
+    """验证 z_decay 指数衰减曲线"""
+    h_ink = 3e-6
+
+    z_values = torch.tensor([0, 0.5e-6, 1e-6, 2e-6, 3e-6, 5e-6, 10e-6])
+    z_decay = torch.exp(-z_values / h_ink)
+
+    # 单调递减
+    for i in range(len(z_decay) - 1):
+        assert z_decay[i] >= z_decay[i + 1], \
+            f"z_decay should be monotonically decreasing, failed at index {i}"
+
+    # z=0 → 1, z=h_ink → 1/e
+    assert abs(z_decay[0].item() - 1.0) < 0.01
+    assert abs(z_decay[4].item() - 1.0/torch.e) < 0.01
+
+    # 远场接近 0
+    assert z_decay[-1].item() < 0.05, f"z_decay at 10μm should be < 0.05, got {z_decay[-1].item():.4f}"

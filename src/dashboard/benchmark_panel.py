@@ -5,12 +5,13 @@
 用于在 Streamlit 仪表板中展示性能基准测试结果。
 """
 
-import streamlit as st
+import time
+from typing import TYPE_CHECKING, Any, Optional
+
 import numpy as np
 import pandas as pd
+import streamlit as st
 import torch
-import time
-from typing import Dict, Any, Optional, List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.dashboard.inference import PINNInferenceEngine
@@ -18,9 +19,9 @@ if TYPE_CHECKING:
 
 def run_single_benchmark(
     model: torch.nn.Module,
-    batch_sizes: Optional[List[int]] = None,
+    batch_sizes: list[int] | None = None,
     device: str = "cuda",
-) -> Dict[int, Dict[str, float]]:
+) -> dict[int, dict[str, float]]:
     """Run inference latency benchmark.
 
     Args:
@@ -68,7 +69,7 @@ def run_single_benchmark(
 
 def run_throughput_test(
     model: torch.nn.Module, max_batch: int = 10000, device: str = "cuda"
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run throughput test across different batch sizes.
 
     Args:
@@ -116,7 +117,7 @@ def run_throughput_test(
     }
 
 
-def get_gpu_info(model: Optional[torch.nn.Module] = None) -> Dict[str, Any]:
+def get_gpu_info(model: torch.nn.Module | None = None) -> dict[str, Any]:
     """Get GPU information and model statistics.
 
     Args:
@@ -378,7 +379,7 @@ def render_benchmark_tab(engine: Optional["PINNInferenceEngine"]) -> None:
             )
 
 
-def load_benchmark_data(benchmark_file: str) -> Optional[Dict[str, Any]]:
+def load_benchmark_data(benchmark_file: str) -> dict[str, Any] | None:
     """加载基准测试数据
 
     Args:
@@ -390,7 +391,7 @@ def load_benchmark_data(benchmark_file: str) -> Optional[Dict[str, Any]]:
     pass
 
 
-def render_benchmark_charts(benchmark_data: Dict[str, Any]) -> None:
+def render_benchmark_charts(benchmark_data: dict[str, Any]) -> None:
     """渲染基准测试图表
 
     Args:
@@ -399,7 +400,7 @@ def render_benchmark_charts(benchmark_data: Dict[str, Any]) -> None:
     pass
 
 
-def render_benchmark_summary(benchmark_data: Dict[str, Any]) -> None:
+def render_benchmark_summary(benchmark_data: dict[str, Any]) -> None:
     """渲染基准测试摘要信息
 
     Args:

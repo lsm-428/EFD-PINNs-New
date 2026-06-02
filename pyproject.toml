@@ -63,6 +63,7 @@ dev = [
     "pre-commit>=4.0.0",
     "hypothesis>=6.151.4",
     "pyvista>=0.46.5",
+    "mypy>=1.14.0",
 ]
 monitoring = [
     "tensorboard>=2.20.0",
@@ -71,12 +72,158 @@ testing = [
     "pytest-cov>=7.1.0",
 ]
 
+# ============================================================================
+# Ruff 配置 — Lint + Format
+# ============================================================================
 [tool.ruff]
-line-length = 88
+line-length = 100
 target-version = "py312"
+src = ["src"]
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "*.egg-info",
+    "build",
+    "dist",
+    "outputs",
+]
 
+[tool.ruff.lint]
+select = [
+    # Pyflakes (F) — 基础错误检测
+    "F",
+    # pycodestyle (E/W) — 代码风格
+    "E", "W",
+    # isort (I) — import 排序
+    "I",
+    # pyupgrade (UP) — 语法现代化
+    "UP",
+    # flake8-bugbear (B) — 常见 bug 预防
+    "B",
+    # flake8-comprehensions (C4) — 推导式优化
+    "C4",
+    # flake8-simplify (SIM) — 代码简化
+    "SIM",
+    # flake8-return (RET) — return 检查
+    "RET",
+    # flake8-raise (RSE) — raise 检查
+    "RSE",
+    # flake8-errmsg (EM) — 错误消息格式
+    "EM",
+    # pylint (PL) — 通用检查
+    "PL",
+    # ruff 特有规则
+    "RUF",
+]
+ignore = [
+    # 允许过长的函数 (科学计算常见)
+    "PLR0911",  # too-many-return-statements
+    "PLR0912",  # too-many-branches
+    "PLR0913",  # too-many-arguments
+    "PLR0915",  # too-many-statements
+    # 允许 lambda 赋值 (PyTorch 中常见)
+    "E731",
+    # 允许大段 try (物理约束需要)
+    "SIM105",   # suppressible-exception
+    # 行尾空白由 pre-commit 处理
+    "W291",
+    # 中文标点符号 (项目使用中文文档)
+    "RUF001",   # ambiguous unicode character in string
+    "RUF002",   # ambiguous unicode character in docstring
+    "RUF003",   # ambiguous unicode character in comment
+    # 魔法数字 (测试和物理代码中合理)
+    "PLR2004",  # magic-value-comparison
+    # 惰性导入 (测试和可选依赖需要)
+    "PLC0415",  # import-outside-top-level
+    # 测试文件 top-level import (需要 sys.path setup)
+    "E402",     # module-import-not-at-top-of-file
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+force-sort-within-sections = true
+
+[tool.ruff.lint.pylint]
+max-args = 8
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# ============================================================================
+# Mypy 配置 — 类型检查
+# ============================================================================
+[tool.mypy]
+python_version = "3.12"
+strict = false
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = false
+ignore_missing_imports = true
+exclude = [
+    "outputs/",
+    "tests/",
+]
+
+[[tool.mypy.overrides]]
+module = [
+    "torch.*",
+    "deepxde.*",
+    "scipy.*",
+    "numpy.*",
+    "pyvista.*",
+    "mph.*",
+]
+ignore_missing_imports = true
+
+# ============================================================================
+# Pytest 配置
+# ============================================================================
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--disable-warnings",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "gpu: marks tests that require GPU",
+    "integration: marks integration tests",
+]
+
+# ============================================================================
+# Coverage 配置
+# ============================================================================
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+
+# ============================================================================
 [tool.black]
-line-length = 88
+line-length = 100
 target-version = ["py312"]
 
 [build-system]

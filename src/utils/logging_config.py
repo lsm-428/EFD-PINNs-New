@@ -24,10 +24,8 @@
 """
 
 import logging
-import sys
 from pathlib import Path
-from typing import Optional
-
+import sys
 
 # 默认日志格式
 DEFAULT_FORMAT = "[%(asctime)s] %(levelname)s | %(message)s"
@@ -39,7 +37,7 @@ VERBOSE_FORMAT = "[%(asctime)s] %(levelname)s [%(filename)s:%(lineno)d] | %(mess
 
 def setup_logging(
     level: str = "INFO",
-    log_file: Optional[str] = None,
+    log_file: str | None = None,
     enable_console: bool = True,
     verbose: bool = False,
     format_type: str = "default",
@@ -197,12 +195,12 @@ _default_logger = logging.getLogger("EFD3D")
 # 导出
 # ============================================================================
 __all__ = [
-    "setup_logging",
-    "get_logger",
-    "log_level_from_env",
-    "setup_logging_from_env",
     "LoggerMixin",
-    "set_log_level",
     "disable_third_party_logging",
     "enable_debug_mode",
+    "get_logger",
+    "log_level_from_env",
+    "set_log_level",
+    "setup_logging",
+    "setup_logging_from_env",
 ]

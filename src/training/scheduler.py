@@ -11,9 +11,9 @@
 4. 权重变化平滑处理，避免剧烈波动
 """
 
-import torch
 import logging
-from typing import Dict, Optional, List
+
+import torch
 
 logger = logging.getLogger("DynamicPhysicsWeight")
 
@@ -108,9 +108,9 @@ class DynamicPhysicsWeightScheduler:
         self,
         data_loss: float,
         physics_loss: float,
-        val_loss: Optional[float] = None,
-        epoch: Optional[int] = None,
-        stage: Optional[int] = None,
+        val_loss: float | None = None,
+        epoch: int | None = None,
+        stage: int | None = None,
     ) -> float:
         """
         更新物理损失权重
@@ -178,18 +178,18 @@ class DynamicPhysicsWeightScheduler:
         self,
         data_loss: float,
         physics_loss: float,
-        val_loss: Optional[float] = None,
-        epoch: Optional[int] = None,
-        stage: Optional[int] = None,
+        val_loss: float | None = None,
+        epoch: int | None = None,
+        stage: int | None = None,
     ) -> float:
         """计算新的物理损失权重"""
         if self.adjustment_strategy == "stage" and stage is not None:
             return self._stage_based_adjustment(stage)
-        elif self.adjustment_strategy == "adaptive":
+        if self.adjustment_strategy == "adaptive":
             return self._adaptive_adjustment(data_loss, physics_loss)
-        elif self.adjustment_strategy == "performance" and val_loss is not None:
+        if self.adjustment_strategy == "performance" and val_loss is not None:
             return self._performance_based_adjustment(val_loss)
-        elif self.adjustment_strategy == "combined":
+        if self.adjustment_strategy == "combined":
             # 组合多种策略
             stage_weight = (
                 self._stage_based_adjustment(stage)
@@ -205,23 +205,20 @@ class DynamicPhysicsWeightScheduler:
 
             # 加权平均
             return 0.4 * stage_weight + 0.4 * adaptive_weight + 0.2 * performance_weight
-        else:
-            # 默认使用自适应调整
-            return self._adaptive_adjustment(data_loss, physics_loss)
+        # 默认使用自适应调整
+        return self._adaptive_adjustment(data_loss, physics_loss)
 
     def _stage_based_adjustment(self, stage: int) -> float:
         """基于训练阶段的权重调整"""
         if stage in self.stage_weights:
             return self.stage_weights[stage]
-        else:
-            # 如果阶段超出预定义范围，使用最后一个阶段的权重
-            return self.stage_weights[max(self.stage_weights.keys())]
+        # 如果阶段超出预定义范围，使用最后一个阶段的权重
+        return self.stage_weights[max(self.stage_weights.keys())]
 
     def _adaptive_adjustment(self, data_loss: float, physics_loss: float) -> float:
         """基于损失比例的自适应权重调整"""
         # 避免除零
-        if physics_loss < 1e-8:
-            physics_loss = 1e-8
+        physics_loss = max(physics_loss, 1e-8)
 
         # 计算当前损失比例
         current_ratio = data_loss / physics_loss
@@ -260,14 +257,13 @@ class DynamicPhysicsWeightScheduler:
             if self.current_weight > (self.min_weight + self.max_weight) / 2:
                 # 当前权重较高，尝试降低权重
                 return self.current_weight * 0.9
-            else:
-                # 当前权重较低，尝试增加权重
-                return self.current_weight * 1.1
+            # 当前权重较低，尝试增加权重
+            return self.current_weight * 1.1
 
         # 默认保持当前权重
         return self.current_weight
 
-    def get_loss_history(self) -> Dict[str, List[float]]:
+    def get_loss_history(self) -> dict[str, list[float]]:
         """获取损失历史记录"""
         return self.loss_history
 
@@ -311,9 +307,9 @@ class PhysicsWeightIntegration:
         self,
         base_physics_loss,
         data_loss,
-        val_loss: Optional[torch.Tensor] = None,
-        epoch: Optional[int] = None,
-        stage: Optional[int] = None,
+        val_loss: torch.Tensor | None = None,
+        epoch: int | None = None,
+        stage: int | None = None,
     ) -> torch.Tensor:
         """
         应用动态权重到物理损失
@@ -354,14 +350,13 @@ class PhysicsWeightIntegration:
         # 根据集成方法应用权重
         if self.integration_method == "multiplicative":
             return base_physics_loss * weight_tensor
-        elif self.integration_method == "additive":
+        if self.integration_method == "additive":
             return base_physics_loss + weight_tensor
-        elif self.integration_method == "replacement":
+        if self.integration_method == "replacement":
             # 使用权重作为新的损失值
             return weight_tensor * torch.mean(base_physics_loss)
-        else:
-            # 默认使用乘法
-            return base_physics_loss * weight_tensor
+        # 默认使用乘法
+        return base_physics_loss * weight_tensor
 
     def get_current_weight(self) -> float:
         """获取当前权重值"""

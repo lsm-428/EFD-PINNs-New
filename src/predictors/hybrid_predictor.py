@@ -33,11 +33,15 @@ EWP 混合预测器
 日期: 2025-12-02
 """
 
+import json
+import logging
+from pathlib import Path
+from typing import Optional
+
 import numpy as np
 import torch
-from pathlib import Path
-from typing import Tuple, Optional, Dict
-import json
+
+logger = logging.getLogger(__name__)
 
 
 class HybridPredictor:
@@ -52,7 +56,7 @@ class HybridPredictor:
     def __init__(
         self,
         model_path: str = "outputs_20251201_212735/final_model.pth",
-        config_path: Optional[str] = None,
+        config_path: str | None = None,
         use_model_for_steady_state: bool = False,  # 默认使用解析公式
         device: str = "cpu",
         aperture_model: Optional["EnhancedApertureModel"] = None,  # 依赖注入
@@ -110,15 +114,15 @@ class HybridPredictor:
         # 计算派生参数
         self._update_derived_params()
 
-        print("✅ HybridPredictor 初始化完成")
-        print("   模式: 解析公式 (Young-Lippmann + 二阶欠阻尼)")
-        print(
+        logger.info("✅ HybridPredictor 初始化完成")
+        logger.info("   模式: 解析公式 (Young-Lippmann + 二阶欠阻尼)")
+        logger.info(
             f"   ε_SU8={self.params['epsilon_r']}, ε_Teflon={self.params['epsilon_h']}, γ={self.params['gamma']} N/m"
         )
-        print(
+        logger.info(
             f"   θ₀={self.params['theta0']}°, τ={self.params['tau'] * 1000:.1f}ms, ζ={self.params['zeta']}"
         )
-        print(
+        logger.info(
             f"   V_threshold={self.params.get('V_threshold', 5.0)}V, τ_recovery_factor={self.params.get('tau_recovery_factor', 0.4)}"
         )
 
@@ -127,10 +131,9 @@ class HybridPredictor:
         V_T = self.params.get("V_threshold", 5.0)
         if V <= V_T:
             return self.params.get("tau_onset", self.params["tau"] * 1.5)
-        elif V <= 2 * V_T:
+        if V <= 2 * V_T:
             return self.params["tau"]
-        else:
-            return self.params.get("tau_saturation", self.params["tau"] * 0.6)
+        return self.params.get("tau_saturation", self.params["tau"] * 0.6)
 
     def _update_derived_params(self):
         """更新派生参数（使用默认 τ）"""
@@ -148,7 +151,7 @@ class HybridPredictor:
 
     def _load_config(self, config_path: str):
         """从配置文件加载参数"""
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = json.load(f)
 
         materials = config.get("materials", {})
@@ -185,18 +188,18 @@ class HybridPredictor:
             }
         )
 
-    def _load_model(self, model_path: str, config_path: Optional[str]):
+    def _load_model(self, model_path: str, config_path: str | None):
         """加载 PINN 模型"""
         from src.models.optimized_ewpinn import OptimizedEWPINN
         from src.training.components import DataNormalizer
 
-        print(f"📦 加载模型: {model_path}")
+        logger.info(f"📦 加载模型: {model_path}")
         checkpoint = torch.load(model_path, map_location="cpu", weights_only=True)
 
         # 获取配置
         config = checkpoint.get("config", {})
         if config_path and Path(config_path).exists():
-            with open(config_path, "r") as f:
+            with open(config_path) as f:
                 config = json.load(f)
 
         # 更新物理参数
@@ -353,13 +356,12 @@ class HybridPredictor:
             # 一阶指数或临界阻尼/过阻尼
             tau = 1.0 / omega_0 if V_to is not None else self.params["tau"]
             return theta_eq + (theta_start - theta_eq) * np.exp(-t / tau)
-        else:
-            # 二阶欠阻尼
-            exp_term = np.exp(-zeta * omega_0 * t)
-            damping_factor = zeta / np.sqrt(1 - zeta**2)
-            return theta_eq + (theta_start - theta_eq) * exp_term * (
-                np.cos(omega_d * t) + damping_factor * np.sin(omega_d * t)
-            )
+        # 二阶欠阻尼
+        exp_term = np.exp(-zeta * omega_0 * t)
+        damping_factor = zeta / np.sqrt(1 - zeta**2)
+        return theta_eq + (theta_start - theta_eq) * exp_term * (
+            np.cos(omega_d * t) + damping_factor * np.sin(omega_d * t)
+        )
 
     def surface_tension_recovery(
         self, t: float, theta_start: float, theta_eq: float = None, V_from: float = None
@@ -535,18 +537,16 @@ class HybridPredictor:
         # 计算动态响应
         if time < t_step:
             return theta_start
-        else:
-            # 判断升压还是降压
-            if voltage >= V_initial:
-                # 升压：电润湿驱动，接触角渐变（二阶欠阻尼）
-                t_since = time - t_step
-                return self.dynamic_response(
-                    t_since, theta_start, theta_eq, V_to=voltage
-                )
-            else:
-                # 降压：接触角瞬间恢复到目标值
-                # Young-Lippmann 是瞬态方程，电场消失 → 接触角立即回到本征值
-                return theta_eq
+        # 判断升压还是降压
+        if voltage >= V_initial:
+            # 升压：电润湿驱动，接触角渐变（二阶欠阻尼）
+            t_since = time - t_step
+            return self.dynamic_response(
+                t_since, theta_start, theta_eq, V_to=voltage
+            )
+        # 降压：接触角瞬间恢复到目标值
+        # Young-Lippmann 是瞬态方程，电场消失 → 接触角立即回到本征值
+        return theta_eq
 
     def step_response(
         self,
@@ -555,7 +555,7 @@ class HybridPredictor:
         duration: float = 0.02,
         t_step: float = 0.002,
         num_points: int = 500,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         计算阶跃响应
 
@@ -594,7 +594,7 @@ class HybridPredictor:
         t_rise: float = 0.002,
         t_fall: float = 0.012,
         num_points: int = 500,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         计算方波响应（含表面张力恢复）
 
@@ -666,7 +666,7 @@ class HybridPredictor:
 
     def voltage_sweep_response(
         self, V_max: float = 30.0, v_step: float = 1.0, t_per_step: float = 0.001
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         计算电压扫描响应 (0→V_max→0V)
 
@@ -740,8 +740,8 @@ class HybridPredictor:
         # 延迟初始化：仅在首次调用且未注入时创建
         if self._aperture_model is None:
             try:
-                from src.models.aperture_model import EnhancedApertureModel
                 from src.config import CONFIG_PATH
+                from src.models.aperture_model import EnhancedApertureModel
 
                 self._aperture_model = EnhancedApertureModel(
                     config_path=str(CONFIG_PATH)
@@ -758,12 +758,11 @@ class HybridPredictor:
         model = self._aperture_model
         if np.isscalar(theta):
             return model.contact_angle_to_aperture_ratio(theta)
-        else:
-            return np.array([model.contact_angle_to_aperture_ratio(t) for t in theta])
+        return np.array([model.contact_angle_to_aperture_ratio(t) for t in theta])
 
     def get_response_metrics(
         self, t: np.ndarray, theta: np.ndarray, t_step: float = 0.002
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         计算响应指标
 
@@ -813,11 +812,12 @@ class HybridPredictor:
 def demo():
     """演示混合预测器的使用"""
     import matplotlib.pyplot as plt
+
     from src.config import CONFIG_PATH
 
-    print("=" * 60)
-    print("🔬 EWP 混合预测器演示 (含表面张力恢复)")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("🔬 EWP 混合预测器演示 (含表面张力恢复)")
+    logger.info("=" * 60)
 
     # 创建预测器 (使用解析公式，从配置文件读取参数)
     predictor = HybridPredictor(
@@ -825,51 +825,51 @@ def demo():
     )
 
     # 显示动力学参数
-    print("\n动力学参数:")
-    print(f"   τ (电润湿响应): {predictor.params['tau'] * 1000:.1f} ms")
-    print(
+    logger.info("\n动力学参数:")
+    logger.info(f"   τ (电润湿响应): {predictor.params['tau'] * 1000:.1f} ms")
+    logger.info(
         f"   τ_recovery (表面张力恢复): {predictor.params.get('tau_recovery', predictor.params['tau'] * 1.5) * 1000:.1f} ms"
     )
-    print(f"   ζ (阻尼比): {predictor.params['zeta']}")
+    logger.info(f"   ζ (阻尼比): {predictor.params['zeta']}")
 
     # 1. 稳态预测 (Young-Lippmann)
-    print("\n📊 稳态预测 (Young-Lippmann 方程):")
-    print("-" * 40)
-    print(f"{'电压(V)':<10} {'接触角(°)':<12} {'角度变化(°)':<12}")
-    print("-" * 40)
+    logger.info("\n📊 稳态预测 (Young-Lippmann 方程):")
+    logger.info("-" * 40)
+    logger.info(f"{'电压(V)':<10} {'接触角(°)':<12} {'角度变化(°)':<12}")
+    logger.info("-" * 40)
 
     theta_0 = predictor.young_lippmann(0)
     for V in [0, 10, 20, 30]:
         theta = predictor.young_lippmann(V)
         delta = theta_0 - theta
-        print(f"{V:<10} {theta:<12.1f} {delta:<12.1f}")
+        logger.info(f"{V:<10} {theta:<12.1f} {delta:<12.1f}")
 
     # 2. 电压扫描响应 (0→30→0V)
-    print("\n📈 电压扫描响应 (0V → 30V → 0V):")
-    print("   升压: 电润湿驱动")
-    print("   降压: 表面张力恢复 (油墨平铺回去)")
+    logger.info("\n📈 电压扫描响应 (0V → 30V → 0V):")
+    logger.info("   升压: 电润湿驱动")
+    logger.info("   降压: 表面张力恢复 (油墨平铺回去)")
 
     voltages, theta_sweep, aperture_sweep = predictor.voltage_sweep_response(
         V_max=30, v_step=5, t_per_step=0.002
     )
 
     n_up = 7  # 0, 5, 10, 15, 20, 25, 30
-    print("\n   升压阶段:")
+    logger.info("\n   升压阶段:")
     for i in range(n_up):
-        print(
+        logger.info(
             f"      V={voltages[i]:2.0f}V: θ={theta_sweep[i]:.1f}°, η={aperture_sweep[i]:.1%}"
         )
 
-    print("   降压阶段:")
+    logger.info("   降压阶段:")
     for i in range(n_up, len(voltages)):
-        print(
+        logger.info(
             f"      V={voltages[i]:2.0f}V: θ={theta_sweep[i]:.1f}°, η={aperture_sweep[i]:.1%}"
         )
 
     # 3. 方波响应
-    print("\n📈 方波响应 (0V → 30V → 0V, 0-100ms):")
-    print("   升压: 接触角渐变（电润湿动力学）")
-    print("   降压: 接触角瞬间恢复，开口率渐变（油墨铺展）")
+    logger.info("\n📈 方波响应 (0V → 30V → 0V, 0-100ms):")
+    logger.info("   升压: 接触角渐变（电润湿动力学）")
+    logger.info("   降压: 接触角瞬间恢复，开口率渐变（油墨铺展）")
     t_sq, V_sq, theta_sq, eta_sq = predictor.square_wave_response(
         V_low=0, V_high=30, duration=0.1, t_rise=0.002, t_fall=0.04
     )
@@ -951,9 +951,9 @@ def demo():
 
     plt.tight_layout()
     plt.savefig("hybrid_predictor_demo.png", dpi=150)
-    print("\n📊 图表已保存: hybrid_predictor_demo.png")
+    logger.info("\n📊 图表已保存: hybrid_predictor_demo.png")
 
-    print("\n✅ 演示完成!")
+    logger.info("\n✅ 演示完成!")
 
 
 if __name__ == "__main__":

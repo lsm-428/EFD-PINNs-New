@@ -20,18 +20,17 @@ Usage:
 import csv
 import os
 import re
-from typing import Dict, List, Any
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
-
 
 # =============================================================================
 # Tail Statistics
 # =============================================================================
 
 
-def summarize_tail(records: Dict[str, List[Any]], tail_k: int = 20) -> Dict[str, float]:
+def summarize_tail(records: dict[str, list[Any]], tail_k: int = 20) -> dict[str, float]:
     """
     Compute median loss for the last K epochs.
 
@@ -44,7 +43,7 @@ def summarize_tail(records: Dict[str, List[Any]], tail_k: int = 20) -> Dict[str,
     """
     n = len(records["epoch"])
     start = max(0, n - tail_k)
-    result: Dict[str, float] = {}
+    result: dict[str, float] = {}
 
     for k, v in records.items():
         if k in {"epoch", "stage"}:
@@ -192,7 +191,7 @@ def analyze_rmse_per_voltage(log_path: str, out_dir: str) -> None:
     voltage_rmse = {}
     eval_log_path = os.path.join(os.path.dirname(log_path), "evaluation.log")
     if os.path.exists(eval_log_path):
-        with open(eval_log_path, "r") as f:
+        with open(eval_log_path) as f:
             for line in f:
                 if "Voltage" in line and "RMSE" in line:
                     match = re.search(r"Voltage\s+([\d.]+)V.*RMSE\s*=\s*([\d.]+)", line)

@@ -20,19 +20,20 @@ EWP 开口率模型
 
     model = EnhancedApertureModel()
     result = model.predict_enhanced(voltage=30)
-    print(f"开口率: {result['aperture_percent']:.1f}%")
+    logger.info(f"开口率: {result['aperture_percent']:.1f}%")
 
 作者: EFD-PINNs Team
 日期: 2025-12-02
 """
 
-import numpy as np
-from typing import Tuple, Dict, Optional, Any, List
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 import json
 import logging
 from pathlib import Path
+from typing import Any, Optional
+
+from matplotlib import cm
+import matplotlib.pyplot as plt
+import numpy as np
 
 # 导入统一物理配置
 try:
@@ -306,7 +307,7 @@ class ApertureModel:
 
     def calculate_ink_distribution(
         self, theta: float, num_points: int = 100
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         计算油墨高度分布 h(r)
 
@@ -354,7 +355,7 @@ class ApertureModel:
 
         return r, h
 
-    def predict(self, voltage: float, theta: float = None) -> Dict:
+    def predict(self, voltage: float, theta: float = None) -> dict:
         """
         预测给定电压下的开口率和油墨分布
 
@@ -367,8 +368,8 @@ class ApertureModel:
         """
         if theta is None:
             # 使用 Young-Lippmann 方程计算接触角
-            from src.predictors.hybrid_predictor import HybridPredictor
             from src.config import CONFIG_PATH
+            from src.predictors.hybrid_predictor import HybridPredictor
 
             predictor = HybridPredictor(config_path=str(CONFIG_PATH))
             theta = predictor.young_lippmann(voltage)
@@ -473,7 +474,7 @@ class EnhancedApertureModel(ApertureModel):
 
         config_path = found_path
 
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             self.config = json.load(f)
 
         # 从配置更新材料参数
@@ -509,12 +510,12 @@ class EnhancedApertureModel(ApertureModel):
 
     def calibrate_with_experimental_data(
         self,
-        data: List[Dict[str, float]],
+        data: list[dict[str, float]],
         k_range: tuple = (0.3, 1.5),
         theta_scale_range: tuple = (3.0, 10.0),
         num_k: int = 25,
         num_theta_scale: int = 25,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         使用稳态开口率实验数据校正开口率映射参数
 
@@ -595,7 +596,7 @@ class EnhancedApertureModel(ApertureModel):
         V_from: float,
         V_to: float,
         t_since: float,
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         predictor = self._get_predictor()
         V_from_val = float(V_from)
         V_to_val = float(V_to)
@@ -732,17 +733,16 @@ class EnhancedApertureModel(ApertureModel):
         if time is None:
             # 稳态计算
             return predictor.young_lippmann(voltage)
-        else:
-            # 动态响应计算
-            return predictor.predict(
-                voltage=voltage, time=time, V_initial=V_initial, t_step=t_step
-            )
+        # 动态响应计算
+        return predictor.predict(
+            voltage=voltage, time=time, V_initial=V_initial, t_step=t_step
+        )
 
     # === 油墨分布计算 ===
 
     def calculate_ink_distribution_enhanced(
         self, theta: float, num_points: int = 100
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         计算满足体积守恒的油墨分布
 
@@ -853,7 +853,7 @@ class EnhancedApertureModel(ApertureModel):
         duration: float = 0.10,
         t_step: float = 0.002,
         num_points: int = 500,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         计算开口率阶跃响应
 
@@ -898,7 +898,7 @@ class EnhancedApertureModel(ApertureModel):
         t_rise: float = 0.002,
         t_fall: float = 0.03,
         num_points: int = 500,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         predictor = self._get_predictor()
         t, V, theta, eta = predictor.square_wave_response(
             V_low=0.0,
@@ -912,7 +912,7 @@ class EnhancedApertureModel(ApertureModel):
 
     def get_aperture_metrics(
         self, t: np.ndarray, eta: np.ndarray, t_step: float = 0.002
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         计算响应指标 (t_90, t_10, overshoot)
 
@@ -986,7 +986,7 @@ class EnhancedApertureModel(ApertureModel):
 
     # === 增强预测接口 ===
 
-    def predict_enhanced(self, voltage: float, time: float = None) -> Dict:
+    def predict_enhanced(self, voltage: float, time: float = None) -> dict:
         """
         增强预测，包含电容器充电效应
 
@@ -1048,7 +1048,7 @@ class EnhancedApertureModel(ApertureModel):
     # === 可视化方法 ===
 
     def plot_comparison(
-        self, V_list: List[float] = None, save_path: str = None
+        self, V_list: list[float] = None, save_path: str = None
     ) -> None:
         """
         生成电压-开口率对比图（原模型 vs 增强模型）
@@ -1277,7 +1277,7 @@ class EnhancedApertureModel(ApertureModel):
 
     # === 验证方法 ===
 
-    def validate(self) -> Dict[str, Any]:
+    def validate(self) -> dict[str, Any]:
         """
         验证模型物理一致性
 
@@ -1349,7 +1349,7 @@ class EnhancedApertureModel(ApertureModel):
 
     # === 配置管理 ===
 
-    def get_config(self) -> Dict:
+    def get_config(self) -> dict:
         """
         返回所有参数的字典
 
@@ -1394,7 +1394,7 @@ class EnhancedApertureModel(ApertureModel):
         Returns:
             EnhancedApertureModel 实例
         """
-        with open(path, "r") as f:
+        with open(path) as f:
             config = json.load(f)
 
         # 创建实例（config_path 默认为 None，会自动使用 CONFIG_PATH）
@@ -1423,9 +1423,9 @@ class EnhancedApertureModel(ApertureModel):
 
 def demo():
     """演示增强版开口率模型"""
-    print("=" * 60)
-    print("🔬 EWP 增强版开口率模型演示")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("🔬 EWP 增强版开口率模型演示")
+    logger.info("=" * 60)
 
     # 创建增强模型
     model = EnhancedApertureModel()
@@ -1433,44 +1433,44 @@ def demo():
     # 创建原模型用于对比
     base_model = ApertureModel()
 
-    print("\n📊 电压-接触角-开口率关系:")
-    print("-" * 70)
-    print(
+    logger.info("\n📊 电压-接触角-开口率关系:")
+    logger.info("-" * 70)
+    logger.info(
         f"{'电压(V)':<8} {'接触角(°)':<12} {'开口率(%)':<12} {'透明半径(μm)':<15} {'体积误差(%)':<12}"
     )
-    print("-" * 70)
+    logger.info("-" * 70)
 
     results = []
     for V in range(0, 31, 5):
         result = model.predict_enhanced(V)
         results.append(result)
-        print(
+        logger.info(
             f"{V:<8} {result['theta']:<12.1f} {result['aperture_percent']:<12.1f} {result['r_open_um']:<15.1f} {result['volume_error']:<12.6f}"
         )
 
-    print("-" * 70)
+    logger.info("-" * 70)
 
     # 动态响应
-    print("\n📈 动态响应 (0V → 30V, 0-100ms):")
+    logger.info("\n📈 动态响应 (0V → 30V, 0-100ms):")
     t, eta = model.aperture_step_response(
         V_start=0, V_end=30, duration=0.10, t_step=0.002
     )
     metrics = model.get_aperture_metrics(t, eta, t_step=0.002)
 
-    print(f"   初始开口率: {metrics['eta_initial'] * 100:.2f}%")
-    print(f"   最终开口率: {metrics['eta_final'] * 100:.2f}%")
-    print(f"   t_10: {metrics['t_10_ms']:.2f} ms")
-    print(f"   t_90: {metrics['t_90_ms']:.2f} ms")
-    print(f"   超调: {metrics['overshoot_percent']:.2f}%")
+    logger.info(f"   初始开口率: {metrics['eta_initial'] * 100:.2f}%")
+    logger.info(f"   最终开口率: {metrics['eta_final'] * 100:.2f}%")
+    logger.info(f"   t_10: {metrics['t_10_ms']:.2f} ms")
+    logger.info(f"   t_90: {metrics['t_90_ms']:.2f} ms")
+    logger.info(f"   超调: {metrics['overshoot_percent']:.2f}%")
 
     # 验证
-    print("\n🔍 模型验证:")
+    logger.info("\n🔍 模型验证:")
     validation = model.validate()
-    print(
+    logger.info(
         f"   体积守恒: {'✅' if validation['volume_conservation']['passed'] else '❌'}"
     )
-    print(f"   开口率范围: {'✅' if validation['aperture_range']['passed'] else '❌'}")
-    print(f"   单调性: {'✅' if validation['monotonicity']['passed'] else '❌'}")
+    logger.info(f"   开口率范围: {'✅' if validation['aperture_range']['passed'] else '❌'}")
+    logger.info(f"   单调性: {'✅' if validation['monotonicity']['passed'] else '❌'}")
 
     # 绘图 - 4个子图
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
@@ -1605,9 +1605,9 @@ def demo():
 
     plt.tight_layout()
     plt.savefig("enhanced_aperture_demo.png", dpi=150)
-    print("\n📊 图表已保存: enhanced_aperture_demo.png")
+    logger.info("\n📊 图表已保存: enhanced_aperture_demo.png")
 
-    print("\n📈 生成全电压范围完整开口率循环图...")
+    logger.info("\n📈 生成全电压范围完整开口率循环图...")
     V_start = 1.0
     V_end = 30.0
     V_step = 1.0
@@ -1702,9 +1702,9 @@ def demo():
     )
     plt.tight_layout()
     plt.savefig("stage1_aperture_cycle_full_recovery.png")
-    print("\n📊 图表已保存: stage1_aperture_cycle_full_recovery.png")
+    logger.info("\n📊 图表已保存: stage1_aperture_cycle_full_recovery.png")
 
-    print("\n✅ 演示完成!")
+    logger.info("\n✅ 演示完成!")
 
     return results
 

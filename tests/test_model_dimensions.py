@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 模型维度一致性属性测试
 使用 hypothesis 进行属性测试
@@ -16,9 +15,10 @@ import unittest
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from hypothesis import given, settings
+from hypothesis import strategies as st
 import torch
-import torch.nn as nn
-from hypothesis import given, strategies as st, settings
+from torch import nn
 
 # 导入模型创建函数
 try:
@@ -212,7 +212,7 @@ class TestConfigToModelConsistency(unittest.TestCase):
             if not os.path.exists(config_path):
                 continue
 
-            with open(config_path, "r") as f:
+            with open(config_path) as f:
                 config = json.load(f)
 
             # 获取模型配置

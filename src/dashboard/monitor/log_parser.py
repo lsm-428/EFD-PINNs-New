@@ -12,15 +12,14 @@ Usage:
     records = parser.parse("outputs/train/pinn_*/training.log")
 """
 
-import os
 import json
-from typing import Dict, List, Any, Optional, Tuple
-
+import os
+from typing import Any
 
 from src.dashboard.monitor.log_parsing import (
-    parse_training_log,
-    find_log_path,
     TAG_MAP,
+    find_log_path,
+    parse_training_log,
 )
 
 
@@ -46,22 +45,22 @@ class LogParser:
 
     def __init__(
         self,
-        state_dir: Optional[str] = None,
-        tag_map: Optional[Dict[str, str]] = None,
+        state_dir: str | None = None,
+        tag_map: dict[str, str] | None = None,
     ):
         self.state_dir = state_dir or "."
         self.state_file = os.path.join(self.state_dir, self.STATE_FILE)
         self.tag_map = tag_map if tag_map is not None else TAG_MAP.copy()
-        self.last_position: Dict[str, int] = {}
+        self.last_position: dict[str, int] = {}
         self._load_state()
 
     def _load_state(self) -> None:
         """Load parse state from file if exists."""
         if os.path.exists(self.state_file):
             try:
-                with open(self.state_file, "r", encoding="utf-8") as f:
+                with open(self.state_file, encoding="utf-8") as f:
                     self.last_position = json.load(f)
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 self.last_position = {}
 
     def _save_state(self) -> None:
@@ -69,7 +68,7 @@ class LogParser:
         try:
             with open(self.state_file, "w", encoding="utf-8") as f:
                 json.dump(self.last_position, f, indent=2)
-        except IOError:
+        except OSError:
             pass
 
     def parse(
@@ -77,7 +76,7 @@ class LogParser:
         log_path: str,
         increment: bool = False,
         reset: bool = False,
-    ) -> Dict[str, List[Any]]:
+    ) -> dict[str, list[Any]]:
         """
         Parse training log file.
 
@@ -112,7 +111,7 @@ class LogParser:
             start_pos = 0
 
         # Read new content
-        with open(log_path, "r", encoding="utf-8") as f:
+        with open(log_path, encoding="utf-8") as f:
             f.seek(start_pos)
             new_content = f.read()
 
@@ -134,7 +133,7 @@ class LogParser:
 
         return result
 
-    def parse_incremental(self, log_path: str) -> Tuple[Dict[str, List[Any]], int]:
+    def parse_incremental(self, log_path: str) -> tuple[dict[str, list[Any]], int]:
         """
         Parse only new content since last position.
 
@@ -148,7 +147,7 @@ class LogParser:
         new_count = len(records.get("epoch", []))
         return records, new_count
 
-    def reset_position(self, log_path: Optional[str] = None) -> None:
+    def reset_position(self, log_path: str | None = None) -> None:
         """Reset parse position for file(s)."""
         if log_path is None:
             self.last_position.clear()
@@ -158,10 +157,10 @@ class LogParser:
         self._save_state()
 
     @staticmethod
-    def find_log(model_dir: Optional[str] = None) -> Tuple[str, str]:
+    def find_log(model_dir: str | None = None) -> tuple[str, str]:
         """Find training log file. Delegates to find_log_path()."""
         return find_log_path(model_dir)
 
 
 # Convenience exports
-__all__ = ["LogParser", "TAG_MAP", "parse_training_log", "find_log_path"]
+__all__ = ["TAG_MAP", "LogParser", "find_log_path", "parse_training_log"]

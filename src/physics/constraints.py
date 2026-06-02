@@ -3,24 +3,26 @@ EWPINN 物理约束模块
 包含物理方程计算、材料参数和边界条件处理
 """
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
 import logging
-from typing import Dict, Optional
+
+import numpy as np
+import torch
+from torch import nn
 
 logger = logging.getLogger("EWPINN_Physics")
 
 # 导入统一物理配置
 try:
-    from src.config import get_materials_params, PHYSICS
+    from src.config import PHYSICS, get_materials_params
 
     _DEFAULT_MATERIALS = None  # 延迟加载
 except ImportError:
     logger.warning("统一配置模块不可用，使用本地默认参数")
     _DEFAULT_MATERIALS = None
     PHYSICS = {}
+
+# 共享梯度工具 (消除跨文件公式重复)
+from src.utils.gradients import compute_gradient, gradient_magnitude, mean_curvature_3d
 
 # 导入动态权重调整模块
 try:
@@ -35,7 +37,7 @@ except ImportError:
     DYNAMIC_WEIGHT_AVAILABLE = False
 
 
-def _get_default_materials_params() -> Dict:
+def _get_default_materials_params() -> dict:
     """获取默认材料参数（优先从统一配置加载）"""
     global _DEFAULT_MATERIALS
     if _DEFAULT_MATERIALS is not None:
@@ -61,6 +63,13 @@ def _get_default_materials_params() -> Dict:
         "poisson_ratio": 0.3,
         "contact_angle_theta0": 120.0,
         "epsilon_0": 8.854e-12,
+        # 新参数 (纯物理值 + A_eff)
+        "epsilon_su8": 3.28,
+        "epsilon_teflon": 1.934,
+        "d_su8": 400e-9,
+        "d_teflon": 400e-9,
+        "A_eff": 1.20,
+        # 旧参数 (向后兼容)
         "dielectric_thickness": 4e-7,
         "relative_permittivity": 3.28,
         "dynamic_contact_angle_advancing": 120.0,
@@ -97,7 +106,7 @@ def _get_default_materials_params() -> Dict:
         # 物理模型配置开关
         "use_convection": False,          # Re<<1, 默认关闭对流项
         "use_legacy_ac": False,           # 标准化 Allen-Cahn (界面宽度可控)
-        "ac_interface_width": 5e-6,       # 界面宽度 (m)
+        "ac_interface_width": 5e-07,      # 界面宽度 (m) = 0.5μm, v7.2 校准值
         "ac_mobility": 1e-10,             # 迁移率 (m³·s/kg), mob≈0.1m/s, τ~0.05ms
         "use_adaptive_loss_scale": False, # 自适应损失归一化 (EMA)
         "use_unified_wetting": False,     # 统一相场润湿 BC (替代旧版 BW/WW/SW)
@@ -120,6 +129,23 @@ class PhysicsConstraints:
 
         # 全局步数计数器，用于控制日志输出频率
         self.global_step = 0
+    def _compute_capacitance(self, with_oil=False):
+        eps0 = self.materials_params.get("epsilon_0", 8.854e-12)
+        eps_su8 = self.materials_params.get("epsilon_su8", 3.28)
+        eps_teflon = self.materials_params.get("epsilon_teflon", 1.934)
+        d_su8 = self.materials_params.get("d_su8", 400e-9)
+        d_teflon = self.materials_params.get("d_teflon", 400e-9)
+        A_eff = self.materials_params.get("A_eff", 1.20)
+
+        Z = d_su8 / (eps0 * eps_su8) + d_teflon / (eps0 * eps_teflon)
+
+        if with_oil:
+            eps_oil = self.materials_params.get("epsilon_ink", 4.0)
+            h_ink = self.materials_params.get("ink_thickness", 3e-6)
+            Z = Z + h_ink / (eps0 * eps_oil)
+
+        return A_eff / Z
+
 
     def compute_navier_stokes_residual(self, x, predictions, model=None, grads=None):
         """
@@ -163,17 +189,12 @@ class PhysicsConstraints:
             sigma = self.materials_params["surface_tension_polar_ink"]
 
             # 电润湿参数
-            epsilon_0 = self.materials_params["epsilon_0"]
-            epsilon_r = self.materials_params.get("relative_permittivity", 3.28)
-            d_dielectric = self.materials_params.get("dielectric_thickness", 4e-7)
-            epsilon_h = self.materials_params.get("epsilon_hydrophobic", 1.934)
-            d_hydrophobic = self.materials_params.get("hydrophobic_thickness", 4e-7)
             Lx = self.materials_params.get("Lx", 174e-6)
             Ly = self.materials_params.get("Ly", 174e-6)
             Lz = self.materials_params.get("domain_height", 20e-6)
 
-            # SU-8 + Teflon 双层串联单位面积电容
-            C_ew = 1.0 / (d_dielectric/(epsilon_0*epsilon_r) + d_hydrophobic/(epsilon_0*epsilon_h))
+            # 双层串联电容 (SU-8 + Teflon)，含有效面积校正因子 A_eff
+            C_ew = self._compute_capacitance()
 
             # 混合属性
             rho = phi * rho_oil + (1 - phi) * rho_polar
@@ -193,18 +214,11 @@ class PhysicsConstraints:
                 phi_xy, phi_xz, phi_yz = grads["phi_xy"], grads["phi_xz"], grads["phi_yz"]
             else:
                 # 回退：独立计算（兼容直接调用场景）
-                def _get_grad(y, x_in):
-                    g = torch.autograd.grad(
-                        y, x_in,
-                        grad_outputs=torch.ones_like(y),
-                        create_graph=True, retain_graph=True, allow_unused=True,
-                    )[0]
-                    return g if g is not None else torch.zeros_like(x_in)
-                g_u = _get_grad(u.sum(), x)
-                g_v = _get_grad(v.sum(), x)
-                g_w = _get_grad(w.sum(), x)
-                g_p = _get_grad(p.sum(), x)
-                g_phi = _get_grad(phi.sum(), x)
+                g_u = compute_gradient(u.sum(), x)
+                g_v = compute_gradient(v.sum(), x)
+                g_w = compute_gradient(w.sum(), x)
+                g_p = compute_gradient(p.sum(), x)
+                g_phi = compute_gradient(phi.sum(), x)
                 u_x, u_y, u_z = g_u[:, 0], g_u[:, 1], g_u[:, 2]
                 v_x, v_y, v_z = g_v[:, 0], g_v[:, 1], g_v[:, 2]
                 w_x, w_y, w_z = g_w[:, 0], g_w[:, 1], g_w[:, 2]
@@ -222,22 +236,12 @@ class PhysicsConstraints:
 
             # 表面张力 (CSF 模型 - 精确曲率)
 
-            grad_phi_mag_sq = phi_x**2 + phi_y**2 + phi_z**2 + 1e-10
-            grad_phi_mag = torch.sqrt(grad_phi_mag_sq)
+            grad_phi_mag_sq, grad_phi_mag = gradient_magnitude(phi_x, phi_y, phi_z)
 
             # 精确曲率公式: kappa = -div(grad(phi)/|grad(phi)|)
-            numerator = (
-                phi_xx * (phi_y**2 + phi_z**2)
-                + phi_yy * (phi_x**2 + phi_z**2)
-                + phi_zz * (phi_x**2 + phi_y**2)
-                - 2
-                * (
-                    phi_x * phi_y * phi_xy
-                    + phi_x * phi_z * phi_xz
-                    + phi_y * phi_z * phi_yz
-                )
+            kappa = mean_curvature_3d(
+                phi_x, phi_y, phi_z, phi_xx, phi_yy, phi_zz, phi_xy, phi_xz, phi_yz
             )
-            kappa = -numerator / (grad_phi_mag_sq * grad_phi_mag + 1e-10)
 
             f_st_x = sigma * kappa * phi_x
             f_st_y = sigma * kappa * phi_y
@@ -344,7 +348,7 @@ class PhysicsConstraints:
             }
 
         except Exception as e:
-            logger.error(f"Navier-Stokes残差计算失败: {str(e)}")
+            logger.error(f"Navier-Stokes残差计算失败: {e!s}")
             return self._empty_residual(x, predictions)
 
     def _compute_laplacian(self, scalar_field, coords, spatial_dims=3):
@@ -480,7 +484,7 @@ class PhysicsConstraints:
             return residuals
 
         except Exception as e:
-            logger.error(f"计算体积守恒残差失败: {str(e)}")
+            logger.error(f"计算体积守恒残差失败: {e!s}")
             device = (
                 x_phys.device
                 if isinstance(x_phys, torch.Tensor)
@@ -717,8 +721,7 @@ class PhysicsConstraints:
                 phi_x = grads["phi_x"]
                 phi_y = grads["phi_y"]
                 phi_z = grads["phi_z"]
-                grad_mag_sq = phi_x**2 + phi_y**2 + phi_z**2 + 1e-10
-                grad_mag = torch.sqrt(grad_mag_sq)
+                grad_mag_sq, grad_mag = gradient_magnitude(phi_x, phi_y, phi_z)
                 laplacian_xy = grads["phi_xx"] + grads["phi_yy"]
             else:
                 # 回退：独立计算
@@ -733,15 +736,10 @@ class PhysicsConstraints:
                 phi_x = grad_phi[:, 0]
                 phi_y = grad_phi[:, 1]
                 phi_z = grad_phi[:, 2]
-                grad_mag_sq = phi_x**2 + phi_y**2 + phi_z**2 + 1e-10
-                grad_mag = torch.sqrt(grad_mag_sq)
+                grad_mag_sq, grad_mag = gradient_magnitude(phi_x, phi_y, phi_z)
                 try:
-                    lap_x = torch.autograd.grad(
-                        phi_x.sum(), x_phys, create_graph=True, retain_graph=True
-                    )[0][:, 0]
-                    lap_y = torch.autograd.grad(
-                        phi_y.sum(), x_phys, create_graph=True, retain_graph=True
-                    )[0][:, 1]
+                    lap_x = compute_gradient(phi_x.sum(), x_phys)[:, 0]
+                    lap_y = compute_gradient(phi_y.sum(), x_phys)[:, 1]
                     laplacian_xy = lap_x + lap_y
                 except Exception:
                     return res
@@ -771,12 +769,18 @@ class PhysicsConstraints:
             }
 
     def compute_electrowetting_residual(self, x_phys, predictions, grads=None):
-        """电润湿驱动力残差 — 已移除
+        """电润湿驱动力残差 — 已移除（设计如此）
 
-        EW 驱动力已整合到 AC 方程（_compute_vof_residual）的 ew_source 项中，
-        直接驱动相场演化，不再需要独立残差。
+        重要：EW 驱动力在 AC 方程内部（_compute_vof_residual 的 ew_source 项），
+        由 electrowetting_weight (materials_params) 控制强度。
 
-        保留此方法以保持 compute_core_residuals 调用兼容，但始终返回零。
+        本方法保留仅为 compute_core_residuals 调用兼容，始终返回零。
+        日志中 EW: 0.00e+00 是正常行为，EW 物理效果包含在 VOF/AC 残差中。
+
+        如需调整 EW 驱动力强度，修改 config 的 electrowetting_weight：
+          - 1.0: 全强度 (默认，当前训练有效行为)
+          - 0.02: 2% 强度 (旧配置值，当时因未传递而无效)
+          - 0.0: 完全关闭 EW 驱动
         """
         try:
             device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device('cpu')
@@ -825,6 +829,23 @@ class PhysicsConstraints:
     def compute_wall_wetting_residual(
         self, x_phys: torch.Tensor, predictions: torch.Tensor, grads=None
     ):
+        """像素墙顶疏油约束 + 侧壁亲油约束 (v7.3 重写)
+
+        物理逻辑:
+          - 像素墙顶 (z approx Lz): 疏油, phi approx 0 (极性液体覆盖墙顶)
+          - 侧壁 (x approx 0/Lx 或 y approx 0/Ly): 亲油, phi 可 > 0 (油墨沿壁爬升)
+          - 底面 (z approx 0): 已由 bottom_wetting 约束, 此处不重复
+
+        约束策略:
+          1. 顶面疏油: z > 0.8*Lz 的点, penalty = relu(phi - 0.1)^2
+          2. 侧壁爬升允许: near_wall + z < wall_height 的点不做惩罚
+          3. 高处侧壁疏油: near_wall + z > wall_height 的点, penalty = relu(phi - 0.3)^2
+
+        关键修正 (vs 旧版):
+          - 旧版只检查 near_wall + z_norm 线性组合, 惩罚太弱 (WW ~1.5e-4)
+          - 新版显式区分顶面/侧壁/高处, 每个区域有明确 phi 目标
+          - penalty 使用 relu 截断, 只罚违规部分, 不影响已合规点
+        """
         try:
             device = (
                 x_phys.device
@@ -848,31 +869,60 @@ class PhysicsConstraints:
                 return residuals
             if predictions.dim() < 2 or predictions.size(1) < 5:
                 return residuals
-            alpha = predictions[:, 4]
-            alpha_clamped = torch.clamp(alpha, 0.0, 1.0)
+
+            phi = predictions[:, 4]
+            phi_clamped = torch.clamp(phi, 0.0, 1.0)
             coords = x_phys.detach()
             x = coords[:, 0]
             y = coords[:, 1]
             z = coords[:, 2]
-            x_min, x_max = torch.min(x), torch.max(x)
-            y_min, y_max = torch.min(y), torch.max(y)
-            Lx = (x_max - x_min).clamp(min=1e-9)
-            Ly = (y_max - y_min).clamp(min=1e-9)
-            margin_x = 0.1 * Lx
-            margin_y = 0.1 * Ly
-            near_left = (x - x_min).abs() < margin_x
-            near_right = (x_max - x).abs() < margin_x
-            near_front = (y - y_min).abs() < margin_y
-            near_back = (y_max - y).abs() < margin_y
-            near_wall = near_left | near_right | near_front | near_back
+
+            # 域参数
             domain_height = self.materials_params.get("domain_height", 20e-6)
+            wall_height = self.materials_params.get("wall_height", 3.5e-6)
+            Lx = self.materials_params.get("pixel_width", PHYSICS.get("Lx", 150e-6))
+            Ly = self.materials_params.get("pixel_height", PHYSICS.get("Ly", 150e-6))
             dh = max(domain_height, 1e-9)
-            z_norm = (z / dh).clamp(0.0, 1.0)
-            penalty = alpha_clamped * z_norm * near_wall.float()
-            residuals["wall_wetting"] = penalty
+
+            # 侧壁检测: 距侧壁 5% 域宽以内
+            margin_x = 0.05 * Lx
+            margin_y = 0.05 * Ly
+            near_left = (x - 0).abs() < margin_x
+            near_right = (Lx - x).abs() < margin_x
+            near_front = (y - 0).abs() < margin_y
+            near_back = (Ly - y).abs() < margin_y
+            near_wall = near_left | near_right | near_front | near_back
+
+            # 顶面检测: z > 80% 域高
+            is_top = z > (0.8 * dh)
+
+            # === 约束1: 顶面疏油 (最强) ===
+            # z > 0.8*Lz 的所有点, phi 必须 < 0.1
+            # 物理含义: 极性液体-气界面在顶面, 油膜不应到达顶部
+            top_penalty = torch.relu(phi_clamped - 0.1) ** 2
+            top_mask = is_top.float()
+            top_loss = (top_penalty * top_mask).sum() / (top_mask.sum() + 1e-8)
+
+            # === 约束2: 侧壁高处疏油 ===
+            # near_wall + z > wall_height: 侧壁高处, phi 应 < 0.3
+            # 物理含义: 像素墙顶 Teflon 疏油, 油不应沿壁爬到墙顶以上
+            above_wall = z > wall_height
+            wall_high = near_wall & above_wall & (~is_top)
+            wall_high_penalty = torch.relu(phi_clamped - 0.3) ** 2
+            wall_high_mask = wall_high.float()
+            wall_high_loss = (wall_high_penalty * wall_high_mask).sum() / (wall_high_mask.sum() + 1e-8)
+
+            # === 约束3: 侧壁低处允许亲油 (不做惩罚) ===
+            # near_wall + z < wall_height: 油墨可沿壁爬升, 不罚
+            # 与旧版关键区别: 旧版 z_norm 线性惩罚会误伤低处亲油
+
+            # 合并: 顶面权重2x (最关键), 侧壁高处1x
+            combined = top_loss * 2.0 + wall_high_loss * 1.0
+            residuals["wall_wetting"] = combined
+
             return residuals
         except Exception as e:
-            logger.error(f"计算墙润湿残差失败: {str(e)}")
+            logger.error(f"计算墙润湿残差失败: {e!s}")
             device = (
                 x_phys.device
                 if isinstance(x_phys, torch.Tensor)
@@ -917,18 +967,13 @@ class PhysicsConstraints:
 
             # 物理参数
             sigma = self.materials_params.get("surface_tension_polar_ink", 0.02505)
-            eps = self.materials_params.get("ac_interface_width", 5e-6)
+            eps = self.materials_params.get("ac_interface_width", 5e-07)
             theta0 = self.materials_params.get("contact_angle_theta0", 120.0)
             V_T_base = self.materials_params.get("V_T_base", 5.0)
-            epsilon_0 = self.materials_params.get("epsilon_0", 8.854e-12)
-            epsilon_r = self.materials_params.get("relative_permittivity", 3.28)
-            d_dielectric = self.materials_params.get("dielectric_thickness", 4e-7)
-            epsilon_h = self.materials_params.get("epsilon_hydrophobic", 1.934)
-            d_hydrophobic = self.materials_params.get("hydrophobic_thickness", 4e-7)
             theta_wall_teflon = self.materials_params.get("theta_wall_teflon", 110.0)
 
-            # 双层串联电容 (与 NS 方程一致)
-            C_yl = 1.0 / (d_dielectric / (epsilon_0 * epsilon_r) + d_hydrophobic / (epsilon_0 * epsilon_h))
+            # 双层串联电容 (SU-8 + Teflon)，含有效面积校正因子 A_eff
+            C_yl = self._compute_capacitance()
 
             # 提取坐标和 φ
             x_coord = x_phys[:, 0]
@@ -1049,12 +1094,8 @@ class PhysicsConstraints:
             # RC充电曲线: (1-exp(-t/τ_RC))²
             charge_factor = (1.0 - torch.exp(-t_b / tau_rc)) ** 2
             # 稳态电润湿能: ½·C·V²
-            eps0 = 8.854e-12
-            eps_r = self.materials_params.get('relative_permittivity', 3.28)
-            eps_h = self.materials_params.get('epsilon_hydrophobic', 1.934)
-            d_d = self.materials_params.get('dielectric_thickness', 4e-7)
-            d_h = self.materials_params.get('hydrophobic_thickness', 4e-7)
-            C_ew = 1.0/(d_d/(eps0*eps_r) + d_h/(eps0*eps_h))
+            # 双层串联电容 (SU-8 + Teflon)，含有效面积校正因子 A_eff
+            C_ew = self._compute_capacitance()
             G_steady = 0.5 * C_ew * V_eff**2
             G_expected = G_steady * charge_factor
 
@@ -1129,14 +1170,10 @@ class PhysicsConstraints:
 
             # cos(θ_eq) from Young-Lippmann
             theta0_deg = self.materials_params.get('contact_angle_theta0', 120.0)
-            eps0 = 8.854e-12
-            eps_r = self.materials_params.get('relative_permittivity', 3.28)
-            eps_h = self.materials_params.get('epsilon_hydrophobic', 1.934)
             sigma_po = self.materials_params.get('surface_tension_polar_ink',
                         self.materials_params.get('sigma', 0.02505))
-            d_d = self.materials_params.get('dielectric_thickness', 4e-7)
-            d_h = self.materials_params.get('hydrophobic_thickness', 4e-7)
-            C_yl = 1.0/(d_d/(eps0*eps_r) + d_h/(eps0*eps_h))
+            # 双层串联电容 (SU-8 + Teflon)，含有效面积校正因子 A_eff
+            C_yl = self._compute_capacitance()
 
             cos_theta0 = np.cos(np.radians(theta0_deg))
             V_m = V_to[mask]; V_T = self.materials_params.get('V_T_base', 5.0)
@@ -1207,12 +1244,109 @@ class PhysicsConstraints:
             normal = (w_t**2).mean()
             phi_ok = (phi_t**2).mean()
 
-            res['top_boundary'] = shear + normal + 0.5 * phi_ok
+            # v7.3: 顶面 phi=0 约束强化 (0.5 -> 3.0)
+            # 顶面是疏油边界, phi 必须 接近 0
+            res['top_boundary'] = shear + normal + 3.0 * phi_ok
             return res
         except Exception as e:
             logger.warning(f'顶面BC失败: {e}')
             device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device('cpu')
             return {'top_boundary': torch.zeros(1, device=device, requires_grad=True)}
+
+    def compute_phi_gradient_smoothness_residual(
+        self, x_phys: torch.Tensor, predictions: torch.Tensor, grads=None
+    ):
+        """phi 场梯度平滑性约束 (v7.3 新增)
+
+        抑制 phi 场的尖锐折角/不连续, 使油膜界面平滑 (流体感)。
+
+        策略:
+          1. 一阶梯度惩罚: mean(|nabla_phi|^2) - 界面宽度正则化
+             界面区域允许大梯度, 但体相区域梯度应 接近 0
+          2. 二阶梯度惩罚: mean(|nabla^2_phi|^2) - 抑制折角
+             phi 的二阶空间导数在折角处大, 平滑界面处小
+
+        权重通过 pinn_two_phase.py 的 phys_weights 字典控制,
+        键名 "phi_gradient_smoothness"。
+        """
+        try:
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device('cpu')
+            zero = torch.zeros(1, device=device, requires_grad=True)
+            res = {'phi_gradient_smoothness': zero}
+
+            if not isinstance(x_phys, torch.Tensor) or predictions.dim() < 2:
+                return res
+            if x_phys.shape[1] < 3:
+                return res
+            if not x_phys.requires_grad:
+                return res
+
+            phi = predictions[:, 4]
+
+            # 一阶梯度 (从统一梯度获取或重新计算)
+            if grads is not None and 'phi_x' in grads:
+                g_x = grads['phi_x']
+                g_y = grads['phi_y']
+                g_z = grads['phi_z']
+            else:
+                try:
+                    g = torch.autograd.grad(
+                        phi.sum(), x_phys, create_graph=True, retain_graph=True
+                    )[0]
+                    if g is None:
+                        return res
+                    g_x, g_y, g_z = g[:, 0], g[:, 1], g[:, 2]
+                except Exception:
+                    return res
+
+            # 界面宽度 (AC 参数)
+            eps_ac = self.materials_params.get('ac_interface_width', 5e-07)
+
+            # 界面检测: phi 在 (0.2, 0.8) 的点是界面区域
+            interface_mask = ((phi > 0.2) & (phi < 0.8)).float()
+            bulk_mask = 1.0 - interface_mask
+
+            # 一阶梯度: 体相区域梯度应 小, 界面区域允许大梯度
+            grad_mag_sq = g_x**2 + g_y**2 + g_z**2
+            # 体相梯度惩罚 (界面区域不罚)
+            bulk_grad_loss = (grad_mag_sq * bulk_mask).mean()
+
+            # 二阶梯度惩罚: 计算 laplacian(phi) 近似
+            # 使用有限差分近似, 避免昂贵的二阶 autograd
+            # 对界面区域: laplacian 应 平滑 (无折角)
+            try:
+                lap_phi = g_x * 0  # placeholder, 需要二阶导数
+                # 计算 d2phi/dx2, d2phi/dy2, d2phi/dz2
+                g_xx = torch.autograd.grad(
+                    g_x.sum(), x_phys, create_graph=True, retain_graph=True
+                )[0][:, 0]
+                g_yy = torch.autograd.grad(
+                    g_y.sum(), x_phys, create_graph=True, retain_graph=True
+                )[0][:, 1]
+                g_zz = torch.autograd.grad(
+                    g_z.sum(), x_phys, create_graph=True, retain_graph=True
+                )[0][:, 2]
+                lap_phi = g_xx + g_yy + g_zz
+            except Exception:
+                lap_phi = torch.zeros_like(phi)
+
+            # 二阶梯度惩罚: |lap_phi|^2 (抑制折角)
+            lap_loss = (lap_phi**2).mean()
+
+            # 界面平滑性: 界面区域的梯度方向应 平滑变化
+            # 用梯度方向变化率 (曲率) 来衡量
+            # 简化: 直接用 |nabla^2 phi|^2 在界面区域
+            interface_lap_loss = (lap_phi**2 * interface_mask).mean()
+
+            # 合并: 体相梯度 0.5x + laplacian 全域 0.3x + laplacian 界面 0.2x
+            combined = bulk_grad_loss * 0.5 + lap_loss * 0.3 + interface_lap_loss * 0.2
+            res['phi_gradient_smoothness'] = combined
+
+            return res
+        except Exception as e:
+            logger.warning(f'phi 梯度平滑性约束失败: {e}')
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device('cpu')
+            return {'phi_gradient_smoothness': torch.zeros(1, device=device, requires_grad=True)}
 
     def safe_compute_laplacian_spatial(
         self, scalar_field: torch.Tensor, coords: torch.Tensor, spatial_dims: int = 3
@@ -1268,7 +1402,7 @@ class PhysicsConstraints:
 
     def _compute_all_gradients(
         self, x_phys: torch.Tensor, predictions: torch.Tensor
-    ) -> Dict[str, torch.Tensor]:
+    ) -> dict[str, torch.Tensor]:
         """
         统一计算所有一阶和二阶梯度。
 
@@ -1286,12 +1420,7 @@ class PhysicsConstraints:
         grads = {}
 
         def get_grad(y, x_in):
-            g = torch.autograd.grad(
-                y, x_in,
-                grad_outputs=torch.ones_like(y),
-                create_graph=True, retain_graph=True, allow_unused=True,
-            )[0]
-            return g if g is not None else torch.zeros_like(x_in)
+            return compute_gradient(y, x_in)
 
         u = predictions[:, 0]
         v = predictions[:, 1]
@@ -1353,8 +1482,8 @@ class PhysicsConstraints:
         self,
         x_phys: torch.Tensor,
         predictions: torch.Tensor,
-        model: Optional[nn.Module] = None,
-    ) -> Dict[str, torch.Tensor]:
+        model: nn.Module | None = None,
+    ) -> dict[str, torch.Tensor]:
         """
         统一物理残差计算入口 - 作为"唯一物理真相"
 
@@ -1498,7 +1627,16 @@ class PhysicsConstraints:
         except Exception as e:
             logger.warning(f"顶面BC残差计算失败: {e}")
 
-        # 14. 压力钉扎
+        # 14. phi 梯度平滑性约束 (v7.3 新增: 抑制界面折角, 增强流体感)
+        try:
+            pgs_residuals = self.compute_phi_gradient_smoothness_residual(
+                x_phys, predictions, grads=grads
+            )
+            residuals.update(pgs_residuals)
+        except Exception as e:
+            logger.warning(f"phi 梯度平滑性残差计算失败: {e}")
+
+        # 15. 压力钉扎
         try:
             p = predictions[:, 3] if predictions.shape[1] >= 4 else None
             if p is not None:
@@ -1512,7 +1650,7 @@ class PhysicsConstraints:
         self,
         x_phys: torch.Tensor,
         predictions: torch.Tensor,
-        model: Optional[nn.Module] = None,
+        model: nn.Module | None = None,
         dt: float = 0.001,  # 1ms 时间步长
     ) -> torch.Tensor:
         """
@@ -1581,8 +1719,8 @@ class PhysicsConstraints:
         self,
         x_phys: torch.Tensor,
         predictions: torch.Tensor,
-        model: Optional[nn.Module] = None,
-        grads: Optional[Dict[str, torch.Tensor]] = None,
+        model: nn.Module | None = None,
+        grads: dict[str, torch.Tensor] | None = None,
     ) -> torch.Tensor:
         """
         计算 Allen-Cahn 相场方程残差 (标准化相场模型)
@@ -1660,8 +1798,8 @@ class PhysicsConstraints:
                 sigma_ac = self.materials_params.get(
                     "surface_tension_polar_ink", 0.02505
                 )
-                eps_ac = self.materials_params.get("ac_interface_width", 5e-6)
-                M_ac = self.materials_params.get("ac_mobility", 5e-11)
+                eps_ac = self.materials_params.get("ac_interface_width", 5e-07)
+                M_ac = self.materials_params.get("ac_mobility", 1e-10)
 
                 # 量纲修正:
                 # M_ac [m³·s/kg] * sigma [kg/s²] / eps [m] = [m²/s] (扩散系数 D_eff)
@@ -1701,18 +1839,10 @@ class PhysicsConstraints:
             #
             # 归一化因子：S_ew = M_ac * delta_C * V² * z_decay / eps_ac²
             try:
-                eps0_v = 8.854e-12
-                eps_r_v = self.materials_params.get('relative_permittivity', 3.28)
-                eps_h_v = self.materials_params.get('epsilon_hydrophobic', 1.934)
-                d_d_v = self.materials_params.get('dielectric_thickness', 4e-7)
-                d_h_v = self.materials_params.get('hydrophobic_thickness', 4e-7)
-                h_ink_v = self.materials_params.get('ink_thickness', 3e-6)
-                eps_ink = self.materials_params.get('epsilon_ink', 4.0)  # 油墨介电常数
-
-                # 开口区域电容（介电层+疏水层串联）
-                C_open = 1.0 / (d_d_v/(eps0_v*eps_r_v) + d_h_v/(eps0_v*eps_h_v))
-                # 油墨区域电容（介电层+疏水层+油墨层串联）
-                C_ink = 1.0 / (d_d_v/(eps0_v*eps_r_v) + d_h_v/(eps0_v*eps_h_v) + h_ink_v/(eps0_v*eps_ink))
+                # 开口区域电容（SU-8 + Teflon），含有效面积校正因子 A_eff
+                C_open = self._compute_capacitance(with_oil=False)
+                # 油墨区域电容（SU-8 + Teflon + 油墨层串联），含 A_eff
+                C_ink = self._compute_capacitance(with_oil=True)
                 # 电容差
                 delta_C = C_open - C_ink  # > 0
 
@@ -1732,6 +1862,13 @@ class PhysicsConstraints:
                 # EW 源项: S_ew = M_ac * delta_C * V_eff² * z_decay / eps_ac²
                 # 量纲: [m³·s/kg] * [F/m²] * [V²] / [m²] = [m²/s] / [m] = [1/s] ✓
                 ew_source = M_ac * delta_C * V_eff**2 * z_decay / (eps_ac**2 + 1e-20)
+
+                # electrowetting_weight: EW 源项权重 (v7.2 校准)
+                # = 1.0 表示全强度 EW 驱动
+                # < 1.0 可用于调弱 EW 对 AC 方程的影响
+                # 历史值 0.02 是为补偿旧 eps=5um 的错误放大，现在 eps=0.5um 后应重新校准
+                ew_weight = self.materials_params.get('electrowetting_weight', 1.0)
+                ew_source = ew_weight * ew_source
 
                 # 负号：驱动力使 phi 减小（油墨被极性液体替代）
                 ac_residual = ac_residual - ew_source

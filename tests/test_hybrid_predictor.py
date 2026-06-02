@@ -13,8 +13,9 @@
 日期: 2026-01-08
 """
 
-import pytest
 import numpy as np
+import pytest
+
 from src.predictors.hybrid_predictor import HybridPredictor
 
 

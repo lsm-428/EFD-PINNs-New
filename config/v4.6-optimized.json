@@ -1,12 +1,21 @@
 {
   "metadata": {
-    "description": "v4.6 优化版 — 统一梯度 + Interface退火 + 提升物理权重",
+    "description": "v4.6 v7.3 \u2014 \u758f\u6cb9\u7ea6\u675f\u5f3a\u5316 + phi\u68af\u5ea6\u5e73\u6ed1 + AC\u964d\u538b",
     "based_on": "v4.6-standard.json"
   },
   "model": {
     "input_format": "triplet",
-    "hidden_phi": [128, 128, 64, 32],
-    "hidden_vel": [64, 64, 32],
+    "hidden_phi": [
+      128,
+      128,
+      64,
+      32
+    ],
+    "hidden_vel": [
+      64,
+      64,
+      32
+    ],
     "use_fourier": true
   },
   "stage1_eta_tutor": true,
@@ -16,8 +25,8 @@
     "learning_rate": 0.0003,
     "min_lr": 1e-06,
     "gradient_clip": 1.0,
-    "stage1_epochs": 1500,
-    "stage2_epochs": 4000,
+    "stage1_epochs": 3000,
+    "stage2_epochs": 8000,
     "stage3_epochs": 60000,
     "early_stop_patience": 60000,
     "warmup_epochs": 500,
@@ -44,14 +53,17 @@
     "surface_tension_weight": 0.01,
     "sharpening_weight": 1.0,
     "explicit_volume_weight": 100.0,
-    "electrowetting_weight": 2.0,
-    "laplace_pressure_weight": 0.2,
+    "electrowetting_weight": 1.0,
+    "laplace_pressure_weight": 0.05,
     "sidewall_contact_angle": 2.0,
     "interface_energy_weight": 0.05,
-    "wall_wetting_weight": 0.1,
+    "wall_wetting_weight": 5.0,
     "temporal_smoothness_weight": 0.1,
     "dielectric_charge_weight": 0.2,
     "contact_line_dynamics_weight": 0.2,
-    "top_boundary_weight": 0.1
+    "top_boundary_weight": 1.0,
+    "ac_interface_width": 1e-06,
+    "ac_mobility": 1e-10,
+    "phi_gradient_smoothness_weight": 2.0
   }
 }

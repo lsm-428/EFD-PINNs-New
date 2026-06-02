@@ -22,7 +22,6 @@
 
 import os
 from pathlib import Path
-from typing import Optional
 
 # ============================================================================
 # 项目根目录
@@ -60,7 +59,7 @@ else:
 # ============================================================================
 
 
-def get_config_path(config_path: Optional[str] = None) -> Path:
+def get_config_path(config_path: str | None = None) -> Path:
     """
     获取配置文件路径
 
@@ -94,7 +93,7 @@ def get_config_path(config_path: Optional[str] = None) -> Path:
     return path
 
 
-def get_output_dir(subdir: Optional[str] = None, create: bool = True) -> Path:
+def get_output_dir(subdir: str | None = None, create: bool = True) -> Path:
     """
     获取输出目录路径
 
@@ -119,11 +118,11 @@ def get_output_dir(subdir: Optional[str] = None, create: bool = True) -> Path:
 # 导出
 # ============================================================================
 __all__ = [
-    "PROJECT_ROOT",
     "CONFIG_PATH",
     "DEFAULT_CONFIG_PATH",
-    "OUTPUT_DIR",
     "DEFAULT_OUTPUT_DIR",
+    "OUTPUT_DIR",
+    "PROJECT_ROOT",
     "get_config_path",
     "get_output_dir",
 ]

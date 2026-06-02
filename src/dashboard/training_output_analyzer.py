@@ -5,18 +5,18 @@
 扫描和分析训练输出目录，提取训练运行信息。
 """
 
-from pathlib import Path
-from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 from datetime import datetime
 import json
-import pandas as pd
-import numpy as np
+from pathlib import Path
+from typing import Any
 import warnings
+
+import numpy as np
+import pandas as pd
 
 # Dashboard inference engine
 from src.dashboard.inference import PINNInferenceEngine
-
 
 # 安全限制配置
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB 最大文件读取大小
@@ -101,8 +101,8 @@ class TrainingRunInfo:
     name: str
     path: str
     creation_time: datetime
-    model_files: List[str]
-    config_path: Optional[str]
+    model_files: list[str]
+    config_path: str | None
     has_loss_csv: bool
     has_metrics: bool
 
@@ -119,7 +119,7 @@ class TrainingOutputScanner:
         self.train_outputs_dir = train_outputs_dir
         self.supported_model_extensions = [".pth", ".pt"]
 
-    def scan_training_outputs(self) -> List[TrainingRunInfo]:
+    def scan_training_outputs(self) -> list[TrainingRunInfo]:
         """扫描所有训练输出目录
 
         Returns:
@@ -155,7 +155,7 @@ class TrainingOutputScanner:
 
         return sorted(runs, key=lambda x: x.creation_time, reverse=True)
 
-    def _extract_run_info(self, run_dir: Path) -> Optional[TrainingRunInfo]:
+    def _extract_run_info(self, run_dir: Path) -> TrainingRunInfo | None:
         """提取单个训练运行目录的信息
 
         Args:
@@ -195,7 +195,7 @@ class TrainingOutputScanner:
             warnings.warn(f"提取训练运行信息 {run_dir.name} 时出错: {e}")
             return None
 
-    def _find_model_files(self, run_dir: Path) -> List[str]:
+    def _find_model_files(self, run_dir: Path) -> list[str]:
         """查找目录中的模型文件
 
         Args:
@@ -216,7 +216,7 @@ class TrainingOutputScanner:
             pass
         return sorted(model_files)
 
-    def _find_config_file(self, run_dir: Path) -> Optional[str]:
+    def _find_config_file(self, run_dir: Path) -> str | None:
         """查找配置文件
 
         Args:
@@ -278,7 +278,7 @@ class TrainingOutputScanner:
 
     def get_training_config(
         self, run_info: TrainingRunInfo
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """获取训练配置
 
         Args:
@@ -292,7 +292,7 @@ class TrainingOutputScanner:
 
         try:
             config_path = Path(run_info.config_path)
-            with open(config_path, "r", encoding="utf-8") as f:
+            with open(config_path, encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             import warnings
@@ -305,7 +305,7 @@ class TrainingConfigParser:
     """训练配置解析器类"""
 
     @staticmethod
-    def parse(config_path: str) -> Optional[Dict[str, Any]]:
+    def parse(config_path: str) -> dict[str, Any] | None:
         """解析训练配置文件
 
         Args:
@@ -331,7 +331,7 @@ class TrainingConfigParser:
             if not check_file_size(str(path)):
                 return None
 
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 raw_config = json.load(f)
 
             # 提取并结构化配置
@@ -359,7 +359,7 @@ class TrainingConfigParser:
             return None
 
     @staticmethod
-    def _extract_metadata(config: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_metadata(config: dict[str, Any]) -> dict[str, Any]:
         """提取元数据信息
 
         Args:
@@ -378,7 +378,7 @@ class TrainingConfigParser:
         }
 
     @staticmethod
-    def _extract_model_architecture(config: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_model_architecture(config: dict[str, Any]) -> dict[str, Any]:
         """提取模型架构参数
 
         Args:
@@ -395,7 +395,7 @@ class TrainingConfigParser:
         }
 
     @staticmethod
-    def _extract_training_parameters(config: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_training_parameters(config: dict[str, Any]) -> dict[str, Any]:
         """提取训练参数
 
         Args:
@@ -422,7 +422,7 @@ class TrainingConfigParser:
         }
 
     @staticmethod
-    def _extract_physics_weights(config: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_physics_weights(config: dict[str, Any]) -> dict[str, Any]:
         """提取物理权重
 
         Args:
@@ -445,7 +445,7 @@ class TrainingConfigParser:
         }
 
     @staticmethod
-    def _extract_data_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_data_config(config: dict[str, Any]) -> dict[str, Any]:
         """提取数据配置
 
         Args:
@@ -465,7 +465,7 @@ class TrainingConfigParser:
         }
 
     @staticmethod
-    def _extract_dynamic_weight_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_dynamic_weight_config(config: dict[str, Any]) -> dict[str, Any]:
         """提取动态权重配置
 
         Args:
@@ -492,7 +492,7 @@ class LossDataParser:
     """损失数据解析器类"""
 
     @staticmethod
-    def parse(csv_path: str) -> Optional[pd.DataFrame]:
+    def parse(csv_path: str) -> pd.DataFrame | None:
         """解析损失数据CSV文件
 
         Args:
@@ -554,7 +554,7 @@ class MetricsParser:
     """评估指标解析器类"""
 
     @staticmethod
-    def parse_rmse(csv_path: str) -> Optional[pd.DataFrame]:
+    def parse_rmse(csv_path: str) -> pd.DataFrame | None:
         """解析RMSE数据CSV文件
 
         Args:
@@ -594,7 +594,7 @@ class MetricsParser:
             return None
 
     @staticmethod
-    def parse_volume_stats(csv_path: str) -> Optional[pd.DataFrame]:
+    def parse_volume_stats(csv_path: str) -> pd.DataFrame | None:
         """解析体积统计数据CSV文件
 
         Args:
@@ -654,9 +654,9 @@ class ModelInfo:
 
     model_path: str
     model_type: str
-    epoch: Optional[int]
+    epoch: int | None
     file_size: int
-    architecture: Dict[str, Any]
+    architecture: dict[str, Any]
 
 
 class ModelLoader:
@@ -698,7 +698,7 @@ class ModelLoader:
         run_path: str,
         model_type: str = "best",
         device: str = "cpu",
-        config_path: Optional[str] = None,
+        config_path: str | None = None,
     ) -> tuple:
         """加载模型
 
@@ -718,6 +718,7 @@ class ModelLoader:
         """
         try:
             import torch
+
             from src.models.pinn_two_phase import TwoPhasePINN
         except ImportError as e:
             warnings.warn(f"导入必要的模块失败: {e}")
@@ -839,8 +840,8 @@ class ModelLoader:
 
     @staticmethod
     def _load_config(
-        run_dir: Path, config_path: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
+        run_dir: Path, config_path: str | None = None
+    ) -> dict[str, Any] | None:
         """加载配置文件
 
         Args:
@@ -859,14 +860,14 @@ class ModelLoader:
             return None
 
         try:
-            with open(config_file, "r", encoding="utf-8") as f:
+            with open(config_file, encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             warnings.warn(f"加载配置文件失败: {e}")
             return None
 
     @staticmethod
-    def _build_model_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_model_config(config: dict[str, Any]) -> dict[str, Any]:
         """构建模型配置
 
         从完整配置中提取模型架构参数。
@@ -892,7 +893,7 @@ class ModelLoader:
         return model_config
 
     @staticmethod
-    def list_available_models(run_path: str) -> List[Dict[str, Any]]:
+    def list_available_models(run_path: str) -> list[dict[str, Any]]:
         """列出训练运行目录中所有可用的模型
 
         Args:
@@ -960,9 +961,9 @@ class TrainingOutputAnalyzer:
         """
         self.train_outputs_dir = train_outputs_dir
         self.scanner = TrainingOutputScanner(train_outputs_dir)
-        self._runs_cache: Optional[List[TrainingRunInfo]] = None
+        self._runs_cache: list[TrainingRunInfo] | None = None
 
-    def _get_runs(self, force_refresh: bool = False) -> List[TrainingRunInfo]:
+    def _get_runs(self, force_refresh: bool = False) -> list[TrainingRunInfo]:
         """获取训练运行列表（带缓存）
 
         Args:
@@ -1169,9 +1170,9 @@ class TrainingOutputAnalyzer:
                 st.metric("平均学习率", f"{float(df['lr'].mean()):.4e}")
             with col3:
                 st.metric("训练阶段数", int(df["stage"].nunique()))
-                st.metric("总轮次", int(len(df)))
+                st.metric("总轮次", len(df))
 
-    def _find_loss_csv(self, run_path: str) -> Optional[str]:
+    def _find_loss_csv(self, run_path: str) -> str | None:
         """查找训练运行目录中的损失 CSV 文件
 
         Args:
@@ -1448,7 +1449,7 @@ class TrainingOutputAnalyzer:
         else:
             st.info("未找到体积统计数据文件 (volume_trend_stats.csv)")
 
-    def _find_metrics_file(self, run_path: str, filename: str) -> Optional[str]:
+    def _find_metrics_file(self, run_path: str, filename: str) -> str | None:
         """在训练运行目录中查找指标文件
 
         Args:
@@ -1464,7 +1465,7 @@ class TrainingOutputAnalyzer:
         return None
 
     def _render_metrics_summary_cards(
-        self, run: TrainingRunInfo, rmse_path: Optional[str], volume_path: Optional[str]
+        self, run: TrainingRunInfo, rmse_path: str | None, volume_path: str | None
     ) -> None:
         """渲染指标摘要信息卡片
 
@@ -1481,7 +1482,7 @@ class TrainingOutputAnalyzer:
         with col1:
             # 运行名称卡片
             st.markdown(
-                """
+                f"""
                 <div style="
                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                     border-radius: 12px;
@@ -1490,11 +1491,9 @@ class TrainingOutputAnalyzer:
                     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
                 ">
                     <div style="font-size: 12px; opacity: 0.8; margin-bottom: 8px;">📁 训练运行</div>
-                    <div style="font-size: 18px; font-weight: bold;">{}</div>
+                    <div style="font-size: 18px; font-weight: bold;">{run.name}</div>
                 </div>
-                """.format(
-                    run.name
-                ),
+                """,
                 unsafe_allow_html=True,
             )
 
@@ -1502,7 +1501,7 @@ class TrainingOutputAnalyzer:
             # 创建时间卡片
             time_str = run.creation_time.strftime("%Y-%m-%d %H:%M")
             st.markdown(
-                """
+                f"""
                 <div style="
                     background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
                     border-radius: 12px;
@@ -1511,18 +1510,16 @@ class TrainingOutputAnalyzer:
                     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
                 ">
                     <div style="font-size: 12px; opacity: 0.8; margin-bottom: 8px;">🕐 创建时间</div>
-                    <div style="font-size: 18px; font-weight: bold;">{}</div>
+                    <div style="font-size: 18px; font-weight: bold;">{time_str}</div>
                 </div>
-                """.format(
-                    time_str
-                ),
+                """,
                 unsafe_allow_html=True,
             )
 
         with col3:
             # 模型数量卡片
             st.markdown(
-                """
+                f"""
                 <div style="
                     background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
                     border-radius: 12px;
@@ -1531,12 +1528,10 @@ class TrainingOutputAnalyzer:
                     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
                 ">
                     <div style="font-size: 12px; opacity: 0.8; margin-bottom: 8px;">📦 模型文件</div>
-                    <div style="font-size: 24px; font-weight: bold;">{}</div>
+                    <div style="font-size: 24px; font-weight: bold;">{len(run.model_files)}</div>
                     <div style="font-size: 12px; opacity: 0.8;">个检查点</div>
                 </div>
-                """.format(
-                    len(run.model_files)
-                ),
+                """,
                 unsafe_allow_html=True,
             )
 
@@ -1561,8 +1556,8 @@ class TrainingOutputAnalyzer:
         Args:
             df: RMSE 数据 DataFrame
         """
-        import streamlit as st
         import plotly.graph_objects as go
+        import streamlit as st
 
         st.markdown("#### 📈 RMSE 按电压分布")
 
@@ -1861,7 +1856,7 @@ class TrainingOutputAnalyzer:
                     st.markdown(f"*{config['description']}*")
                     self._render_image_grid(images)
 
-    def _find_image_files(self, run_path: str) -> List[str]:
+    def _find_image_files(self, run_path: str) -> list[str]:
         """查找训练运行目录中的所有图像文件
 
         Args:
@@ -1888,7 +1883,7 @@ class TrainingOutputAnalyzer:
 
         return sorted(image_files)
 
-    def _group_images_by_type(self, image_files: List[str]) -> Dict[str, List[str]]:
+    def _group_images_by_type(self, image_files: list[str]) -> dict[str, list[str]]:
         """按类型分组图像文件
 
         Args:
@@ -1946,7 +1941,7 @@ class TrainingOutputAnalyzer:
 
         return groups
 
-    def _render_image_grid(self, image_files: List[str], columns: int = 2) -> None:
+    def _render_image_grid(self, image_files: list[str], columns: int = 2) -> None:
         """渲染图像网格
 
         Args:
@@ -2200,8 +2195,8 @@ class TrainingOutputAnalyzer:
         self, selected_model_info, Lx, Ly, Lz, V_max, t_max
     ):
         """渲染轨迹预测子标签页 (Task 5)"""
-        import streamlit as st
         import numpy as np
+        import streamlit as st
 
         st.markdown("#### 🎯 轨迹预测")
         st.markdown("预测特定空间点在时间序列上的物理量演化。")
@@ -2307,10 +2302,10 @@ class TrainingOutputAnalyzer:
         self, checkpoint_path: str, point: tuple, voltage: float, t_array: np.ndarray
     ):
         """执行轨迹预测并显示结果"""
-        import streamlit as st
+        import numpy as np
         import plotly.graph_objects as go
         from plotly.subplots import make_subplots
-        import numpy as np
+        import streamlit as st
 
         st.markdown("#### 📊 轨迹预测结果")
 
@@ -2576,9 +2571,9 @@ class TrainingOutputAnalyzer:
         Lz: float,
     ):
         """执行切片预测并显示结果"""
-        import streamlit as st
         import plotly.graph_objects as go
         from plotly.subplots import make_subplots
+        import streamlit as st
 
         st.markdown("#### 📊 切片可视化结果")
 
@@ -2762,8 +2757,8 @@ class TrainingOutputAnalyzer:
             checkpoint_path: 模型检查点路径 (.pth 文件)
             inputs: (x, y, z, V_from, V_to, t_since) 元组
         """
-        import streamlit as st
         import plotly.graph_objects as go
+        import streamlit as st
 
         st.markdown("#### 📊 推理结果")
 

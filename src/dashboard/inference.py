@@ -1,9 +1,10 @@
-import torch
-import numpy as np
-import logging
-from typing import Dict, Tuple, Callable
+from collections.abc import Callable
 import json
+import logging
 from pathlib import Path
+
+import numpy as np
+import torch
 
 # Project imports
 from src.models.pinn_two_phase import TwoPhasePINN
@@ -57,7 +58,7 @@ class PINNInferenceEngine:
             file_config = {}
             config_path = self.checkpoint_path.parent / "config.json"
             if config_path.exists():
-                with open(config_path, "r") as f:
+                with open(config_path) as f:
                     file_config = json.load(f)
 
             if ckpt_config:
@@ -150,7 +151,7 @@ class PINNInferenceEngine:
         pos: float = 0.5,
         res: int = 100,
         voltage_from: float = 0.0,
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """
         Predict 2D slice of the field
         """
@@ -247,7 +248,7 @@ class PINNInferenceEngine:
         plane: str = "xz",
         slice_val: float = 0.5,
         resolution: int = 100,
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """Wrapper for predict_field_slice to match dashboard API"""
         axis_map = {"xy": "z", "xz": "y", "yz": "x"}
         axis = axis_map.get(plane, "z")
@@ -292,7 +293,7 @@ class PINNInferenceEngine:
         voltage_to: float,
         resolution_xy: int = 40,
         resolution_z: int = 10,
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """Predict full 3D volume field"""
         x = np.linspace(0, self.Lx, resolution_xy)
         y = np.linspace(0, self.Ly, resolution_xy)
@@ -365,8 +366,8 @@ class PINNInferenceEngine:
         }
 
     def predict_point_trajectory(
-        self, voltage: float, t_array: np.ndarray, point: Tuple[float, float, float]
-    ) -> Dict[str, np.ndarray]:
+        self, voltage: float, t_array: np.ndarray, point: tuple[float, float, float]
+    ) -> dict[str, np.ndarray]:
         """Predict time evolution at a specific point"""
         x, y, z = point
         n_t = len(t_array)
@@ -420,7 +421,7 @@ class PINNInferenceEngine:
 
     def predict_trajectory(
         self, func: Callable, t_sim: np.ndarray
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """
         Predict aperture ratio trajectory for a dynamic waveform.
         func: t -> (v_from, v_to, t_local)
@@ -524,7 +525,7 @@ class PINNInferenceEngine:
 
     def predict_point(
         self, x: float, y: float, z: float, V_from: float, V_to: float, t_since: float
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Single-point 6D Triad inference.
 
@@ -578,7 +579,7 @@ class PINNInferenceEngine:
             "phi": float(output[0, 4]),
         }
 
-    def predict_batch(self, points: np.ndarray) -> Dict[str, np.ndarray]:
+    def predict_batch(self, points: np.ndarray) -> dict[str, np.ndarray]:
         """
         Batch inference for multiple 6D Triad points.
 
@@ -636,7 +637,7 @@ class PINNInferenceEngine:
 
     def check_point_physics(
         self, x: float, y: float, z: float, V_from: float, V_to: float, t_since: float
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Physics validation for a single 6D Triad point.
 
@@ -693,7 +694,7 @@ class PINNInferenceEngine:
         voltage_to: float,
         plane: str = "xz",
         resolution: int = 64,
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """Compute physics residuals"""
         # Create input tensor requiring grad
         axis_map = {"xy": "z", "xz": "y", "yz": "x"}

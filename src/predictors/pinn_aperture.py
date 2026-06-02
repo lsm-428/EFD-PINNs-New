@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 PINN 开口率预测器
 ================
@@ -18,7 +17,6 @@ PINN 开口率预测器
 import glob
 import logging
 import os
-from typing import Dict, Optional, Tuple
 
 import numpy as np
 import torch
@@ -43,7 +41,7 @@ class PINNAperturePredictor:
     """
 
     def __init__(
-        self, checkpoint_path: Optional[str] = None, device: Optional[str] = None
+        self, checkpoint_path: str | None = None, device: str | None = None
     ):
         """
         初始化预测器
@@ -101,7 +99,7 @@ class PINNAperturePredictor:
     def _load_model(self, checkpoint_path: str):
         """加载模型"""
         try:
-            from src.models.pinn_two_phase import TwoPhasePINN, DEFAULT_CONFIG
+            from src.models.pinn_two_phase import DEFAULT_CONFIG, TwoPhasePINN
             from src.utils.model_utils import load_model_with_mismatch_handling
 
             checkpoint = torch.load(
@@ -201,8 +199,8 @@ class PINNAperturePredictor:
         return phi.reshape(n_points, n_points)
 
     def predict_full_field(
-        self, voltage: float, time: float, n_points: Tuple[int, int, int] = (50, 50, 20)
-    ) -> Dict[str, np.ndarray]:
+        self, voltage: float, time: float, n_points: tuple[int, int, int] = (50, 50, 20)
+    ) -> dict[str, np.ndarray]:
         """
         预测完整的 3D 场
 
@@ -298,8 +296,7 @@ class PINNAperturePredictor:
                     # 没有接触线，检查整体状态
                     if np.mean(phi_field) < TRANSPARENT_THRESHOLD:
                         return 1.0  # 全透明
-                    else:
-                        return 0.0  # 无开口
+                    return 0.0  # 无开口
 
                 # 计算所有闭合轮廓围成的面积
                 total_area = 0.0
@@ -444,7 +441,7 @@ class PINNAperturePredictor:
 
     def get_interface_contour(
         self, voltage: float, time: float, n_points: int = 100, level: float = 0.5
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         获取油水界面轮廓 (φ=0.5)
 
@@ -479,8 +476,7 @@ class PINNAperturePredictor:
         if contour_points:
             all_points = np.vstack(contour_points)
             return all_points[:, 0], all_points[:, 1]
-        else:
-            return np.array([]), np.array([])
+        return np.array([]), np.array([])
 
 
 # 便捷函数

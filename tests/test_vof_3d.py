@@ -16,8 +16,8 @@ Usage:
     python tests/test_vof_3d.py --visualize
 """
 
-import sys
 from pathlib import Path
+import sys
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -234,7 +234,6 @@ def generate_3d_visualization(output_dir="outputs/analysis"):
     print("  [INFO] 3D visualization requires display connection")
     print("  [INFO] On headless systems, export PYVISTA_OFF_SCREEN=1")
     print("  [INFO] Or use: tests/test_vof_3d.py --visualize")
-    return None
 
 
 if __name__ == "__main__":

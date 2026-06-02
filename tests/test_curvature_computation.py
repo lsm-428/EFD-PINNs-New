@@ -14,8 +14,8 @@
 - 球面解析解：κ = 2/R
 """
 
-import torch
 import pytest
+import torch
 
 
 def _compute_curvature_logic(phi_grads):

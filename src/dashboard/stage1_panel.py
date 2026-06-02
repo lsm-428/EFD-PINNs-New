@@ -5,16 +5,16 @@ Stage 1 分析模型演示面板组件
 用于在 Streamlit 仪表板中演示 Stage 1 分析模型（接触角/开口率预测）。
 """
 
-import streamlit as st
+from typing import Any
+
 import numpy as np
 import pandas as pd
-from typing import Dict, Any, Tuple
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import streamlit as st
 
-from src.models.aperture_model import EnhancedApertureModel
 from src.config import PHYSICS
-
+from src.models.aperture_model import EnhancedApertureModel
 
 # ============================================================================
 # Core Model Functions
@@ -34,7 +34,7 @@ def get_stage1_model() -> EnhancedApertureModel:
 
 def compute_steady_state(
     model: EnhancedApertureModel, voltage: float
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Compute steady state contact angle and aperture ratio.
 
@@ -69,7 +69,7 @@ def compute_dynamic_response(
     V_to: float,
     duration: float = 0.05,
     num_points: int = 500,
-) -> Dict[str, np.ndarray]:
+) -> dict[str, np.ndarray]:
     """
     Compute dynamic response for voltage jump.
 
@@ -116,7 +116,7 @@ def compute_dynamic_response(
 
 
 def create_stage1_plots(
-    results: Dict[str, Any], plot_type: str = "dynamic"
+    results: dict[str, Any], plot_type: str = "dynamic"
 ) -> go.Figure:
     """
     Create Plotly figure for Stage 1 results.
@@ -617,7 +617,7 @@ def render_young_lippmann_theory():
     st.table(example_df)
 
 
-def render_voltage_sequence_input() -> Tuple[float, float, float]:
+def render_voltage_sequence_input() -> tuple[float, float, float]:
     """
     Render voltage sequence input controls in Streamlit.
 

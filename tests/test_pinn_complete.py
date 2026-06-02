@@ -16,26 +16,28 @@ PINN 模型完整测试套件
 作者: EFD-PINNs Team
 """
 
-import os
-import sys
+import argparse
 import glob
 import json
-import argparse
+import os
+import sys
+
+import matplotlib
 import numpy as np
 import torch
-import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from typing import Dict, Tuple
 import warnings
+
+import matplotlib.pyplot as plt
 
 warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.models.pinn_two_phase import TwoPhasePINN, PHYSICS, DEFAULT_CONFIG
 from matplotlib.colors import LinearSegmentedColormap
+
+from src.models.pinn_two_phase import DEFAULT_CONFIG, PHYSICS, TwoPhasePINN
 
 # 设置字体
 plt.rcParams["font.family"] = "DejaVu Sans"
@@ -50,7 +52,7 @@ EWD_CMAP = LinearSegmentedColormap.from_list("EWD", ["#E0FFFF", "#FF00FF"])
 # ============================================================================
 
 
-def load_model(checkpoint_path: str) -> Tuple[TwoPhasePINN, torch.device, Dict]:
+def load_model(checkpoint_path: str) -> tuple[TwoPhasePINN, torch.device, dict]:
     """加载模型和配置"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
@@ -91,7 +93,7 @@ def predict_phi(model, device, x, y, z, V_from, V_to, t_since) -> np.ndarray:
 
 def compute_aperture(
     model, device, V_from, V_to, t_since, n=50
-) -> Tuple[float, np.ndarray]:
+) -> tuple[float, np.ndarray]:
     """计算开口率"""
     Lx, Ly, h_ink = PHYSICS["Lx"], PHYSICS["Ly"], PHYSICS["h_ink"]
 
@@ -127,7 +129,7 @@ class PhysicsValidator:
         self.device = device
         self.results = {}
 
-    def test_phi_range(self) -> Dict:
+    def test_phi_range(self) -> dict:
         """测试 φ 值范围 [0, 1]"""
         print("\n[1.1] φ 值范围测试")
 
@@ -149,7 +151,7 @@ class PhysicsValidator:
         self.results["phi_range"] = {"passed": passed, "violations": violations}
         return self.results["phi_range"]
 
-    def test_initial_condition(self) -> Dict:
+    def test_initial_condition(self) -> dict:
         """测试初始条件：t=0 时 φ≈1（油墨覆盖）"""
         print("\n[1.2] 初始条件测试")
 
@@ -167,7 +169,7 @@ class PhysicsValidator:
         self.results["initial_condition"] = {"passed": passed, "errors": errors}
         return self.results["initial_condition"]
 
-    def test_zero_voltage(self) -> Dict:
+    def test_zero_voltage(self) -> dict:
         """测试零电压：V=0 时 φ≈1（油墨不动）"""
         print("\n[1.3] 零电压测试")
 
@@ -184,7 +186,7 @@ class PhysicsValidator:
         self.results["zero_voltage"] = {"passed": passed, "errors": errors}
         return self.results["zero_voltage"]
 
-    def test_monotonicity(self) -> Dict:
+    def test_monotonicity(self) -> dict:
         """测试单调性：η 随时间单调增加（升压时）"""
         print("\n[1.4] 时间单调性测试")
 
@@ -214,7 +216,7 @@ class PhysicsValidator:
         self.results["monotonicity"] = {"passed": passed, "violations": violations}
         return self.results["monotonicity"]
 
-    def test_voltage_response(self) -> Dict:
+    def test_voltage_response(self) -> dict:
         """测试电压响应：η 随电压单调增加"""
         print("\n[1.5] 电压响应测试")
 
@@ -243,11 +245,11 @@ class PhysicsValidator:
         self.results["voltage_response"] = {"passed": passed, "violations": violations}
         return self.results["voltage_response"]
 
-    def test_phi_field_error(self) -> Dict:
+    def test_phi_field_error(self) -> dict:
         """测试 φ 场与目标值的 MAE/MSE"""
         print("\n[1.6] φ 场误差测试 (MAE/MSE)")
 
-        from src.models.pinn_two_phase import DataGenerator, DEFAULT_CONFIG
+        from src.models.pinn_two_phase import DEFAULT_CONFIG, DataGenerator
 
         # 创建数据生成器获取目标值
         data_gen = DataGenerator(DEFAULT_CONFIG, self.device)
@@ -320,7 +322,7 @@ class PhysicsValidator:
         }
         return self.results["phi_field_error"]
 
-    def run_all(self) -> Dict:
+    def run_all(self) -> dict:
         """运行所有物理验证"""
         print("\n" + "=" * 60)
         print("1. 物理验证测试")
@@ -381,7 +383,7 @@ class AnalyticalComparator:
 
         return eta
 
-    def test_steady_state(self) -> Dict:
+    def test_steady_state(self) -> dict:
         """测试稳态开口率"""
         print("\n[2.1] 稳态开口率对比")
 
@@ -404,7 +406,7 @@ class AnalyticalComparator:
         self.results["steady_state"] = {"passed": passed, "mae": mae, "details": errors}
         return self.results["steady_state"]
 
-    def test_dynamic_response(self) -> Dict:
+    def test_dynamic_response(self) -> dict:
         """测试动态响应"""
         print("\n[2.2] 动态响应对比")
 
@@ -431,7 +433,7 @@ class AnalyticalComparator:
         }
         return self.results["dynamic_response"]
 
-    def test_recovery(self) -> Dict:
+    def test_recovery(self) -> dict:
         """测试降压恢复"""
         print("\n[2.3] 降压恢复测试")
 
@@ -455,7 +457,7 @@ class AnalyticalComparator:
         self.results["recovery"] = {"passed": passed, "etas": etas, "times": times}
         return self.results["recovery"]
 
-    def run_all(self) -> Dict:
+    def run_all(self) -> dict:
         """运行所有解析对比"""
         print("\n" + "=" * 60)
         print("2. 解析对比测试")
@@ -485,7 +487,7 @@ class RobustnessValidator:
         self.device = device
         self.results = {}
 
-    def test_input_noise(self) -> Dict:
+    def test_input_noise(self) -> dict:
         """测试输入噪声敏感性"""
         print("\n[3.1] 输入噪声敏感性")
 
@@ -542,7 +544,7 @@ class RobustnessValidator:
         self.results["input_noise"] = {"passed": passed, "sensitivities": sensitivities}
         return self.results["input_noise"]
 
-    def test_high_voltage_stability(self) -> Dict:
+    def test_high_voltage_stability(self) -> dict:
         """测试高电压稳定性 (实际工作: 0-20V, 训练: 0-30V)"""
         print("\n[3.2] 高电压稳定性测试 (20-30V)")
 
@@ -578,7 +580,7 @@ class RobustnessValidator:
         }
         return self.results["high_voltage_stability"]
 
-    def test_time_extrapolation(self) -> Dict:
+    def test_time_extrapolation(self) -> dict:
         """测试时间外推 (训练范围: 0-50ms)"""
         print("\n[3.3] 时间外推测试 (Train: 0-50ms)")
 
@@ -625,7 +627,7 @@ class RobustnessValidator:
         }
         return self.results["time_extrapolation"]
 
-    def test_boundary_cases(self) -> Dict:
+    def test_boundary_cases(self) -> dict:
         """测试边界情况"""
         print("\n[3.4] 边界情况测试")
 
@@ -656,7 +658,7 @@ class RobustnessValidator:
         self.results["boundary_cases"] = {"passed": passed, "errors": errors}
         return self.results["boundary_cases"]
 
-    def test_intermediate_voltages(self) -> Dict:
+    def test_intermediate_voltages(self) -> dict:
         """测试中间电压（训练数据稀疏区域）"""
         print("\n[3.5] 中间电压测试")
 
@@ -688,7 +690,7 @@ class RobustnessValidator:
         self.results["intermediate_voltages"] = {"passed": passed, "errors": errors}
         return self.results["intermediate_voltages"]
 
-    def run_all(self) -> Dict:
+    def run_all(self) -> dict:
         """运行所有鲁棒性测试"""
         print("\n" + "=" * 60)
         print("3. 鲁棒性测试")
@@ -712,7 +714,7 @@ class RobustnessValidator:
 # ============================================================================
 
 
-def generate_report(model, device, output_dir: str, results: Dict):
+def generate_report(model, device, output_dir: str, results: dict):
     """生成可视化测试报告"""
     print("\n" + "=" * 60)
     print("生成测试报告")
@@ -858,15 +860,15 @@ def generate_report(model, device, output_dir: str, results: Dict):
     def convert_to_serializable(obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
-        elif isinstance(obj, (np.float32, np.float64)):
+        if isinstance(obj, (np.float32, np.float64)):
             return float(obj)
-        elif isinstance(obj, (np.int32, np.int64)):
+        if isinstance(obj, (np.int32, np.int64)):
             return int(obj)
-        elif isinstance(obj, (np.bool_, bool)):
+        if isinstance(obj, (np.bool_, bool)):
             return bool(obj)
-        elif isinstance(obj, dict):
+        if isinstance(obj, dict):
             return {k: convert_to_serializable(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
+        if isinstance(obj, list):
             return [convert_to_serializable(v) for v in obj]
         return obj
 
@@ -883,7 +885,7 @@ def generate_report(model, device, output_dir: str, results: Dict):
 # ============================================================================
 
 
-def run_complete_test(model_dir: str) -> Dict:
+def run_complete_test(model_dir: str) -> dict:
     """运行完整测试"""
     print("\n" + "#" * 60)
     print("# PINN 模型完整测试")
@@ -999,3 +1001,122 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ============================================================================
+# pytest 兼容测试 (不依赖已训练模型)
+# ============================================================================
+
+
+
+class _MockModel:
+    """模拟 PINN 模型，返回合理的伪输出"""
+    def __init__(self, mode="flat"):
+        self.mode = mode
+
+    def __call__(self, x):
+        n = x.shape[0]
+        out = torch.zeros(n, 5)
+        if self.mode == "flat":
+            out[:, 4] = 0.8  # oil covered
+        elif self.mode == "open":
+            out[:, 4] = 0.1  # water covered
+        return out
+
+    def eval(self):
+        pass
+
+
+def test_load_model_nonexistent():
+    """验证模型文件不存在时 gracefully handle error"""
+    try:
+        result = load_model("/nonexistent/path/model.pth")
+        assert result is None, "load_model should return None for nonexistent path"
+    except (FileNotFoundError, RuntimeError):
+        pass  # Exception is also acceptable behavior
+
+
+def test_compute_aperture_mock():
+    """验证开口率计算基本正确性 (mock 数据)"""
+    mock = _MockModel("flat")
+
+    eta, phi = compute_aperture(mock, torch.device("cpu"), 0, 30, 0.015, n=20)
+
+    assert 0 <= eta <= 1, f"eta should be in [0,1], got {eta:.3f}"
+    assert phi.shape == (20, 20), f"phi shape should be (20,20), got {phi.shape}"
+
+
+def test_physics_validator_mock():
+    """验证 PhysicsValidator 各测试返回 passed 标志 (mock)"""
+    mock = _MockModel("flat")
+    validator = PhysicsValidator(mock, torch.device("cpu"))
+
+    results = validator.run_all()
+
+    assert isinstance(results, dict)
+    assert len(results) > 0
+
+    for category, tests in results.items():
+        assert isinstance(tests, dict), f"{category} should be dict"
+        for test_name, test_result in tests.items():
+            assert test_result is not None, \
+                f"{category}.{test_name} result should not be None"
+
+
+def test_analytical_comparator_mock():
+    """验证 AnalyticalComparator 能运行并产生结果 (mock)"""
+    mock = _MockModel("flat")
+    comparator = AnalyticalComparator(mock, torch.device("cpu"))
+
+    results = comparator.run_all()
+
+    assert isinstance(results, dict)
+    assert len(results) > 0
+    for tests in results.values():
+        for t in tests.values():
+            assert t is not None, f"Result should not be None, got {type(t)}"
+
+
+def test_robustness_validator_mock():
+    """验证 RobustnessValidator 各子测试正常执行 (mock)"""
+    mock = _MockModel("flat")
+    validator = RobustnessValidator(mock, torch.device("cpu"))
+
+    results = validator.run_all()
+
+    assert isinstance(results, dict)
+    assert len(results) >= 5, "Should have at least 5 robustness sub-tests"
+
+    for test_name, test_result in results.items():
+        assert "passed" in test_result, f"{test_name} missing passed flag"
+
+
+def test_run_complete_test_nonexistent():
+    """验证 run_complete_test 对不存在目录返回 None"""
+    result = run_complete_test("/nonexistent/dir")
+    assert result is None, "Should return None for nonexistent directory"
+
+
+def test_compute_aperture_open():
+    """验证全开口状态的开口率 (mock, open)"""
+    mock_open = _MockModel("open")
+
+    eta, _ = compute_aperture(mock_open, torch.device("cpu"), 0, 30, 0.015, n=20)
+
+    # phi < 0.3 视为开口 → 全开口时 eta 应接近 1
+    assert eta > 0.5, f"Open mock should give eta > 0.5, got {eta:.3f}"
+
+
+def test_phi_bounds():
+    """验证 predict_phi 返回的 phi 在 [0,1] 范围内"""
+    mock = _MockModel("flat")
+    Lx = PHYSICS["Lx"]
+
+    phi = predict_phi(
+        mock, torch.device("cpu"),
+        np.array([Lx / 2]), np.array([Lx / 2]),
+        np.array([1e-6]), 0, 30, 0.015
+    )
+
+    assert phi.shape == (1,)
+    assert 0 <= phi[0] <= 1, f"phi should be in [0,1], got {phi[0]:.3f}"

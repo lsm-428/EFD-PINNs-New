@@ -11,7 +11,7 @@ For environments without param:
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class DataStoreBase:
@@ -31,12 +31,12 @@ class DataStoreBase:
     def __init__(self) -> None:
         """Initialize DataStore with default state."""
         # Model paths state
-        self.model_paths: List[str] = []
+        self.model_paths: list[str] = []
 
-        self.current_model_path: Optional[str] = None
+        self.current_model_path: str | None = None
 
         # Simulation parameters (6D Triad format: [x, y, z, V_from, V_to, t_since])
-        self.current_parameters: Dict[str, float] = {
+        self.current_parameters: dict[str, float] = {
             "x": 0.0,
             "y": 0.0,
             "z": 0.0,
@@ -46,12 +46,12 @@ class DataStoreBase:
         }
 
         # Cached results
-        self.cached_results: Dict[str, Any] = {}
+        self.cached_results: dict[str, Any] = {}
 
         # Timestamp for updates
         self.last_updated: float = time.time()
 
-    def update_model_paths(self, paths: List[str]) -> None:
+    def update_model_paths(self, paths: list[str]) -> None:
         """Update available model paths.
 
         Args:
@@ -79,7 +79,7 @@ class DataStoreBase:
         self.cached_results[key] = results
         self.last_updated = time.time()
 
-    def get_cached(self, key: str) -> Optional[Any]:
+    def get_cached(self, key: str) -> Any | None:
         """Get cached results by key.
 
         Args:

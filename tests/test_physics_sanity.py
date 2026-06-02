@@ -11,10 +11,11 @@
 Created: 2025-12-31
 """
 
-import torch
-import pytest
-import sys
 import os
+import sys
+
+import pytest
+import torch
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -49,8 +50,8 @@ class TestParameterConsistency:
 
     def test_physics_constraints_uses_unified_config(self):
         """验证 PhysicsConstraints 使用统一配置"""
-        from src.physics.constraints import PhysicsConstraints
         from src.config import get_materials_params
+        from src.physics.constraints import PhysicsConstraints
 
         materials = get_materials_params()
         pc = PhysicsConstraints(materials_params=materials)

@@ -6,11 +6,11 @@ Standardized plotting utilities for EFD3D project.
 Ensures consistent styling (fonts, labels, colormaps) across Web App, CLI, and Notebooks.
 """
 
-import matplotlib.pyplot as plt
+
 import matplotlib
+import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objects as go
-from typing import Optional, Dict
 
 try:
     import pyvista as pv
@@ -41,18 +41,17 @@ class FlowFieldPlotter:
         grid_key = f"{key}_grid"
         if grid_key in data:
             return data[grid_key]
-        elif key in data:
+        if key in data:
             return data[key]
-        else:
-            raise KeyError(
-                f"Neither '{grid_key}' nor '{key}' found in data. Available keys: {list(data.keys())}"
-            )
+        raise KeyError(
+            f"Neither '{grid_key}' nor '{key}' found in data. Available keys: {list(data.keys())}"
+        )
 
     def plot_phase_field(
         self,
         ax: matplotlib.axes.Axes,
-        data: Dict[str, np.ndarray],
-        title: Optional[str] = None,
+        data: dict[str, np.ndarray],
+        title: str | None = None,
     ):
         """
         Plot Phase Field (Phi) Contour.
@@ -94,8 +93,8 @@ class FlowFieldPlotter:
     def plot_velocity_field(
         self,
         ax: matplotlib.axes.Axes,
-        data: Dict[str, np.ndarray],
-        title: Optional[str] = None,
+        data: dict[str, np.ndarray],
+        title: str | None = None,
     ):
         """
         Plot Velocity Magnitude and Streamlines.
@@ -143,7 +142,7 @@ class FlowFieldPlotter:
         ax: matplotlib.axes.Axes,
         t: np.ndarray,
         eta: np.ndarray,
-        highlight_t: Optional[float] = None,
+        highlight_t: float | None = None,
     ):
         """
         Plot Aperture Ratio vs Time.
@@ -178,7 +177,7 @@ class FlowFieldPlotter:
         ax.legend()
 
     def create_dashboard_figure(
-        self, data: Dict[str, np.ndarray], show_electric_field: bool = False
+        self, data: dict[str, np.ndarray], show_electric_field: bool = False
     ):
         """
         Create a combined figure for dashboard view.
@@ -208,8 +207,8 @@ class FlowFieldPlotter:
     def plot_electric_potential(
         self,
         ax: matplotlib.axes.Axes,
-        data: Dict[str, np.ndarray],
-        title: Optional[str] = None,
+        data: dict[str, np.ndarray],
+        title: str | None = None,
     ):
         """
         Plot Electric Potential (Psi).
@@ -234,7 +233,7 @@ class FlowFieldPlotter:
 
         return im
 
-    def plot_residual_heatmap(self, data: Dict[str, np.ndarray], residual_key: str):
+    def plot_residual_heatmap(self, data: dict[str, np.ndarray], residual_key: str):
         """
         Plot heatmap for a specific residual field.
         """
@@ -267,7 +266,7 @@ class FlowFieldPlotter:
         return fig
 
     def generate_3d_html(
-        self, data: Dict[str, np.ndarray], filename: str = "temp_viz.html"
+        self, data: dict[str, np.ndarray], filename: str = "temp_viz.html"
     ) -> str:
         """
         Generate high-quality 3D visualization using PyVista (VTK).
@@ -333,7 +332,7 @@ class FlowFieldPlotter:
         return filename
 
     def create_3d_isosurface_figure(
-        self, data: Dict[str, np.ndarray], isovalue: float = 0.5
+        self, data: dict[str, np.ndarray], isovalue: float = 0.5
     ):
         """
         Create a 3D interactive plot using Plotly.

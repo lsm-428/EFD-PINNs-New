@@ -1,17 +1,16 @@
 from pathlib import Path
-from typing import List, Optional
 
 
 class MarkdownReport:
     """Simple Markdown format report generator."""
 
-    def __init__(self, title: Optional[str] = None) -> None:
+    def __init__(self, title: str | None = None) -> None:
         """Initialize report with optional title.
 
         Args:
             title: Optional report title
         """
-        self._lines: List[str] = []
+        self._lines: list[str] = []
         if title:
             self.add_title(title)
 
@@ -40,7 +39,7 @@ class MarkdownReport:
         self._lines.append(text)
         return self
 
-    def add_list(self, items: List[str], ordered: bool = False) -> "MarkdownReport":
+    def add_list(self, items: list[str], ordered: bool = False) -> "MarkdownReport":
         """Add a list.
 
         Args:
@@ -55,7 +54,7 @@ class MarkdownReport:
             self._lines.append(f"{prefix}{item}")
         return self
 
-    def add_table(self, headers: List[str], rows: List[List[str]]) -> "MarkdownReport":
+    def add_table(self, headers: list[str], rows: list[list[str]]) -> "MarkdownReport":
         """Add a table.
 
         Args:

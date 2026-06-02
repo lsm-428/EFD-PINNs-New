@@ -10,22 +10,22 @@ Author: EFD-PINNs Team
 Date: 2025-12-03
 """
 
-import pytest
-import numpy as np
-from hypothesis import given, settings, strategies as st
-
-import sys
 import os
+import sys
+
+from hypothesis import given, settings
+from hypothesis import strategies as st
+import numpy as np
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.solvers.flow_solver import (
-    MeshGenerator,
-    InterfaceTracker,
     ContactLineHandler,
+    InterfaceTracker,
+    MeshGenerator,
     create_initial_conditions,
 )
-
 
 # ============================================================
 # 测试策略定义
@@ -667,6 +667,7 @@ class TestPINNSolverProperties:
         **Validates: Requirements 5.3**
         """
         import tempfile
+
         from src.solvers.flow_solver import PINNSolver
 
         solver1 = PINNSolver()
@@ -844,8 +845,9 @@ class TestExportProperties:
         **Feature: ewp-flow-field-solver, Property 12: 导出格式兼容性**
         **Validates: Requirements 7.4**
         """
-        import tempfile
         import os
+        import tempfile
+
         from src.solvers.flow_solver import FlowFieldSimulator
 
         simulator = FlowFieldSimulator()
@@ -872,9 +874,10 @@ class TestExportProperties:
         **Feature: ewp-flow-field-solver, Property 12: 导出格式兼容性**
         **Validates: Requirements 7.4**
         """
-        import tempfile
-        import os
         import json
+        import os
+        import tempfile
+
         from src.solvers.flow_solver import FlowFieldSimulator
 
         simulator = FlowFieldSimulator()
@@ -888,7 +891,7 @@ class TestExportProperties:
             assert os.path.exists(json_file), "JSON file not created"
 
             # 验证可加载
-            with open(json_file, "r") as f:
+            with open(json_file) as f:
                 data = json.load(f)
 
             assert "t" in data, "Missing 't' in JSON"

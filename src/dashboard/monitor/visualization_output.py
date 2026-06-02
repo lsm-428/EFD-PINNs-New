@@ -18,14 +18,13 @@ Usage:
     )
 """
 
-import os
 from datetime import datetime
-from typing import Dict, List, Any
+import os
+from typing import Any
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
-
 
 # =============================================================================
 # Publication-Quality Plotting Settings
@@ -75,7 +74,7 @@ LOSS_COLORS = [
 # =============================================================================
 
 
-def plot_loss_components(records: Dict[str, List[Any]], out_dir: str) -> None:
+def plot_loss_components(records: dict[str, list[Any]], out_dir: str) -> None:
     """
     Plot loss components for publication.
 
@@ -92,7 +91,7 @@ def plot_loss_components(records: Dict[str, List[Any]], out_dir: str) -> None:
 
     # Identify loss components (exclude metadata)
     exclude = {"epoch", "stage", "loss_total", "lr"}
-    component_names = [k for k in records.keys() if k not in exclude]
+    component_names = [k for k in records if k not in exclude]
 
     # Figure 1: Loss curves (log scale)
     fig1, ax1 = plt.subplots(figsize=(5, 3.5))
@@ -180,7 +179,7 @@ def plot_loss_components(records: Dict[str, List[Any]], out_dir: str) -> None:
             print(f"  [OK] Loss fraction: {output_path2_png}")
 
 
-def plot_learning_curve(records: Dict[str, List[Any]], out_dir: str) -> None:
+def plot_learning_curve(records: dict[str, list[Any]], out_dir: str) -> None:
     """
     Plot training loss and learning rate for publication.
 
@@ -231,7 +230,7 @@ def plot_learning_curve(records: Dict[str, List[Any]], out_dir: str) -> None:
 # =============================================================================
 
 
-def generate_html_report(records: Dict[str, List[Any]], out_dir: str) -> None:
+def generate_html_report(records: dict[str, list[Any]], out_dir: str) -> None:
     """
     Generate interactive HTML report with training statistics.
 

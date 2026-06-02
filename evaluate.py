@@ -936,6 +936,303 @@ class PINNEvaluator:
         plt.close()
         print(f"✅ Z-profile plot saved: {output_path}")
 
+
+    # =============================================================================
+    # Feature: Wall-Climb Detection, Steady-State eta(V), Critical Voltage
+    # =============================================================================
+
+    def plot_steady_state_eta(self, model: TwoPhasePINN, output_path: str,
+                               voltages: Optional[List[float]] = None,
+                               t_steady: float = 0.040):
+        """Plot steady-state aperture ratio eta vs voltage.
+
+        This is THE key result: at each voltage, what is the final opening?
+        V_th = voltage where eta starts rising from 0
+        eta_sat = saturated aperture at high voltage
+        """
+        if voltages is None:
+            voltages = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]
+
+        etas = []
+        for V in voltages:
+            eta = self.compute_aperture(model, V, t_steady, V)
+            etas.append(eta)
+            print(f"  V={V:5.1f}V  eta={eta:.4f}")
+
+        etas = np.array(etas)
+
+        # Find threshold voltage (eta > 0.05)
+        v_threshold = None
+        for V, eta_val in zip(voltages, etas):
+            if eta_val > 0.05:
+                v_threshold = V
+                break
+
+        # Find saturation voltage (eta > 0.9 * eta_max)
+        eta_max_val = etas[-1] if len(etas) > 0 else 0
+        v_saturation = None
+        for V, eta_val in zip(voltages, etas):
+            if eta_val > 0.9 * eta_max_val:
+                v_saturation = V
+                break
+
+        # Plot
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.plot(voltages, etas, "b-o", linewidth=2, markersize=5, label="PINN eta(V)")
+
+        # Mark threshold
+        if v_threshold is not None:
+            ax.axvline(v_threshold, color="red", linestyle="--", alpha=0.7,
+                       label=f"V_th ~ {v_threshold:.0f}V (eta>0.05)")
+            idx = voltages.index(v_threshold)
+            ax.scatter([v_threshold], [etas[idx]], color="red", s=80, zorder=5)
+
+        # Mark saturation
+        if v_saturation is not None:
+            ax.axvline(v_saturation, color="green", linestyle="--", alpha=0.7,
+                       label=f"V_sat ~ {v_saturation:.0f}V (eta>0.9*eta_max)")
+
+        # Mark wall-climb danger zone
+        ax.axhspan(0.85, 1.05, alpha=0.1, color="red", label="Wall-climb risk (eta>0.85)")
+        ax.axhline(0.85, color="red", linestyle=":", alpha=0.4)
+
+        ax.set_xlabel("Voltage (V)", fontsize=12)
+        ax.set_ylabel("Aperture Ratio eta", fontsize=12)
+        ax.set_title("Steady-State Aperture vs Voltage (t=40ms)", fontsize=13)
+        ax.set_ylim(-0.05, 1.05)
+        ax.legend(fontsize=9)
+        ax.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=200)
+        plt.close()
+
+        v_th_str = f"{v_threshold}V" if v_threshold else "NOT REACHED"
+        v_sat_str = f"{v_saturation}V" if v_saturation else "NOT REACHED"
+        print(f"\nSteady-State eta(V) Results:")
+        print(f"   V_threshold (eta>0.05): {v_th_str}")
+        print(f"   V_saturation (eta>0.9*eta_max): {v_sat_str}")
+        print(f"   eta at 30V: {etas[-1]:.4f}")
+        print(f"Steady-state eta(V) plot saved: {output_path}")
+
+        return {"voltages": voltages, "etas": etas.tolist(),
+                "v_threshold": v_threshold, "v_saturation": v_saturation}
+
+    def detect_wall_climb(self, model: TwoPhasePINN, output_path: str,
+                           voltages: Optional[List[float]] = None,
+                           t_steady: float = 0.040):
+        """Detect wall-climbing: oil film overflowing the pixel wall.
+
+        Wall-climb = phi > 0 at the pixel boundary (r -> r_wall, z near Lz).
+        In a well-behaved EWD pixel, oil should be confined within the pixel well.
+        If phi is significant near the wall top, the oil is climbing out.
+
+        Checks:
+        1. phi at (r=r_wall, z=Lz) -- wall top corner, should be ~0
+        2. phi along (r=r_wall, z=0..Lz) -- wall edge profile
+        3. phi radial profile at z=0 -- should be confined within pixel radius
+        """
+        if voltages is None:
+            voltages = [0, 5, 10, 15, 20, 25, 30]
+
+        Lx, Ly, Lz = PHYSICS["Lx"], PHYSICS["Ly"], PHYSICS["Lz"]
+        cx, cy = Lx / 2, Ly / 2
+
+        n_r = 50
+        n_z = 50
+
+        results = {}
+
+        fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+
+        # --- Panel 1: Wall-edge phi vs Voltage ---
+        ax1 = axes[0]
+        wall_phi_top = []
+        wall_phi_mid = []
+
+        for V in voltages:
+            z_arr = np.linspace(0, Lz, n_z)
+            inputs = np.zeros((n_z, 6), dtype=np.float32)
+            inputs[:, 0] = Lx
+            inputs[:, 1] = cy
+            inputs[:, 2] = z_arr
+            inputs[:, 3] = V
+            inputs[:, 4] = V
+            inputs[:, 5] = t_steady
+
+            with torch.no_grad():
+                out = model(torch.tensor(inputs, device=self.device))
+                phi_wall = out[:, 4].cpu().numpy()
+
+            wall_phi_top.append(float(phi_wall[-1]))
+            wall_phi_mid.append(float(phi_wall[n_z // 2]))
+            results[V] = {"wall_phi_z": phi_wall.tolist()}
+
+            ax1.plot(z_arr * 1e6, phi_wall, label=f"{V}V", linewidth=1.5)
+
+        ax1.set_xlabel("z (um)")
+        ax1.set_ylabel("phi at wall edge")
+        ax1.set_title("Phase Field Along Wall Edge")
+        ax1.legend(fontsize=7)
+        ax1.grid(True, alpha=0.3)
+        ax1.axhline(0.5, color="k", linestyle=":", alpha=0.3)
+
+        # --- Panel 2: Wall-top phi vs Voltage ---
+        ax2 = axes[1]
+        ax2.plot(voltages, wall_phi_top, "rs-", linewidth=2, markersize=6, label="phi at wall top (z=Lz)")
+        ax2.plot(voltages, wall_phi_mid, "b^-", linewidth=2, markersize=6, label="phi at wall mid (z=Lz/2)")
+        ax2.axhline(0.1, color="orange", linestyle="--", alpha=0.7, label="Warning: phi>0.1")
+        ax2.axhline(0.3, color="red", linestyle="--", alpha=0.7, label="Critical: phi>0.3 (climbing!)")
+        ax2.set_xlabel("Voltage (V)")
+        ax2.set_ylabel("phi at wall edge")
+        ax2.set_title("Wall-Edge Phase vs Voltage")
+        ax2.legend(fontsize=8)
+        ax2.grid(True, alpha=0.3)
+
+        climb_voltages = [V for V, p in zip(voltages, wall_phi_top) if p > 0.3]
+        warn_voltages = [V for V, p in zip(voltages, wall_phi_top) if p > 0.1]
+        print(f"\nWall-Climb Detection Results:")
+        print(f"   Wall-top phi>0.1 (warning) at: {warn_voltages}V")
+        print(f"   Wall-top phi>0.3 (climbing!) at: {climb_voltages}V")
+        if climb_voltages:
+            print(f"   *** OIL CLIMBING DETECTED at V >= {min(climb_voltages)}V! ***")
+        elif warn_voltages:
+            print(f"   *** Wall leakage warning at V >= {min(warn_voltages)}V ***")
+        else:
+            print(f"   No wall-climb detected up to {max(voltages)}V")
+
+        # --- Panel 3: Radial phi profile at z=0 for key voltages ---
+        ax3 = axes[2]
+        x_arr = np.linspace(0, Lx, n_r)
+        for V in [0, 10, 20, 30]:
+            inputs = np.zeros((n_r, 6), dtype=np.float32)
+            inputs[:, 0] = x_arr
+            inputs[:, 1] = cy
+            inputs[:, 2] = 0.0
+            inputs[:, 3] = V
+            inputs[:, 4] = V
+            inputs[:, 5] = t_steady
+
+            with torch.no_grad():
+                out = model(torch.tensor(inputs, device=self.device))
+                phi_radial = out[:, 4].cpu().numpy()
+
+            ax3.plot(x_arr * 1e6, phi_radial, label=f"{V}V", linewidth=2)
+
+        ax3.axhline(self.aperture_phi0, color="k", linestyle=":", alpha=0.4, label=f"phi0={self.aperture_phi0}")
+        ax3.set_xlabel("x (um)")
+        ax3.set_ylabel("phi at z=0")
+        ax3.set_title("Radial Phase Profile at Substrate")
+        ax3.legend(fontsize=8)
+        ax3.grid(True, alpha=0.3)
+
+        plt.suptitle("Wall-Climb & Oil Containment Analysis", fontsize=14, fontweight="bold")
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=200)
+        plt.close()
+        print(f"Wall-climb analysis saved: {output_path}")
+
+        return results
+
+    def find_critical_voltage(self, model: TwoPhasePINN, output_path: str,
+                               V_range: Tuple[float, float] = (0, 35),
+                               V_step: float = 1.0,
+                               t_steady: float = 0.040):
+        """Find critical voltages: V_open (starts to open), V_full (fully open), V_climb (oil climbs wall).
+
+        These are the three key voltages for an EWD pixel:
+        - V_open: eta just becomes detectable (eta > 0.02)
+        - V_full: eta reaches practical maximum (eta > 0.8)
+        - V_climb: oil starts climbing the wall (wall-top phi > 0.3)
+        """
+        Lx, Ly, Lz = PHYSICS["Lx"], PHYSICS["Ly"], PHYSICS["Lz"]
+        cx, cy = Lx / 2, Ly / 2
+
+        voltages = np.arange(V_range[0], V_range[1] + V_step, V_step)
+        etas = []
+        wall_phis = []
+
+        print(f"\nCritical Voltage Scan:")
+        print(f"   Scanning V = {V_range[0]:.0f} -> {V_range[1]:.0f}V, step = {V_step:.0f}V")
+
+        for V in voltages:
+            eta = self.compute_aperture(model, float(V), t_steady, float(V))
+            etas.append(eta)
+
+            inputs = np.array([[Lx, cy, Lz, V, V, t_steady]], dtype=np.float32)
+            with torch.no_grad():
+                out = model(torch.tensor(inputs, device=self.device))
+                phi_wall = float(out[0, 4].cpu().numpy())
+            wall_phis.append(phi_wall)
+
+            if V % 5 < V_step + 0.01:
+                print(f"   V={V:5.1f}V  eta={eta:.4f}  phi_wall={phi_wall:.4f}")
+
+        etas = np.array(etas)
+        wall_phis = np.array(wall_phis)
+
+        V_open = None
+        V_full = None
+        V_climb = None
+
+        for V, eta_val in zip(voltages, etas):
+            if eta_val > 0.02 and V_open is None:
+                V_open = V
+            if eta_val > 0.80 and V_full is None:
+                V_full = V
+                break
+
+        for V, phi_val in zip(voltages, wall_phis):
+            if phi_val > 0.3 and V_climb is None:
+                V_climb = V
+                break
+
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+
+        ax1.plot(voltages, etas, "b-", linewidth=2, label="eta (aperture ratio)")
+        ax1.axhline(0.02, color="gray", linestyle=":", alpha=0.5, label="eta=0.02 (open threshold)")
+        ax1.axhline(0.80, color="gray", linestyle="--", alpha=0.5, label="eta=0.80 (full open)")
+        if V_open is not None:
+            ax1.axvline(V_open, color="green", linestyle="-.", alpha=0.7, label=f"V_open ~ {V_open:.0f}V")
+        if V_full is not None:
+            ax1.axvline(V_full, color="blue", linestyle="-.", alpha=0.7, label=f"V_full ~ {V_full:.0f}V")
+        if V_climb is not None:
+            ax1.axvline(V_climb, color="red", linestyle="-.", alpha=0.7, label=f"V_climb ~ {V_climb:.0f}V")
+        ax1.set_ylabel("Aperture Ratio eta")
+        ax1.set_title("Critical Voltage Analysis")
+        ax1.legend(fontsize=8)
+        ax1.grid(True, alpha=0.3)
+        ax1.set_ylim(-0.05, 1.05)
+
+        ax2.plot(voltages, wall_phis, "r-", linewidth=2, label="phi at wall top")
+        ax2.axhline(0.1, color="orange", linestyle="--", alpha=0.7, label="Warning (phi>0.1)")
+        ax2.axhline(0.3, color="red", linestyle="--", alpha=0.7, label="Climbing! (phi>0.3)")
+        if V_climb is not None:
+            ax2.axvline(V_climb, color="red", linestyle="-.", alpha=0.7, label=f"V_climb ~ {V_climb:.0f}V")
+        ax2.set_xlabel("Voltage (V)")
+        ax2.set_ylabel("Wall-Top Phase phi")
+        ax2.legend(fontsize=8)
+        ax2.grid(True, alpha=0.3)
+        ax2.set_ylim(-0.05, 1.05)
+
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=200)
+        plt.close()
+
+        v_open_str = f"{V_open:.1f}V" if V_open is not None else "NOT REACHED"
+        v_full_str = f"{V_full:.1f}V" if V_full is not None else "NOT REACHED"
+        v_climb_str = f"{V_climb:.1f}V" if V_climb is not None else "NO CLIMB"
+        print(f"\nCritical Voltage Results:")
+        print(f"   V_open  (eta>0.02): {v_open_str}")
+        print(f"   V_full  (eta>0.80): {v_full_str}")
+        print(f"   V_climb (phi_wall>0.3): {v_climb_str}")
+        print(f"Critical voltage plot saved: {output_path}")
+
+        return {"V_open": V_open, "V_full": V_full, "V_climb": V_climb,
+                "voltages": voltages.tolist(), "etas": etas.tolist(),
+                "wall_phis": wall_phis.tolist()}
+
+
     # =============================================================================
     # Feature: Statistical Significance Test (Best vs Final Model)
     # =============================================================================
@@ -1316,6 +1613,18 @@ def main():
                     args.model_dir, f"mass_conservation_{suffix}.png"
                 )
                 evaluator.plot_mass_conservation(model, mass_out)
+
+                # 7b. Steady-State eta(V) Curve
+                eta_v_out = os.path.join(args.model_dir, f"steady_state_eta_{suffix}.png")
+                evaluator.plot_steady_state_eta(model, eta_v_out)
+
+                # 7c. Wall-Climb Detection
+                climb_out = os.path.join(args.model_dir, f"wall_climb_{suffix}.png")
+                evaluator.detect_wall_climb(model, climb_out)
+
+                # 7d. Critical Voltage Analysis
+                critical_out = os.path.join(args.model_dir, f"critical_voltage_{suffix}.png")
+                evaluator.find_critical_voltage(model, critical_out)
 
                 # 7. Z-Profile
                 z_out = os.path.join(args.model_dir, f"z_profile_{suffix}.png")

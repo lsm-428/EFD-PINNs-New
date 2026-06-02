@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 EFD3D Scripts Testing Framework
 Common utilities and test patterns for testing CLI scripts
@@ -12,14 +11,16 @@ Provides:
 - Test configuration for scripts
 """
 
-import sys
-import os
+from collections.abc import Callable
 import json
-import tempfile
-import subprocess
+import os
 from pathlib import Path
-from typing import Dict, List, Any, Tuple, Callable
+import subprocess
+import sys
+import tempfile
+from typing import Any
 from unittest.mock import MagicMock
+
 import pytest
 
 # Add project root to path
@@ -46,7 +47,7 @@ class ScriptTestHelper:
             self.script_path = Path(os.getcwd()) / self.script_path
 
     def run_script(
-        self, args: List[str], capture_output: bool = True
+        self, args: list[str], capture_output: bool = True
     ) -> subprocess.CompletedProcess:
         """
         Run script with given arguments
@@ -64,7 +65,7 @@ class ScriptTestHelper:
         )
         return result
 
-    def create_temp_config(self, config_dict: Dict[str, Any]) -> str:
+    def create_temp_config(self, config_dict: dict[str, Any]) -> str:
         """
         Create a temporary config file from dict
 
@@ -103,7 +104,7 @@ class ScriptTestHelper:
             os.close(fd)
             raise
 
-    def parse_json_output(self, output: str) -> Dict[str, Any]:
+    def parse_json_output(self, output: str) -> dict[str, Any]:
         """
         Parse JSON output from script
 
@@ -123,7 +124,7 @@ class ConfigFixture:
     """Fixture for creating test configurations"""
 
     @staticmethod
-    def minimal_config() -> Dict[str, Any]:
+    def minimal_config() -> dict[str, Any]:
         """Create minimal valid configuration"""
         return {
             "model": {
@@ -137,7 +138,7 @@ class ConfigFixture:
         }
 
     @staticmethod
-    def training_config() -> Dict[str, Any]:
+    def training_config() -> dict[str, Any]:
         """Create training configuration"""
         return {
             "model": {
@@ -165,7 +166,7 @@ class ConfigFixture:
         }
 
     @staticmethod
-    def analysis_config() -> Dict[str, Any]:
+    def analysis_config() -> dict[str, Any]:
         """Create analysis configuration"""
         return {
             "analysis": {
@@ -210,7 +211,7 @@ class CLITestCase:
             f"STDERR: {result.stderr}"
         )
 
-    def assert_json_output(self, result: subprocess.CompletedProcess) -> Dict[str, Any]:
+    def assert_json_output(self, result: subprocess.CompletedProcess) -> dict[str, Any]:
         """Assert output is valid JSON and return parsed data"""
         try:
             data = json.loads(result.stdout)
@@ -244,7 +245,7 @@ def script_helper():
 def temp_config():
     """Fixture providing temporary config file"""
 
-    def _create_config(config_dict: Dict[str, Any]):
+    def _create_config(config_dict: dict[str, Any]):
         helper = ScriptTestHelper("dummy.py")
         return helper.create_temp_config(config_dict)
 
@@ -259,7 +260,7 @@ def temp_config():
 class FunctionTestCase:
     """Base class for function-level testing"""
 
-    def assert_function_signature(self, func: Callable, expected_params: List[str]):
+    def assert_function_signature(self, func: Callable, expected_params: list[str]):
         """
         Assert function has expected parameters
 
@@ -302,7 +303,7 @@ class FunctionTestCase:
         with pytest.raises(exception):
             func(*args)
 
-    def assert_output_shape(self, result: Any, expected_shape: Tuple[int, ...]):
+    def assert_output_shape(self, result: Any, expected_shape: tuple[int, ...]):
         """
         Assert output has expected shape (for numpy/torch arrays)
 
@@ -370,7 +371,7 @@ class IntegrationTestCase:
         os.makedirs(os.path.join(temp_dir, "checkpoints"), exist_ok=True)
         os.makedirs(os.path.join(temp_dir, "data"), exist_ok=True)
 
-    def assert_directory_structure(self, base_path: str, expected_dirs: List[str]):
+    def assert_directory_structure(self, base_path: str, expected_dirs: list[str]):
         """
         Assert expected directory structure exists
 
@@ -384,7 +385,7 @@ class IntegrationTestCase:
                 dir_path
             ), f"Expected directory {dir_path} does not exist"
 
-    def assert_output_files(self, expected_files: List[str]):
+    def assert_output_files(self, expected_files: list[str]):
         """
         Assert expected output files exist
 
@@ -414,7 +415,7 @@ class IntegrationTestCase:
             log_path: Path to log file
             expected_text: Text to search for
         """
-        with open(log_path, "r") as f:
+        with open(log_path) as f:
             content = f.read()
         assert (
             expected_text in content
@@ -485,7 +486,7 @@ class PerformanceTestCase:
 
     def measure_execution_time(
         self, func: Callable, *args, **kwargs
-    ) -> Tuple[float, Any]:
+    ) -> tuple[float, Any]:
         """
         Measure function execution time
 

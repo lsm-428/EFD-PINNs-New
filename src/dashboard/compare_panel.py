@@ -5,32 +5,33 @@
 用于在 Streamlit 仪表板中进行多运行或多配置的对比分析。
 """
 
-import streamlit as st
+import json
+from pathlib import Path
+
+# Import EFD3D modules
+import sys
+from typing import Any
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import json
+import streamlit as st
 import torch
-from pathlib import Path
-from typing import Dict, Any, List
-
-# Import EFD3D modules
-import sys
 
 project_root = str(Path(__file__).resolve().parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from src.models.pinn_two_phase import TwoPhasePINN, PHYSICS
-from src.models.aperture_model import EnhancedApertureModel
 from src.config import CONFIG_PATH
+from src.models.aperture_model import EnhancedApertureModel
+from src.models.pinn_two_phase import PHYSICS, TwoPhasePINN
 
 # Color scheme
 COMPARE_COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
 
 
-def compare_training_runs(run_dirs: List[str]) -> go.Figure:
+def compare_training_runs(run_dirs: list[str]) -> go.Figure:
     """Compare training curves from multiple runs.
 
     Args:
@@ -44,7 +45,7 @@ def compare_training_runs(run_dirs: List[str]) -> go.Figure:
         """Parse training log file."""
         data = {"epoch": [], "loss_total": [], "lr": []}
         try:
-            with open(log_path, "r") as f:
+            with open(log_path) as f:
                 for line in f:
                     if "Epoch" in line and "Loss:" in line:
                         parts = line.split()
@@ -417,7 +418,7 @@ def render_compare_tab() -> None:
                     st.code(traceback.format_exc())
 
 
-def _extract_run_metrics(run_paths: List[str]) -> List[Dict[str, Any]]:
+def _extract_run_metrics(run_paths: list[str]) -> list[dict[str, Any]]:
     """Extract metrics from training runs for comparison table.
 
     Args:
@@ -452,7 +453,7 @@ def _extract_run_metrics(run_paths: List[str]) -> List[Dict[str, Any]]:
         if log_path.exists():
             try:
                 losses = []
-                with open(log_path, "r") as f:
+                with open(log_path) as f:
                     for line in f:
                         if "Loss:" in line:
                             parts = line.split()
@@ -474,7 +475,7 @@ def _extract_run_metrics(run_paths: List[str]) -> List[Dict[str, Any]]:
     return metrics_list
 
 
-def select_runs_for_comparison(runs: List[Any], run_selector: Any) -> List[Any]:
+def select_runs_for_comparison(runs: list[Any], run_selector: Any) -> list[Any]:
     """选择要对比的训练运行
 
     Args:
@@ -487,7 +488,7 @@ def select_runs_for_comparison(runs: List[Any], run_selector: Any) -> List[Any]:
     pass
 
 
-def render_comparison_summary(selected_runs: List[Any]) -> None:
+def render_comparison_summary(selected_runs: list[Any]) -> None:
     """渲染对比摘要信息
 
     Args:
@@ -496,7 +497,7 @@ def render_comparison_summary(selected_runs: List[Any]) -> None:
     pass
 
 
-def render_loss_comparison(selected_runs: List[Any]) -> None:
+def render_loss_comparison(selected_runs: list[Any]) -> None:
     """渲染损失曲线对比图
 
     Args:
@@ -505,7 +506,7 @@ def render_loss_comparison(selected_runs: List[Any]) -> None:
     pass
 
 
-def render_metrics_comparison(selected_runs: List[Any]) -> None:
+def render_metrics_comparison(selected_runs: list[Any]) -> None:
     """渲染指标对比表
 
     Args:
@@ -514,7 +515,7 @@ def render_metrics_comparison(selected_runs: List[Any]) -> None:
     pass
 
 
-def render_config_comparison(selected_runs: List[Any]) -> None:
+def render_config_comparison(selected_runs: list[Any]) -> None:
     """渲染配置对比表
 
     Args:
@@ -523,7 +524,7 @@ def render_config_comparison(selected_runs: List[Any]) -> None:
     pass
 
 
-def select_runs_for_comparison(runs: List[Any], run_selector: Any) -> List[Any]:
+def select_runs_for_comparison(runs: list[Any], run_selector: Any) -> list[Any]:
     """选择要对比的训练运行
 
     Args:
@@ -536,7 +537,7 @@ def select_runs_for_comparison(runs: List[Any], run_selector: Any) -> List[Any]:
     pass
 
 
-def render_comparison_summary(selected_runs: List[Any]) -> None:
+def render_comparison_summary(selected_runs: list[Any]) -> None:
     """渲染对比摘要信息
 
     Args:
@@ -545,7 +546,7 @@ def render_comparison_summary(selected_runs: List[Any]) -> None:
     pass
 
 
-def render_loss_comparison(selected_runs: List[Any]) -> None:
+def render_loss_comparison(selected_runs: list[Any]) -> None:
     """渲染损失曲线对比图
 
     Args:
@@ -554,7 +555,7 @@ def render_loss_comparison(selected_runs: List[Any]) -> None:
     pass
 
 
-def render_metrics_comparison(selected_runs: List[Any]) -> None:
+def render_metrics_comparison(selected_runs: list[Any]) -> None:
     """渲染指标对比表
 
     Args:
@@ -563,7 +564,7 @@ def render_metrics_comparison(selected_runs: List[Any]) -> None:
     pass
 
 
-def render_config_comparison(selected_runs: List[Any]) -> None:
+def render_config_comparison(selected_runs: list[Any]) -> None:
     """渲染配置对比表
 
     Args:

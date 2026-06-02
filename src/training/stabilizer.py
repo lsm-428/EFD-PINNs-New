@@ -5,9 +5,10 @@
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Any
+
 import torch
-import torch.nn as nn
+from torch import nn
 
 logger = logging.getLogger("EWP-TrainingStabilizer")
 
@@ -26,12 +27,12 @@ class TrainingStabilizer:
         config: 训练配置字典
     """
 
-    def __init__(self, model: nn.Module, config: Dict[str, Any]):
+    def __init__(self, model: nn.Module, config: dict[str, Any]):
         self.model = model
         self.grad_clip = config.get("gradient_clip", 1.0)
         self.warmup_epochs = config.get("warmup_epochs", 1000)
         self.base_lr = config.get("learning_rate", 5e-4)
-        self.last_valid_state: Optional[Dict[str, torch.Tensor]] = None
+        self.last_valid_state: dict[str, torch.Tensor] | None = None
         self.nan_recovery_count = 0
 
     def get_warmup_lr(self, epoch: int) -> float:
@@ -85,8 +86,7 @@ class TrainingStabilizer:
                     f"Recovery count: {self.nan_recovery_count}"
                 )
                 return True
-            else:
-                logger.error("NaN/Inf detected but no valid state to restore!")
+            logger.error("NaN/Inf detected but no valid state to restore!")
         return False
 
     def clip_gradients(self) -> float:

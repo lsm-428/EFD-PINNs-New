@@ -14,12 +14,12 @@ VOF Sensitivity Tests
 **版本**: v4.5
 """
 
-import sys
 from pathlib import Path
+import sys
 
 import pytest
 import torch
-import torch.nn as nn
+from torch import nn
 
 # 添加项目根目录到路径
 PROJECT_ROOT = Path(__file__).parent.parent.parent

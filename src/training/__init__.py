@@ -4,19 +4,19 @@
 包含调度器、核心组件和稳定性管理
 """
 
-from .scheduler import DynamicPhysicsWeightScheduler, PhysicsWeightIntegration
 from .components import (
     DataNormalizer,
-    LossStabilizer,
     EnhancedDataAugmenter,
+    LossStabilizer,
 )
+from .scheduler import DynamicPhysicsWeightScheduler, PhysicsWeightIntegration
 from .stabilizer import TrainingStabilizer
 
 __all__ = [
-    "DynamicPhysicsWeightScheduler",
-    "PhysicsWeightIntegration",
     "DataNormalizer",
-    "LossStabilizer",
+    "DynamicPhysicsWeightScheduler",
     "EnhancedDataAugmenter",
+    "LossStabilizer",
+    "PhysicsWeightIntegration",
     "TrainingStabilizer",
 ]

@@ -14,9 +14,9 @@ Usage:
     report.generate("output.html")
 """
 
-import os
 from datetime import datetime
-from typing import Dict, List, Any
+import os
+from typing import Any
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -43,9 +43,9 @@ class HTMLReport:
         """
         self.title = title
         self.subtitle = subtitle
-        self.charts: List[Dict[str, Any]] = []
-        self.sections: List[Dict[str, Any]] = []
-        self.metrics: Dict[str, Any] = {}
+        self.charts: list[dict[str, Any]] = []
+        self.sections: list[dict[str, Any]] = []
+        self.metrics: dict[str, Any] = {}
 
     def add_section(self, title: str, content: str, collapsible: bool = False) -> None:
         """
@@ -71,7 +71,7 @@ class HTMLReport:
         """
         self.metrics[name] = {"value": value, "unit": unit}
 
-    def add_metrics_grid(self, metrics: Dict[str, Dict[str, Any]]) -> None:
+    def add_metrics_grid(self, metrics: dict[str, dict[str, Any]]) -> None:
         """
         Add a grid of metrics.
 
@@ -81,7 +81,7 @@ class HTMLReport:
         self.metrics.update(metrics)
 
     def add_loss_curves(
-        self, records: Dict[str, List[Any]], log_scale: bool = True
+        self, records: dict[str, list[Any]], log_scale: bool = True
     ) -> None:
         """
         Add loss curves visualization.
@@ -94,7 +94,7 @@ class HTMLReport:
 
         # Identify loss components
         exclude = {"epoch", "stage", "loss_total", "lr"}
-        component_names = [k for k in records.keys() if k not in exclude]
+        component_names = [k for k in records if k not in exclude]
 
         fig = make_subplots(rows=1, cols=1)
 
@@ -154,7 +154,7 @@ class HTMLReport:
             {"title": "Loss Components", "figure": fig, "type": "loss_curves"}
         )
 
-    def add_learning_rate(self, records: Dict[str, List[Any]]) -> None:
+    def add_learning_rate(self, records: dict[str, list[Any]]) -> None:
         """
         Add learning rate visualization.
 
@@ -213,7 +213,7 @@ class HTMLReport:
             {"title": "Learning Rate", "figure": fig, "type": "learning_curve"}
         )
 
-    def add_loss_fraction(self, records: Dict[str, List[Any]]) -> None:
+    def add_loss_fraction(self, records: dict[str, list[Any]]) -> None:
         """
         Add loss fraction stacked area plot.
 
@@ -224,7 +224,7 @@ class HTMLReport:
 
         # Identify loss components
         exclude = {"epoch", "stage", "loss_total", "lr"}
-        component_names = [k for k in records.keys() if k not in exclude]
+        component_names = [k for k in records if k not in exclude]
 
         # Prepare fraction data
         comp_values = []
@@ -347,7 +347,7 @@ class HTMLReport:
 
         self.charts.append({"title": "Metrics", "figure": fig, "type": "metrics_table"})
 
-    def add_training_summary(self, records: Dict[str, List[Any]]) -> None:
+    def add_training_summary(self, records: dict[str, list[Any]]) -> None:
         """
         Add training summary statistics.
 

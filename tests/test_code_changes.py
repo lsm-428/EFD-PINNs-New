@@ -3,8 +3,8 @@
 快速测试代码修改是否正确
 """
 
-import sys
 from pathlib import Path
+import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -117,7 +117,7 @@ def test_model_forward():
     """测试模型前向传播"""
     print("\n5. 测试模型前向传播...")
 
-    from src.models.pinn_two_phase import TwoPhasePINN, PHYSICS
+    from src.models.pinn_two_phase import PHYSICS, TwoPhasePINN
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = TwoPhasePINN().to(device)

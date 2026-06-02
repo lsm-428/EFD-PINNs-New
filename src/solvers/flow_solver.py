@@ -16,24 +16,27 @@ Author: EFD-PINNs Team
 Date: 2025-12-03
 """
 
-import numpy as np
-import torch
-import torch.nn as nn
+from dataclasses import asdict, dataclass, field
 import json
-import os
-from dataclasses import dataclass, field, asdict
-from typing import Optional, List, Tuple, Dict, Any
-
-# 导入现有模块
-from src.predictors.hybrid_predictor import HybridPredictor
-from src.models.aperture_model import EnhancedApertureModel
-from src.config import PHYSICS
-
 
 # ============================================================
 # 物理常量和参数 — 统一从 physics_config 导入
 # ============================================================
+import logging
+import os
+from typing import Any
+
+import numpy as np
+import torch
+from torch import nn
+
 from src.config import PHYSICS
+from src.models.aperture_model import EnhancedApertureModel
+
+# 导入现有模块
+from src.predictors.hybrid_predictor import HybridPredictor
+
+logger = logging.getLogger(__name__)
 
 FLUID_PROPERTIES = {
     "oil": {
@@ -95,7 +98,7 @@ class Mesh:
     nz: int  # z 方向网格数
 
     # 边界单元索引
-    boundary_cells: Dict[str, np.ndarray] = field(default_factory=dict)
+    boundary_cells: dict[str, np.ndarray] = field(default_factory=dict)
 
     @property
     def total_cells(self) -> int:
@@ -107,7 +110,7 @@ class Mesh:
         """单元体积"""
         return self.dx * self.dy * self.dz
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典（用于序列化）"""
         return {
             "nx": self.nx,
@@ -130,21 +133,21 @@ class SimulationResult:
     t: np.ndarray  # (nt,) 时间点
 
     # 流场数据 (可选，大数据量时可能只保存部分时间步)
-    u: Optional[np.ndarray] = None  # (nt, nx, ny, nz) x 方向速度
-    v: Optional[np.ndarray] = None  # (nt, nx, ny, nz) y 方向速度
-    w: Optional[np.ndarray] = None  # (nt, nx, ny, nz) z 方向速度
-    p: Optional[np.ndarray] = None  # (nt, nx, ny, nz) 压力
-    phi: Optional[np.ndarray] = None  # (nt, nx, ny, nz) 体积分数
+    u: np.ndarray | None = None  # (nt, nx, ny, nz) x 方向速度
+    v: np.ndarray | None = None  # (nt, nx, ny, nz) y 方向速度
+    w: np.ndarray | None = None  # (nt, nx, ny, nz) z 方向速度
+    p: np.ndarray | None = None  # (nt, nx, ny, nz) 压力
+    phi: np.ndarray | None = None  # (nt, nx, ny, nz) 体积分数
 
     # 积分量（始终保存）
-    aperture_ratio: Optional[np.ndarray] = None  # (nt,) 开口率
-    contact_angle: Optional[np.ndarray] = None  # (nt,) 接触角
+    aperture_ratio: np.ndarray | None = None  # (nt,) 开口率
+    contact_angle: np.ndarray | None = None  # (nt,) 接触角
 
     # 守恒误差
-    mass_error: Optional[np.ndarray] = None  # (nt,) 质量误差
+    mass_error: np.ndarray | None = None  # (nt,) 质量误差
 
     # 元数据
-    config: Dict[str, Any] = field(default_factory=dict)
+    config: dict[str, Any] = field(default_factory=dict)
     computation_time: float = 0.0
     method: str = "cfd"
 
@@ -170,7 +173,7 @@ class SolverConfig:
     nz: int = 16
 
     # 时间参数
-    dt: Optional[float] = None  # 时间步长，None 表示自动计算
+    dt: float | None = None  # 时间步长，None 表示自动计算
     t_end: float = 0.02  # 结束时间 (20ms)
     save_interval: int = 10  # 保存间隔（每多少步保存一次）
 
@@ -189,19 +192,19 @@ class SolverConfig:
     # 边界条件
     slip_length: float = 1e-9  # 滑移长度 (m)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "SolverConfig":
+    def from_dict(cls, data: dict[str, Any]) -> "SolverConfig":
         """从字典创建"""
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
     @classmethod
     def from_json(cls, path: str) -> "SolverConfig":
         """从 JSON 文件加载"""
-        with open(path, "r") as f:
+        with open(path) as f:
             data = json.load(f)
         return cls.from_dict(data.get("solver", data))
 
@@ -269,7 +272,7 @@ class MeshGenerator:
         >>> print(f"Total cells: {mesh.total_cells}")
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """
         初始化网格生成器
 
@@ -344,7 +347,7 @@ class MeshGenerator:
 
     def _identify_boundary_cells(
         self, nx: int, ny: int, nz: int
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """
         识别边界单元索引
 
@@ -458,7 +461,7 @@ class InterfaceTracker:
         >>> phi_new = tracker.advect(phi, velocity, dt)
     """
 
-    def __init__(self, mesh: Mesh, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, mesh: Mesh, config: dict[str, Any] | None = None):
         """
         初始化界面追踪器
 
@@ -563,7 +566,7 @@ class InterfaceTracker:
 
     def compute_interface_normal(
         self, phi: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         计算界面法向量
 
@@ -636,7 +639,7 @@ class InterfaceTracker:
 
     def compute_surface_tension_force(
         self, phi: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         计算表面张力体积力（CSF 模型）
 
@@ -773,8 +776,8 @@ class ContactLineHandler:
 
     def __init__(
         self,
-        predictor: Optional[HybridPredictor] = None,
-        config: Optional[Dict[str, Any]] = None,
+        predictor: HybridPredictor | None = None,
+        config: dict[str, Any] | None = None,
     ):
         """
         初始化接触线处理器
@@ -797,8 +800,8 @@ class ContactLineHandler:
         self.slip_model = config.get("slip_model", "navier")  # 滑移模型类型
 
         # 接触角滞后参数
-        self.theta_advancing = config.get("theta_advancing", None)  # 前进角
-        self.theta_receding = config.get("theta_receding", None)  # 后退角
+        self.theta_advancing = config.get("theta_advancing")  # 前进角
+        self.theta_receding = config.get("theta_receding")  # 后退角
 
         # 当前状态
         self.current_voltage = 0.0
@@ -822,8 +825,8 @@ class ContactLineHandler:
         self,
         voltage: float,
         time: float,
-        V_initial: Optional[float] = None,
-        t_step: Optional[float] = None,
+        V_initial: float | None = None,
+        t_step: float | None = None,
     ) -> float:
         """
         获取动态接触角
@@ -868,7 +871,7 @@ class ContactLineHandler:
         w: np.ndarray,
         mesh: Mesh,
         contact_line_cells: np.ndarray,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         应用 Navier 滑移模型
 
@@ -1025,7 +1028,7 @@ class FlowSolver:
         >>> result = solver.solve(t_end=0.01)
     """
 
-    def __init__(self, mesh: Mesh, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, mesh: Mesh, config: dict[str, Any] | None = None):
         """
         初始化求解器
 
@@ -1081,10 +1084,10 @@ class FlowSolver:
     def set_initial_conditions(
         self,
         phi_0: np.ndarray,
-        u_0: Optional[np.ndarray] = None,
-        v_0: Optional[np.ndarray] = None,
-        w_0: Optional[np.ndarray] = None,
-        p_0: Optional[np.ndarray] = None,
+        u_0: np.ndarray | None = None,
+        v_0: np.ndarray | None = None,
+        w_0: np.ndarray | None = None,
+        p_0: np.ndarray | None = None,
     ):
         """
         设置初始条件
@@ -1120,7 +1123,7 @@ class FlowSolver:
         # 重置时间
         self.current_time = 0.0
 
-    def set_boundary_conditions(self, bc_config: Dict[str, Any]):
+    def set_boundary_conditions(self, bc_config: dict[str, Any]):
         """
         设置边界条件
 
@@ -1219,7 +1222,7 @@ class FlowSolver:
         """获取混合粘度场"""
         return self.phi * self.mu_oil + (1 - self.phi) * self.mu_water
 
-    def solve_step(self, dt: float) -> Dict[str, np.ndarray]:
+    def solve_step(self, dt: float) -> dict[str, np.ndarray]:
         """
         求解一个时间步
 
@@ -1439,7 +1442,7 @@ class FlowSolver:
         }
 
     def solve(
-        self, t_end: float, dt: Optional[float] = None, save_interval: int = 10
+        self, t_end: float, dt: float | None = None, save_interval: int = 10
     ) -> SimulationResult:
         """
         求解到指定时间
@@ -1523,7 +1526,7 @@ class FlowSolver:
 
         return result
 
-    def compute_mass_conservation_error(self) -> Dict[str, float]:
+    def compute_mass_conservation_error(self) -> dict[str, float]:
         """
         计算质量守恒误差
 
@@ -1578,7 +1581,7 @@ class FlowSolver:
 
         return residual
 
-    def get_wall_velocity(self) -> Dict[str, np.ndarray]:
+    def get_wall_velocity(self) -> dict[str, np.ndarray]:
         """
         获取壁面速度（用于验证无滑移边界条件）
 
@@ -1623,7 +1626,7 @@ class PINNSolver:
         >>> result = solver.predict(x, t=0.01)
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """
         初始化 PINN 求解器
 
@@ -1730,7 +1733,7 @@ class PINNSolver:
         x_norm = self._normalize_input(x)
         return self.model(x_norm)
 
-    def compute_physics_loss(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def compute_physics_loss(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
         """
         计算物理损失
 
@@ -1889,11 +1892,11 @@ class PINNSolver:
 
     def train(
         self,
-        training_data: Dict[str, np.ndarray],
+        training_data: dict[str, np.ndarray],
         epochs: int = 10000,
         batch_size: int = 256,
         verbose: bool = True,
-    ) -> Dict[str, List[float]]:
+    ) -> dict[str, list[float]]:
         """
         训练 PINN
 
@@ -1967,7 +1970,7 @@ class PINNSolver:
             self.history["bc_loss"].append(bc_loss.item())
 
             if verbose and (epoch + 1) % 100 == 0:
-                print(
+                logger.info(
                     f"Epoch {epoch + 1}/{epochs}: "
                     f"Total={total_loss.item():.6f}, "
                     f"Data={data_loss.item():.6f}, "
@@ -1978,8 +1981,8 @@ class PINNSolver:
         return self.history
 
     def predict(
-        self, x: np.ndarray, t: Optional[float] = None
-    ) -> Dict[str, np.ndarray]:
+        self, x: np.ndarray, t: float | None = None
+    ) -> dict[str, np.ndarray]:
         """
         预测流场
 
@@ -2062,7 +2065,7 @@ class PINNSolver:
         if "history" in checkpoint:
             self.history = checkpoint["history"]
 
-    def get_training_summary(self) -> Dict[str, Any]:
+    def get_training_summary(self) -> dict[str, Any]:
         """获取训练摘要"""
         if not self.history["total_loss"]:
             return {"trained": False}
@@ -2096,7 +2099,7 @@ class FlowFieldSimulator:
         >>> print(f"Final aperture ratio: {result.aperture_ratio[-1]:.2%}")
     """
 
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: str | None = None):
         """
         初始化模拟器
 
@@ -2105,7 +2108,7 @@ class FlowFieldSimulator:
         """
         # 加载配置
         if config_path is not None and os.path.exists(config_path):
-            with open(config_path, "r") as f:
+            with open(config_path) as f:
                 self.config = json.load(f)
         else:
             self.config = {}
@@ -2307,7 +2310,7 @@ class FlowFieldSimulator:
 
     def compare_with_aperture_model(
         self, voltage: float, duration: float
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         与 EnhancedApertureModel 对比
 
@@ -2340,8 +2343,8 @@ class FlowFieldSimulator:
         }
 
     def validate_against_experiment(
-        self, exp_data: Dict[str, np.ndarray]
-    ) -> Dict[str, float]:
+        self, exp_data: dict[str, np.ndarray]
+    ) -> dict[str, float]:
         """
         与实验数据验证
 
@@ -2410,14 +2413,14 @@ class FlowFieldSimulator:
         try:
             import pyvista as pv
         except ImportError:
-            print("Warning: PyVista not available, skipping VTK export")
+            logger.warning("Warning: PyVista not available, skipping VTK export")
             return
 
         self._initialize_mesh()
 
         # 只导出有完整场数据的结果
         if not result.has_full_fields():
-            print("Warning: No full field data, exporting summary only")
+            logger.warning("Warning: No full field data, exporting summary only")
             self._export_json(result, output_dir)
             return
 
@@ -2491,7 +2494,7 @@ class FlowFieldSimulator:
 
 def create_initial_conditions(
     mesh: Mesh, ink_thickness: float = 3e-6
-) -> Dict[str, np.ndarray]:
+) -> dict[str, np.ndarray]:
     """
     创建初始条件
 
@@ -2557,77 +2560,77 @@ def demo_flow_solver():
     """
     演示流场求解器的基本功能
     """
-    print("=" * 60)
-    print("🌊 EWP Flow Field Solver Demo")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("🌊 EWP Flow Field Solver Demo")
+    logger.info("=" * 60)
 
     # 1. 创建网格
-    print("\n📐 创建计算网格...")
+    logger.info("\n📐 创建计算网格...")
     generator = MeshGenerator()
     mesh = generator.generate_structured_mesh(nx=16, ny=16, nz=8)
-    print(f"   网格尺寸: {mesh.nx} × {mesh.ny} × {mesh.nz}")
-    print(f"   总单元数: {mesh.total_cells}")
-    print(f"   单元体积: {mesh.cell_volume * 1e18:.2f} μm³")
+    logger.info(f"   网格尺寸: {mesh.nx} × {mesh.ny} × {mesh.nz}")
+    logger.info(f"   总单元数: {mesh.total_cells}")
+    logger.info(f"   单元体积: {mesh.cell_volume * 1e18:.2f} μm³")
 
     # 2. 创建初始条件
-    print("\n🎯 创建初始条件...")
+    logger.info("\n🎯 创建初始条件...")
     initial = create_initial_conditions(mesh)
     phi = initial["phi"]
-    print(f"   油墨体积分数: {np.mean(phi):.3f}")
+    logger.info(f"   油墨体积分数: {np.mean(phi):.3f}")
 
     # 3. 初始化界面追踪器
-    print("\n🔍 初始化界面追踪器...")
+    logger.info("\n🔍 初始化界面追踪器...")
     tracker = InterfaceTracker(mesh)
     thickness = tracker.compute_interface_thickness(phi)
-    print(f"   界面厚度: {thickness:.1f} 网格单元")
+    logger.info(f"   界面厚度: {thickness:.1f} 网格单元")
 
     # 4. 初始化接触线处理器
-    print("\n📍 初始化接触线处理器...")
+    logger.info("\n📍 初始化接触线处理器...")
     handler = ContactLineHandler()
     theta_0 = handler.get_equilibrium_contact_angle(0)
     theta_30 = handler.get_equilibrium_contact_angle(30)
-    print(f"   0V 平衡接触角: {theta_0:.1f}°")
-    print(f"   30V 平衡接触角: {theta_30:.1f}°")
+    logger.info(f"   0V 平衡接触角: {theta_0:.1f}°")
+    logger.info(f"   30V 平衡接触角: {theta_30:.1f}°")
 
     # 5. 使用 FlowFieldSimulator 进行模拟
-    print("\n🚀 使用 FlowFieldSimulator 进行模拟...")
+    logger.info("\n🚀 使用 FlowFieldSimulator 进行模拟...")
     simulator = FlowFieldSimulator()
     result = simulator.simulate(voltage=30, duration=0.01, method="hybrid")
-    print(f"   模拟时长: {result.t[-1] * 1000:.1f} ms")
-    print(f"   最终开口率: {result.aperture_ratio[-1] * 100:.1f}%")
-    print(f"   最终接触角: {result.contact_angle[-1]:.1f}°")
+    logger.info(f"   模拟时长: {result.t[-1] * 1000:.1f} ms")
+    logger.info(f"   最终开口率: {result.aperture_ratio[-1] * 100:.1f}%")
+    logger.info(f"   最终接触角: {result.contact_angle[-1]:.1f}°")
 
     # 6. 与 EnhancedApertureModel 对比
-    print("\n🔄 与 EnhancedApertureModel 对比...")
+    logger.info("\n🔄 与 EnhancedApertureModel 对比...")
     comparison = simulator.compare_with_aperture_model(voltage=30, duration=0.01)
-    print(f"   模型开口率: {comparison['model_aperture_ratio'] * 100:.1f}%")
-    print(f"   模拟开口率: {comparison['simulation_aperture_ratio'] * 100:.1f}%")
-    print(f"   相对误差: {comparison['relative_error'] * 100:.2f}%")
+    logger.info(f"   模型开口率: {comparison['model_aperture_ratio'] * 100:.1f}%")
+    logger.info(f"   模拟开口率: {comparison['simulation_aperture_ratio'] * 100:.1f}%")
+    logger.error(f"   相对误差: {comparison['relative_error'] * 100:.2f}%")
 
     # 7. 测试 CFD 求解器
-    print("\n⚙️ 测试 CFD 求解器...")
+    logger.info("\n⚙️ 测试 CFD 求解器...")
     cfd_solver = FlowSolver(mesh)
     cfd_solver.set_initial_conditions(phi)
     cfd_solver.set_boundary_conditions({"walls": "no_slip"})
     mass_error = cfd_solver.compute_mass_conservation_error()
-    print(f"   初始质量误差: {mass_error['total_error'] * 100:.4f}%")
+    logger.error(f"   初始质量误差: {mass_error['total_error'] * 100:.4f}%")
 
     # 8. 测试 PINN 求解器
-    print("\n🧠 测试 PINN 求解器...")
+    logger.info("\n🧠 测试 PINN 求解器...")
     pinn_solver = PINNSolver()
     pinn_solver.build_network()
     summary = pinn_solver.get_training_summary()
-    print(f"   网络已构建: {not summary['trained']}")
-    print(f"   设备: {pinn_solver.device}")
+    logger.info(f"   网络已构建: {not summary['trained']}")
+    logger.info(f"   设备: {pinn_solver.device}")
 
-    print("\n" + "=" * 60)
-    print("✅ 演示完成!")
-    print("=" * 60)
-    print("\n📖 使用示例:")
+    logger.info("\n" + "=" * 60)
+    logger.info("✅ 演示完成!")
+    logger.info("=" * 60)
+    logger.info("\n📖 使用示例:")
     print("   from ewp_flow_solver import FlowFieldSimulator")
-    print("   simulator = FlowFieldSimulator()")
-    print("   result = simulator.simulate(voltage=30, duration=0.02)")
-    print("   print(f'Final aperture: {result.aperture_ratio[-1]:.2%}')")
+    logger.info("   simulator = FlowFieldSimulator()")
+    logger.info("   result = simulator.simulate(voltage=30, duration=0.02)")
+    logger.info("   print(f'Final aperture: {result.aperture_ratio[-1]:.2%}')")
 
 
 # ============================================================
@@ -2640,9 +2643,9 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--demo":
         demo_flow_solver()
     elif len(sys.argv) > 1 and sys.argv[1] == "--help":
-        print("EWP Flow Field Solver")
-        print("Usage:")
-        print("  python ewp_flow_solver.py --demo   # 运行演示")
-        print("  python ewp_flow_solver.py --help   # 显示帮助")
+        logger.info("EWP Flow Field Solver")
+        logger.info("Usage:")
+        logger.info("  python ewp_flow_solver.py --demo   # 运行演示")
+        logger.info("  python ewp_flow_solver.py --help   # 显示帮助")
     else:
         demo_flow_solver()

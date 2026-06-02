@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 EFD3D 统一物理参数配置模块
 ==========================
@@ -33,11 +32,11 @@ EFD3D 统一物理参数配置模块
 日期: 2025-12-31
 """
 
+from dataclasses import asdict, dataclass, field
 import json
 import logging
-from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Dict, Any, Optional, Union
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +51,7 @@ from .paths import DEFAULT_CONFIG_PATH
 # 这是项目中所有物理参数的权威来源
 # 值来自 config/device_calibrated_physics.json 和实验校准
 
-PHYSICS: Dict[str, Any] = {
+PHYSICS: dict[str, Any] = {
     # ========== 几何参数 ==========
     "Lx": 174e-6,  # 像素宽度 (m)
     "Ly": 174e-6,  # 像素高度 (m)
@@ -104,7 +103,7 @@ PHYSICS: Dict[str, Any] = {
     "V_max": 30.0,  # 最大工作电压 (V)
     "V_threshold": 5.0,  # 阈值电压 (V) = V_T_base + (h_ink-3μm)×sensitivity，计算值
     # ========== Allen-Cahn 相场参数 ==========
-    "ac_interface_width": 5e-6,  # 界面宽度 (m)
+    "ac_interface_width": 5e-07,  # 界面宽度 (m) = 0.5μm, v7.2 校准值
     "ac_mobility": 1e-10,        # 迁移率 (m³·s/kg), mob≈0.1m/s, τ~0.05ms
     # ========== 开口率参数 ==========
     "eta_max": 0.85,  # 最大开口率
@@ -154,6 +153,14 @@ class PhysicsConfig:
 
     # 电学参数
     epsilon_0: float = 8.854e-12
+    # SU-8 + Teflon 纯物理参数 (文献值，不变)
+    epsilon_su8: float = 3.28
+    epsilon_teflon: float = 1.934
+    d_su8: float = 400e-9
+    d_teflon: float = 400e-9
+    # 有效面积校正因子 (器件级校准，吸收边缘场+粗糙度+像素阵列效应)
+    A_eff: float = 1.20
+    # 保留向后兼容的旧字段
     epsilon_r: float = 3.28
     epsilon_h: float = 1.934
     d_dielectric: float = 4e-7
@@ -188,6 +195,11 @@ class PhysicsConfig:
     # 电润湿 EW 力参数
     lambda_debye: float = 50e-9  # 德拜屏蔽长度 [m] ~50nm
 
+    # Allen-Cahn 相场参数
+    ac_interface_width: float = 5e-07  # 界面宽度 (m) = 0.5μm, v7.2 校准值
+    ac_mobility: float = 1e-10  # 迁移率 (m³·s/kg)
+    electrowetting_weight: float = 1.0  # EW 源项权重 (1.0=全强度, 0.02=2%)
+
     # 物理模型开关
     use_convection: bool = False        # Re≈1-5, 默认关闭对流项
     use_unified_wetting: bool = False   # 统一相场润湿 BC (替代旧版 BW/WW/SW)
@@ -209,7 +221,7 @@ class PhysicsConfig:
         return self.tau * self.tau_recovery_factor
 
     @classmethod
-    def from_json(cls, path: Union[str, Path]) -> "PhysicsConfig":
+    def from_json(cls, path: str | Path) -> "PhysicsConfig":
         """
         从 JSON 配置文件加载物理参数
 
@@ -224,7 +236,7 @@ class PhysicsConfig:
             logger.warning(f"配置文件不存在: {path}，使用默认参数")
             return cls(_source="default")
 
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
 
         # 从各个配置节提取参数
@@ -250,6 +262,13 @@ class PhysicsConfig:
             # 材料参数
             theta0=materials.get("theta0", cls.theta0),
             theta_wall=materials.get("theta_wall", cls.theta_wall),
+            # 新参数 (纯物理值 + A_eff)
+            epsilon_su8=materials.get("epsilon_su8", cls.epsilon_su8),
+            epsilon_teflon=materials.get("epsilon_teflon", cls.epsilon_teflon),
+            d_su8=materials.get("d_su8", cls.d_su8),
+            d_teflon=materials.get("d_teflon", cls.d_teflon),
+            A_eff=materials.get("A_eff", cls.A_eff),
+            # 旧参数 (向后兼容)
             epsilon_r=materials.get("epsilon_r", cls.epsilon_r),
             epsilon_h=materials.get("epsilon_hydrophobic", cls.epsilon_h),
             gamma=materials.get("gamma", cls.gamma),
@@ -277,10 +296,14 @@ class PhysicsConfig:
             ),
             aperture_alpha=aperture_mapping.get("alpha", cls.aperture_alpha),
             use_convection=materials.get("use_convection", cls.use_convection),
+            # Allen-Cahn 相场参数 (v7.2 校准)
+            ac_interface_width=materials.get("ac_interface_width", cls.ac_interface_width),
+            ac_mobility=materials.get("ac_mobility", cls.ac_mobility),
+            electrowetting_weight=materials.get("electrowetting_weight", cls.electrowetting_weight),
             _source=str(path),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典（兼容 PHYSICS 格式）"""
         d = asdict(self)
         d.pop("_source", None)
@@ -296,7 +319,7 @@ class PhysicsConfig:
 
         return d
 
-    def to_materials_params(self) -> Dict[str, Any]:
+    def to_materials_params(self) -> dict[str, Any]:
         """
         转换为 PhysicsConstraints 兼容的 materials_params 格式
 
@@ -310,6 +333,13 @@ class PhysicsConfig:
             "surface_tension": self.gamma,
             # 电学属性
             "epsilon_0": self.epsilon_0,
+            # 新参数 (纯物理值 + A_eff)
+            "epsilon_su8": self.epsilon_su8,
+            "epsilon_teflon": self.epsilon_teflon,
+            "d_su8": self.d_su8,
+            "d_teflon": self.d_teflon,
+            "A_eff": self.A_eff,
+            # 旧参数 (向后兼容)
             "relative_permittivity": self.epsilon_r,
             "dielectric_thickness": self.d_dielectric,
             # 两相流属性
@@ -336,9 +366,13 @@ class PhysicsConfig:
             "use_convection": self.use_convection,
             "use_unified_wetting": getattr(self, "use_unified_wetting", False),
             "theta_wall_teflon": getattr(self, "theta_wall_teflon", 110.0),
+            # Allen-Cahn 相场参数 (v7.2 校准)
+            "ac_interface_width": getattr(self, "ac_interface_width", 5e-07),
+            "ac_mobility": getattr(self, "ac_mobility", 1e-10),
+            "electrowetting_weight": getattr(self, "electrowetting_weight", 1.0),
         }
 
-    def to_predictor_params(self) -> Dict[str, Any]:
+    def to_predictor_params(self) -> dict[str, Any]:
         """
         转换为 HybridPredictor 兼容的 params 格式
 
@@ -381,11 +415,11 @@ class PhysicsConfig:
 # 便捷函数
 # ============================================================================
 
-_config_cache: Dict[str, PhysicsConfig] = {}
+_config_cache: dict[str, PhysicsConfig] = {}
 
 
 def get_physics_config(
-    path: Optional[Union[str, Path]] = None, use_cache: bool = True
+    path: str | Path | None = None, use_cache: bool = True
 ) -> PhysicsConfig:
     """
     获取物理配置实例
@@ -413,7 +447,7 @@ def get_physics_config(
     return config
 
 
-def get_materials_params(path: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
+def get_materials_params(path: str | Path | None = None) -> dict[str, Any]:
     """
     获取 PhysicsConstraints 兼容的 materials_params
 
