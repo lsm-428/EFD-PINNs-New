@@ -538,12 +538,13 @@ class PhysicsLoss:
             "explicit_volume": 1.0,
             "sharpening": 0.0,
             "bottom_wetting": 0.5,
-            "wall_wetting": 0.1,
+            "wall_wetting": 5.0,  # v7.3: 0.1 -> 5.0
+            "phi_gradient_smoothness": 2.0,  # v7.3 新增
             "phase_field_wetting": 10.0,
             "temporal_smoothness": 0.1,
             "dielectric_charge": 0.05,
             "contact_line_dynamics": 0.1,
-            "top_boundary": 0.05,
+            "top_boundary": 1.0,  # v7.3: 0.05 -> 1.0
             "pressure_pin": 0.01,
         }
         weights = weights or default_weights
@@ -1748,6 +1749,7 @@ class Trainer:
             "pinn_wall_wetting": [],
             "pinn_bottom_wetting": [],
             "pinn_phase_field_wetting": [],
+            "pinn_phi_gradient_smoothness": [],
             "pinn_dielectric_charge": [],
             "pinn_contact_line_dynamics": [],
             "pinn_top_boundary": [],
@@ -1926,6 +1928,7 @@ class Trainer:
                 "sidewall_contact_angle": 0.0, "interface_energy": 0.0,
                 "wall_wetting": 0.0, "bottom_wetting": 0.0,
                 "phase_field_wetting": 0.0,
+                "phi_gradient_smoothness": 0.0,
                 "temporal_smoothness": 0.0,
                 "dielectric_charge": 0.0, "contact_line_dynamics": 0.0,
                 "top_boundary": 0.0,
@@ -1955,6 +1958,7 @@ class Trainer:
                 "wall_wetting": 0.0,
                 "bottom_wetting": 0.0,
                 "phase_field_wetting": 0.0,
+                "phi_gradient_smoothness": 0.0,
                 "temporal_smoothness": 0.0,
                 "dielectric_charge": 0.0,
                 "contact_line_dynamics": 0.0,
@@ -1981,11 +1985,13 @@ class Trainer:
             * smooth_factor,
             "interface_energy": physics_cfg.get("interface_energy_weight", 0.05)
             * smooth_factor,
-            "wall_wetting": physics_cfg.get("wall_wetting_weight", 0.1)
+            "wall_wetting": physics_cfg.get("wall_wetting_weight", 5.0)
             * smooth_factor,
             "bottom_wetting": physics_cfg.get("bottom_wetting_weight", 0.5)
             * smooth_factor,
             "phase_field_wetting": physics_cfg.get("phase_field_wetting_weight", 10.0)
+            * smooth_factor,
+            "phi_gradient_smoothness": physics_cfg.get("phi_gradient_smoothness_weight", 2.0)
             * smooth_factor,
             "temporal_smoothness": physics_cfg.get("temporal_smoothness_weight", 0.1)
             * smooth_factor,
@@ -1993,7 +1999,7 @@ class Trainer:
             * smooth_factor,
             "contact_line_dynamics": physics_cfg.get("contact_line_dynamics_weight", 0.1)
             * smooth_factor,
-            "top_boundary": physics_cfg.get("top_boundary_weight", 0.05)
+            "top_boundary": physics_cfg.get("top_boundary_weight", 1.0)
             * smooth_factor,
             "explicit_volume": physics_cfg.get("explicit_volume_weight", 0.0)
             * smooth_factor,
@@ -2499,7 +2505,9 @@ class Trainer:
         if spatial_count == 0:
             spatial_loss = torch.tensor(0.0, device=self.device)
         else:
-            spatial_loss = spatial_loss * 500.0 * stage1_factor / spatial_count
+            # v7.3: phi_spatial min factor 0.3
+            spatial_min_factor = max(stage1_factor, 0.3)
+            spatial_loss = spatial_loss * 500.0 * spatial_min_factor / spatial_count
 
         # geom_loss 已在下方计算，此处不返回
 
@@ -2833,8 +2841,8 @@ class Trainer:
             s3_start = self.stage2_epochs
             s3_end = self.epochs
             s3_progress = max(0.0, (epoch - s3_start) / max(s3_end - s3_start, 1))
-            if s3_progress < 0.2:  # S3早期: 拓扑成型
-                ac_mult, ns_mult, contact_mult = 8.0, 0.2, 0.5
+            if s3_progress < 0.2:  # S3早期: v7.3 ac_mult 8.0->3.0
+                ac_mult, ns_mult, contact_mult = 3.0, 0.2, 0.5
                 ew_penalty_mult = 1.0
                 lp_mult = 0.1  # Laplace 压力弱化，避免曲率震荡
             elif s3_progress < 0.6:  # S3中期: NS驱动
@@ -2859,13 +2867,14 @@ class Trainer:
                 "laplace_pressure": float(weights.get("laplace_pressure", 0.2)) * lp_mult,
                 "sidewall_contact_angle": float(weights.get("sidewall_contact_angle", 5.0)) * contact_mult,
                 "interface_energy": float(weights.get("interface_energy", 0.05)) * ac_mult,
-                "wall_wetting": float(weights.get("wall_wetting", 0.1)) * contact_mult,
+                "wall_wetting": float(weights.get("wall_wetting", 5.0)) * contact_mult,
                 "bottom_wetting": float(weights.get("bottom_wetting", 0.5)) * contact_mult,
                 "phase_field_wetting": float(weights.get("phase_field_wetting", 10.0)) * contact_mult,
+                "phi_gradient_smoothness": float(weights.get("phi_gradient_smoothness", 2.0)) * ac_mult,
                 "temporal_smoothness": float(weights.get("temporal_smoothness", 0.1)) * ns_mult,
                 "dielectric_charge": float(weights.get("dielectric_charge", 0.05)) * ns_mult,
                 "contact_line_dynamics": float(weights.get("contact_line_dynamics", 0.1)) * contact_mult,
-                "top_boundary": float(weights.get("top_boundary", 0.05)) * ns_mult,
+                "top_boundary": float(weights.get("top_boundary", 1.0)) * ns_mult,
                 "volume_conservation": float(
                     self.config.get("physics", {}).get("volume_conservation_weight", 0.0)
                 ),
@@ -2899,6 +2908,7 @@ class Trainer:
                     "wall_wetting",
                     "bottom_wetting",
                     "phase_field_wetting",
+                    "phi_gradient_smoothness",
                     "dielectric_charge",
                     "contact_line_dynamics",
                     "top_boundary",
@@ -3419,6 +3429,7 @@ class Trainer:
                     ("Loss/wall_wetting", "pinn_wall_wetting"),
                     ("Loss/bottom_wetting", "pinn_bottom_wetting"),
                     ("Loss/phase_field_wetting", "pinn_phase_field_wetting"),
+                    ("Loss/phi_gradient_smoothness", "pinn_phi_gradient_smoothness"),
                     ("Loss/contact_line_dynamics", "pinn_contact_line_dynamics"),
                     ("Loss/dielectric_charge", "pinn_dielectric_charge"),
                     ("Loss/top_boundary", "pinn_top_boundary"),
@@ -3477,6 +3488,9 @@ class Trainer:
             )
             self.history["pinn_phase_field_wetting"].append(
                 get_val(losses, "pinn_phase_field_wetting")
+            )
+            self.history["pinn_phi_gradient_smoothness"].append(
+                get_val(losses, "pinn_phi_gradient_smoothness")
             )
             self.history["pinn_dielectric_charge"].append(
                 get_val(losses, "pinn_dielectric_charge")
@@ -3586,8 +3600,11 @@ class Trainer:
                 if bw_val is not None:
                     physics_str += f" | BW: {bw_val.item():.2e}"
                 pfw_val = losses.get("pinn_phase_field_wetting")
+                pgs_val = losses.get("pinn_phi_gradient_smoothness")
                 if pfw_val is not None:
                     physics_str += f" | PFW: {pfw_val.item():.2e}"
+                if pgs_val is not None:
+                    physics_str += f" | PGS: {pgs_val.item():.2e}"
                 dc_val = losses.get("pinn_dielectric_charge")
                 if dc_val is not None:
                     physics_str += f" | DC: {dc_val.item():.2e}"
