@@ -35,7 +35,6 @@ def test_ew_source_magnitude():
     eps_r = params.get("relative_permittivity", 12.0)
     eps_h = params.get("epsilon_hydrophobic", 1.934)
     d_d = params.get("dielectric_thickness", 8e-7)
-    d_h = params.get("hydrophobic_thickness", 4e-7)
     sigma_ac = params.get("surface_tension_polar_ink", 0.02505)
     eps_ac = params.get("ac_interface_width", 5e-07)
     M_ac = params.get("ac_mobility", 1e-10)
@@ -140,4 +139,7 @@ def test_capacitance_components():
     C_su8_only = eps0 * eps_su8 / d_su8
     assert (
         C_su8_only > C_open
-    ), f"C_open ({C_open:.4e}) should be less than C_su8_only ({C_su8_only:.4e}) (series adds impedance)"
+    ), (
+        f"C_open ({C_open:.4e}) should be less than C_su8_only ({C_su8_only:.4e}) "
+        "(series adds impedance)"
+    )
