@@ -269,7 +269,10 @@ class TestVOFTransportEquation:
 
         assert (
             violated_loss > normal_loss
-        ), f"Volume violation should increase loss: normal={normal_loss:.6f}, violated={violated_loss:.6f}"
+        ), (
+            f"Volume violation should increase loss: "
+            f"normal={normal_loss:.6f}, violated={violated_loss:.6f}"
+        )
 
     def test_interface_sharpening_theory(self):
         """
@@ -278,7 +281,6 @@ class TestVOFTransportEquation:
         φ(1-φ)在φ=0.5时最大，在φ=0或1时为0
         """
         device = torch.device("cpu")
-        batch_size = 100
 
         phi_values = torch.tensor([0.0, 0.25, 0.5, 0.75, 1.0], device=device)
 

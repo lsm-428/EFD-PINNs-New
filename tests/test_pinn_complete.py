@@ -835,11 +835,11 @@ def generate_report(model, device, output_dir: str, results: dict):
     def convert_to_serializable(obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
-        if isinstance(obj, (np.float32, np.float64)):
+        if isinstance(obj, np.float32 | np.float64):
             return float(obj)
-        if isinstance(obj, (np.int32, np.int64)):
+        if isinstance(obj, np.int32 | np.int64):
             return int(obj)
-        if isinstance(obj, (np.bool_, bool)):
+        if isinstance(obj, np.bool_ | bool):
             return bool(obj)
         if isinstance(obj, dict):
             return {k: convert_to_serializable(v) for k, v in obj.items()}

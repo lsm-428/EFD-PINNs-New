@@ -46,9 +46,6 @@ class MockPINNModel(nn.Module):
         Returns:
             (batch, 5) - [u, v, w, p, phi]，输出依赖 x 以支持 autograd
         """
-        batch_size = x.shape[0]
-        device = x.device
-
         # 基于输入 x 构造输出，确保 requires_grad=True 且梯度可传播
         # 使用 x 的线性组合 + dummy 参数，使输出依赖计算图
         x_mean = x.mean(dim=1, keepdim=True)  # (batch, 1)
@@ -137,7 +134,7 @@ class TestVOFWeightSensitivity:
 
         # 这个测试主要验证VOF损失存在且有效
         # Ensure vof_ratio is a tensor for torch.isfinite()
-        if isinstance(vof_ratio, (int, float)):
+        if isinstance(vof_ratio, int | float):
             vof_ratio_tensor = torch.tensor(vof_ratio, dtype=torch.float32)
         else:
             vof_ratio_tensor = vof_ratio

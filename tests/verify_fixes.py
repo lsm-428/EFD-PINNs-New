@@ -41,7 +41,7 @@ def test_fix1_ew_indicator_zdecay():
         20e-6: math.exp(-20e-6 / h_ink),  # far field
     }
 
-    z_decays = {z: val for z, val in test_points.items() if isinstance(z, (int, float))}
+    z_decays = {z: val for z, val in test_points.items() if isinstance(z, int | float)}
     z_list = sorted(z_decays.keys())
 
     # 单调递减

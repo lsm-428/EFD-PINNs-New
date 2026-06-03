@@ -186,8 +186,8 @@ class TestVoltageDownProcess:
         V_prev = 30
         t_step = 0.015
 
-        # 降压前的开口率
-        eta_before = data_generator.get_opening_rate(V_prev, t_step)
+        # 降压前的开口率（保留用于调试）
+        _ = data_generator.get_opening_rate(V_prev, t_step)
 
         # 降压后不同时刻的 φ 场（通过积分估算开口率）
         times = [0.016, 0.020, 0.030, 0.050]

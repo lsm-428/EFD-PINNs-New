@@ -59,11 +59,10 @@ class ScriptTestHelper:
         Returns:
             CompletedProcess object
         """
-        cmd = [sys.executable, str(self.script_path)] + args
-        result = subprocess.run(
+        cmd = [sys.executable, str(self.script_path), *args]
+        return subprocess.run(
             cmd, capture_output=capture_output, text=True, cwd=os.getcwd(), check=False
         )
-        return result
 
     def create_temp_config(self, config_dict: dict[str, Any]) -> str:
         """
@@ -116,8 +115,9 @@ class ScriptTestHelper:
         """
         try:
             return json.loads(output)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse JSON output: {e}\nOutput: {output}")
+        except json.JSONDecodeError as err:
+            msg = f"Failed to parse JSON output: {err}\nOutput: {output}"
+            raise ValueError(msg) from err
 
 
 class ConfigFixture:
@@ -214,12 +214,10 @@ class CLITestCase:
     def assert_json_output(self, result: subprocess.CompletedProcess) -> dict[str, Any]:
         """Assert output is valid JSON and return parsed data"""
         try:
-            data = json.loads(result.stdout)
-            return data
-        except json.JSONDecodeError:
-            raise AssertionError(
-                f"Expected JSON output, got:\n{result.stdout}\nSTDERR: {result.stderr}"
-            )
+            return json.loads(result.stdout)
+        except json.JSONDecodeError as err:
+            msg = f"Expected JSON output, got:\n{result.stdout}\nSTDERR: {result.stderr}"
+            raise AssertionError(msg) from err
 
     def assert_file_exists(self, filepath: str):
         """Assert file exists"""
@@ -316,7 +314,8 @@ class FunctionTestCase:
                 result.shape == expected_shape
             ), f"Expected shape {expected_shape}, got {result.shape}"
         else:
-            raise TypeError("Result has no shape attribute")
+            msg = "Result has no shape attribute"
+            raise TypeError(msg)
 
 
 class MockTestCase:
@@ -588,7 +587,8 @@ class ExampleFunctionTests(FunctionTestCase):
 
         def example_func(x: int):
             if x < 0:
-                raise ValueError("x must be non-negative")
+                msg = "x must be non-negative"
+                raise ValueError(msg)
             return x
 
         self.assert_raises(example_func, -1, exception=ValueError)
