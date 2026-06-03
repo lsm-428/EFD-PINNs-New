@@ -252,7 +252,11 @@ with tabs[0]:
                 st.pyplot(fig)
 
                 # Export Data
-                # df = pd.DataFrame({'x': data['X_grid'].flatten(), 'y': data['Y_grid'].flatten(), 'phi': data['phi'].flatten()})
+                # df = pd.DataFrame({
+                #     'x': data['X_grid'].flatten(),
+                #     'y': data['Y_grid'].flatten(),
+                #     'phi': data['phi'].flatten()
+                # })
                 # st.download_button("Download CSV", df.to_csv(), "slice_data.csv")
         else:
             st.info("👈 Adjust parameters and click 'Render Slice' to visualize.")

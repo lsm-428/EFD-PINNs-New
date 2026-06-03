@@ -121,7 +121,8 @@ class HybridPredictor:
         )
         logger.info(f"   θ₀={self.params['theta0']}°, τ={self.params['tau'] * 1000:.1f}ms, ζ={self.params['zeta']}")
         logger.info(
-            f"   V_threshold={self.params.get('V_threshold', 5.0)}V, τ_recovery_factor={self.params.get('tau_recovery_factor', 0.4)}"
+            f"   V_threshold={self.params.get('V_threshold', 5.0)}V, "
+            f"τ_recovery_factor={self.params.get('tau_recovery_factor', 0.4)}"
         )
 
     def _voltage_dependent_tau(self, V: float) -> float:
@@ -776,9 +777,8 @@ def demo():
     # 显示动力学参数
     logger.info("\n动力学参数:")
     logger.info(f"   τ (电润湿响应): {predictor.params['tau'] * 1000:.1f} ms")
-    logger.info(
-        f"   τ_recovery (表面张力恢复): {predictor.params.get('tau_recovery', predictor.params['tau'] * 1.5) * 1000:.1f} ms"
-    )
+    tau_recovery = predictor.params.get("tau_recovery", predictor.params["tau"] * 1.5)
+    logger.info(f"   τ_recovery (表面张力恢复): {tau_recovery * 1000:.1f} ms")
     logger.info(f"   ζ (阻尼比): {predictor.params['zeta']}")
 
     # 1. 稳态预测 (Young-Lippmann)

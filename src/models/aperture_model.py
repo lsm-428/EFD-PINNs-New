@@ -1400,7 +1400,8 @@ def demo():
         result = model.predict_enhanced(V)
         results.append(result)
         logger.info(
-            f"{V:<8} {result['theta']:<12.1f} {result['aperture_percent']:<12.1f} {result['r_open_um']:<15.1f} {result['volume_error']:<12.6f}"
+            f"{V:<8} {result['theta']:<12.1f} {result['aperture_percent']:<12.1f} "
+            f"{result['r_open_um']:<15.1f} {result['volume_error']:<12.6f}"
         )
 
     logger.info("-" * 70)

@@ -249,10 +249,12 @@ def generate_html_report(records: dict[str, list[Any]], out_dir: str) -> None:
     <title>EFD3D Training Report</title>
     <style>
         body {{ font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f5f5f5; }}
-        .container {{ max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+        .container {{ max-width: 1000px; margin: 0 auto; background: white;
+            padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
         h1 {{ color: #333; border-bottom: 2px solid #667eea; padding-bottom: 10px; }}
         .stats-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 20px 0; }}
-        .stat-card {{ background: linear-gradient(135deg, #667eea20, #764ba220); padding: 20px; border-radius: 8px; text-align: center; }}
+        .stat-card {{ background: linear-gradient(135deg, #667eea20, #764ba220);
+            padding: 20px; border-radius: 8px; text-align: center; }}
         .stat-value {{ font-size: 1.8em; font-weight: bold; color: #667eea; }}
         .stat-label {{ color: #666; font-size: 0.9em; margin-top: 5px; }}
         table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
@@ -269,10 +271,22 @@ def generate_html_report(records: dict[str, list[Any]], out_dir: str) -> None:
     <div class="container">
         <h1>EFD3D Training Report</h1>
         <div class="stats-grid">
-            <div class="stat-card"><div class="stat-value">{len(epochs):,}</div><div class="stat-label">Total Epochs</div></div>
-            <div class="stat-card"><div class="stat-value">{best_epoch:,}</div><div class="stat-label">Best Epoch</div></div>
-            <div class="stat-card"><div class="stat-value">{final_loss:.2f}</div><div class="stat-label">Final Loss</div></div>
-            <div class="stat-card"><div class="stat-value">{best_loss:.2f}</div><div class="stat-label">Best Loss</div></div>
+            <div class="stat-card">
+                <div class="stat-value">{len(epochs):,}</div>
+                <div class="stat-label">Total Epochs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{best_epoch:,}</div>
+                <div class="stat-label">Best Epoch</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{final_loss:.2f}</div>
+                <div class="stat-label">Final Loss</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{best_loss:.2f}</div>
+                <div class="stat-label">Best Loss</div>
+            </div>
         </div>
         <h2>Loss Components (Last 20 Epochs Median)</h2>
         <table><tr><th>Component</th><th>Value</th><th>Status</th></tr>

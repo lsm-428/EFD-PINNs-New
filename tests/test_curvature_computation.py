@@ -157,9 +157,9 @@ class TestCurvatureComputation:
         kappa = _compute_curvature_logic(phi_grads)
 
         # 曲率大小应在合理范围内（不能为零或无穷大）
-        assert (
-            0.1 < abs(kappa.item()) < 100.0
-        ), f"Curvature magnitude {abs(kappa.item()):.4f} is not physically reasonable"
+        assert 0.1 < abs(kappa.item()) < 100.0, (
+            f"Curvature magnitude {abs(kappa.item()):.4f} is not physically reasonable"
+        )
 
 
 # 保留独立运行功能（用于手动测试）

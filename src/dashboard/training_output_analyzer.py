@@ -2637,9 +2637,13 @@ class TrainingOutputAnalyzer:
                 col=3,
             )
 
+            title = (
+                f"切片可视化: {axis.upper()}平面 @ 位置{pos * 100:.0f}% "
+                f"| 电压 {voltage_from}V→{voltage_to}V | 时间 {time:.3f}s"
+            )
             fig.update_layout(
                 height=700,
-                title_text=f"切片可视化: {axis.upper()}平面 @ 位置{pos * 100:.0f}% | 电压 {voltage_from}V→{voltage_to}V | 时间 {time:.3f}s",
+                title_text=title,
                 showlegend=False,
             )
 

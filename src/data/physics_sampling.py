@@ -426,9 +426,8 @@ def create_physics_sampling_dataset(config: dict, n_total: int = 100000) -> dict
     for key, values in dataset.items():
         dataset[key] = np.array(values)
 
-    logger.info(
-        f"数据集生成完成，总样本数: {len(dataset['interface_points']) + len(dataset['initial_points']) + len(dataset['boundary_points'])}"
-    )
+    total_samples = len(dataset["interface_points"]) + len(dataset["initial_points"]) + len(dataset["boundary_points"])
+    logger.info(f"数据集生成完成，总样本数: {total_samples}")
 
     return dataset
 

@@ -88,9 +88,11 @@ class PINNInferenceEngine:
                 current_model_cfg = self.config.get("model", {})
                 current_h = current_model_cfg.get("hidden_phi", [])
 
+                current_h0 = current_h[0] if current_h else "None"
                 if not current_h or (len(current_h) > 0 and current_h[0] != h1):
                     logger.warning(
-                        f"Config mismatch: Checkpoint has hidden_dim={h1}, but config has {current_h[0] if current_h else 'None'}. Auto-correcting."
+                        f"Config mismatch: Checkpoint has hidden_dim={h1}, "
+                        f"but config has {current_h0}. Auto-correcting."
                     )
 
                     if "model" not in self.config:

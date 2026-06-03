@@ -3082,9 +3082,8 @@ class Trainer:
                         logger.warning(f"Epoch {epoch}: step 后检测到 NaN 权重，已回滚到上一个有效状态")
                     self.optimizer.zero_grad()
             else:
-                logger.warning(
-                    f"Epoch {epoch}: 检测到无效总损失 {total_loss.item() if isinstance(total_loss, torch.Tensor) else total_loss}, 跳过本次优化步"
-                )
+                loss_val = total_loss.item() if isinstance(total_loss, torch.Tensor) else total_loss
+                logger.warning(f"Epoch {epoch}: 检测到无效总损失 {loss_val}, 跳过本次优化步")
                 if hasattr(self, "_last_valid_state"):
                     self.model.load_state_dict(self._last_valid_state)
                     logger.warning(f"Epoch {epoch}: 已回滚模型权重到上一个有效状态")

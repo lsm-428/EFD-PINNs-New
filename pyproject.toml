@@ -130,6 +130,9 @@ ignore = [
     "W291",
     # 中文标点符号 (项目使用中文文档)
     "RUF001",   # ambiguous unicode character in string
+    # 全局变量使用模式 (项目架构设计)
+    "PLW0602",   # using global but no assignment
+    "PLW0603",   # discouraged global update
     "RUF002",   # ambiguous unicode character in docstring
     "RUF003",   # ambiguous unicode character in comment
     # 魔法数字 (测试和物理代码中合理)

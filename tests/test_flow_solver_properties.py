@@ -186,9 +186,9 @@ class TestMeshGeneratorProperties:
         max_idx = mesh.total_cells - 1
         for boundary_name, indices in mesh.boundary_cells.items():
             assert np.all(indices >= 0), f"Negative index in {boundary_name}"
-            assert np.all(
-                indices <= max_idx
-            ), f"Index out of range in {boundary_name}: max={indices.max()}, limit={max_idx}"
+            assert np.all(indices <= max_idx), (
+                f"Index out of range in {boundary_name}: max={indices.max()}, limit={max_idx}"
+            )
 
 
 # ============================================================
@@ -493,9 +493,9 @@ class TestMassConservationProperties:
         mass_error = solver.compute_mass_conservation_error()
 
         # 质量误差应在 0.1% 以内
-        assert (
-            mass_error["total_error"] < 0.001
-        ), f"Mass error {mass_error['total_error'] * 100:.4f}% exceeds 0.1% tolerance"
+        assert mass_error["total_error"] < 0.001, (
+            f"Mass error {mass_error['total_error'] * 100:.4f}% exceeds 0.1% tolerance"
+        )
 
 
 # ============================================================
@@ -733,9 +733,9 @@ class TestApertureRatioProperties:
             comparison = simulator.compare_with_aperture_model(voltage=voltage, duration=0.01)
 
             # 对于 hybrid 方法，应该完全一致
-            assert (
-                comparison["relative_error"] < 0.01
-            ), f"Aperture ratio mismatch at {voltage}V: {comparison['relative_error'] * 100:.2f}%"
+            assert comparison["relative_error"] < 0.01, (
+                f"Aperture ratio mismatch at {voltage}V: {comparison['relative_error'] * 100:.2f}%"
+            )
 
 
 # ============================================================
