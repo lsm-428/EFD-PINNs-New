@@ -36,7 +36,10 @@ EWP 混合预测器
 import json
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from src.models.aperture_model import EnhancedApertureModel
 
 import numpy as np
 import torch

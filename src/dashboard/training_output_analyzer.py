@@ -9,8 +9,11 @@ from dataclasses import dataclass
 from datetime import datetime
 import json
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 import warnings
+
+if TYPE_CHECKING:
+    import plotly
 
 import numpy as np
 import pandas as pd
@@ -960,9 +963,9 @@ class TrainingOutputAnalyzer:
         """
         try:
             import streamlit as st
-        except ImportError:
+        except ImportError as e:
             msg = "Streamlit 未安装。请运行: pip install streamlit"
-            raise ImportError(msg)
+            raise ImportError(msg) from e
 
         st.title("📊 训练输出分析器")
         st.markdown("分析和可视化训练输出目录中的训练运行。")
@@ -1173,7 +1176,7 @@ class TrainingOutputAnalyzer:
         show_log_scale: bool = True,
         show_stage_markers: bool = True,
         smooth_window: int = 10,
-    ) -> "go.Figure":
+    ) -> "plotly.graph_objects.Figure":
         """创建总损失曲线图表
 
         Args:
@@ -1255,7 +1258,7 @@ class TrainingOutputAnalyzer:
 
         return fig
 
-    def _create_loss_components_chart(self, df: pd.DataFrame, smooth_window: int = 10) -> "go.Figure":
+    def _create_loss_components_chart(self, df: pd.DataFrame, smooth_window: int = 10) -> "plotly.graph_objects.Figure":
         """创建损失组件分解图表
 
         Args:
@@ -1309,7 +1312,7 @@ class TrainingOutputAnalyzer:
 
         return fig
 
-    def _create_lr_chart(self, df: pd.DataFrame, show_stage_markers: bool = True) -> "go.Figure":
+    def _create_lr_chart(self, df: pd.DataFrame, show_stage_markers: bool = True) -> "plotly.graph_objects.Figure":
         """创建学习率变化图表
 
         Args:

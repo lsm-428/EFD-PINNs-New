@@ -154,7 +154,7 @@ class ModelManager:
 
         except Exception as e:
             msg = f"Failed to load model from {path}: {e}"
-            raise RuntimeError(msg)
+            raise RuntimeError(msg) from e
 
     def clear_cache(self) -> None:
         """Clear all cached models."""

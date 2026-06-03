@@ -251,9 +251,9 @@ class TestCompressionSensitivity:
         near_interface = (phi > 0.3) & (phi < 0.7)
         near_pure = (phi < 0.1) | (phi > 0.9)
 
-        assert factor[near_interface].mean() > factor[near_pure].mean(), (
-            "Interface region should have higher compression"
-        )
+        assert (
+            factor[near_interface].mean() > factor[near_pure].mean()
+        ), "Interface region should have higher compression"
 
 
 class TestSamplingSensitivity:
@@ -281,9 +281,9 @@ class TestSamplingSensitivity:
         near_interface = (phi > 0.3) & (phi < 0.7)
         near_pure = (phi < 0.1) | (phi > 0.9)
 
-        assert interface_weight[near_interface].mean() > interface_weight[near_pure].mean(), (
-            "Interface region should have higher sampling weight"
-        )
+        assert (
+            interface_weight[near_interface].mean() > interface_weight[near_pure].mean()
+        ), "Interface region should have higher sampling weight"
 
         # 验证: 权重在0-1范围内
         assert interface_weight.max() <= 1.0, "Max weight should be 1.0"

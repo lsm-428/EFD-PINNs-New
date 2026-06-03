@@ -134,7 +134,7 @@ def plot_loss_components(records: dict[str, list[Any]], out_dir: str) -> None:
     if plot_count > 0:
         comp_values = []
         comp_labels = []
-        for i, name in enumerate(component_names):
+        for _i, name in enumerate(component_names):
             values = np.array(records[name], dtype=float)
             if np.all(np.isnan(values)):
                 continue

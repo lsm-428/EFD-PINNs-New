@@ -130,7 +130,7 @@ class PINNInferenceEngine:
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
             msg = f"Model loading failed: {e}"
-            raise RuntimeError(msg)
+            raise RuntimeError(msg) from e
 
     def _init_physics(self):
         """Initialize physics parameters"""

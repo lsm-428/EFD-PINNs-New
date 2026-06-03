@@ -143,6 +143,14 @@ ignore = [
     "E402",     # module-import-not-at-top-of-file
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# 忽略 __init__.py 中的惰性导入警告
+"src/dashboard/monitor/__init__.py" = ["F401"]
+"src/dashboard/__init__.py" = ["F401"]
+"src/config/__init__.py" = ["F401"]
+"src/models/__init__.py" = ["F401"]
+"src/predictors/__init__.py" = ["F401"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["src"]
 force-sort-within-sections = true

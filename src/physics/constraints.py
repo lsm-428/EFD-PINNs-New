@@ -13,7 +13,7 @@ logger = logging.getLogger("EWPINN_Physics")
 
 # 导入统一物理配置
 try:
-    from src.config import PHYSICS, get_materials_params
+    from src.config import PHYSICS
 
     _DEFAULT_MATERIALS = None  # 延迟加载
 except ImportError:
@@ -26,10 +26,7 @@ from src.utils.gradients import compute_gradient, gradient_magnitude, mean_curva
 
 # 导入动态权重调整模块
 try:
-    from src.training.scheduler import (
-        DynamicPhysicsWeightScheduler,
-        PhysicsWeightIntegration,
-    )
+    import src.training.scheduler  # noqa: F401
 
     DYNAMIC_WEIGHT_AVAILABLE = True
 except ImportError:
@@ -1524,6 +1521,7 @@ class PhysicsConstraints:
 
                 # z 方向衰减
                 z_coord = x_phys[:, 2]
+                h_ink_v = self.materials_params.get("ink_thickness", 3e-6)
                 z_decay = torch.exp(-z_coord / h_ink_v)
 
                 # EW 源项: S_ew = M_ac * delta_C * V_eff² * z_decay / eps_ac²

@@ -58,9 +58,9 @@ def test_voltage_monotonicity():
 
     # Young-Lippmann: cosθ 随 V² 单调递增
     # cosθ 增大 → θ 减小 → 更亲水 → 开口率增大
-    assert cos_high > cos_low, (
-        f"cosθ should increase with V: cos({V_low}V)={cos_low:.3f}, cos({V_high}V)={cos_high:.3f}"
-    )
+    assert (
+        cos_high > cos_low
+    ), f"cosθ should increase with V: cos({V_low}V)={cos_low:.3f}, cos({V_high}V)={cos_high:.3f}"
 
 
 def test_field_dimensions():

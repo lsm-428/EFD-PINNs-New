@@ -29,7 +29,10 @@ EWP 开口率模型
 import json
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from src.predictors.hybrid_predictor import HybridPredictor
 
 from matplotlib import cm
 import matplotlib.pyplot as plt
