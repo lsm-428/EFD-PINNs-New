@@ -137,9 +137,7 @@ def test_capacitance_components():
     assert Z_teflon > 0
     # Teflon 虽然是疏水层但电容串联后 C 应小于单独 SU-8
     C_su8_only = eps0 * eps_su8 / d_su8
-    assert (
-        C_su8_only > C_open
-    ), (
+    assert C_su8_only > C_open, (
         f"C_open ({C_open:.4e}) should be less than C_su8_only ({C_su8_only:.4e}) "
         "(series adds impedance)"
     )
