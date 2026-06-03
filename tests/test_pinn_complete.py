@@ -171,7 +171,7 @@ class PhysicsValidator:
 
         errors = []
         for t in [0.005, 0.01, 0.02, 0.04]:
-            eta, phi = compute_aperture(self.model, self.device, 0, 0, t, n=30)
+            eta, _phi = compute_aperture(self.model, self.device, 0, 0, t, n=30)
 
             if eta > 0.05:
                 errors.append({"t": t, "eta": eta})
@@ -646,7 +646,7 @@ class RobustnessValidator:
 
         errors = []
         for V in test_voltages:
-            eta, phi = compute_aperture(self.model, self.device, 0, V, t, n=30)
+            eta, _phi = compute_aperture(self.model, self.device, 0, V, t, n=30)
 
             # 检查是否在相邻整数电压之间
             V_low, V_high = int(V), int(V) + 1

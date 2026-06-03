@@ -177,8 +177,7 @@ class PhysicsBasedSampler:
         # 使用Beta分布，在阈值附近采样更多点
         # Beta(0.3, 2.0) 在左边界附近有更高的概率密度
         beta_samples = np.random.beta(0.3, 2.0, n_samples)
-        v_samples = v_min + beta_samples * (v_max - v_min)
-        return v_samples
+        return v_min + beta_samples * (v_max - v_min)
 
     def _sample_saturation_region(self, v_min: float, v_max: float, n_samples: int) -> np.ndarray:
         """
@@ -186,8 +185,7 @@ class PhysicsBasedSampler:
         """
         # 使用Beta分布，在右边界附近有更高的概率密度
         beta_samples = np.random.beta(2.0, 0.3, n_samples)
-        v_samples = v_min + beta_samples * (v_max - v_min)
-        return v_samples
+        return v_min + beta_samples * (v_max - v_min)
 
     def sample_time_adaptive(
         self, n_samples: int, voltage: float, voltage_prev: float = 0.0
@@ -274,14 +272,12 @@ class PhysicsBasedSampler:
         """
         # 使用指数分布模拟暂态过程
         # 在早期时间点采样更密集
-        lambda_exp = 1.0 / tau
+        1.0 / tau
         times = np.random.exponential(scale=tau, size=n_samples)
 
         # 限制最大时间
         t_max = 0.1  # 100ms
-        times = np.clip(times, 0, t_max)
-
-        return times
+        return np.clip(times, 0, t_max)
 
     def sample_spatial_physics_based(
         self, n_samples: int, voltage: float, time: float
@@ -386,8 +382,7 @@ class PhysicsBasedSampler:
         base_width = 0.5e-6  # 基础界面宽度
         max_width = 2e-6  # 最大界面宽度
 
-        width = base_width + (max_width - base_width) * V_factor * t_factor
-        return width
+        return base_width + (max_width - base_width) * V_factor * t_factor
 
 
 def create_physics_sampling_dataset(config: dict, n_total: int = 100000) -> dict[str, np.ndarray]:
@@ -476,8 +471,8 @@ if __name__ == "__main__":
     times_down = sampler.sample_time_adaptive(100, 0.0, 10.0)  # 降压
 
     logger.info("\n时间采样统计:")
-    logger.info(f"  升压 - 平均时间: {times_up.mean()*1000:.2f}ms")
-    logger.info(f"  降压 - 平均时间: {times_down.mean()*1000:.2f}ms")
+    logger.info(f"  升压 - 平均时间: {times_up.mean() * 1000:.2f}ms")
+    logger.info(f"  降压 - 平均时间: {times_down.mean() * 1000:.2f}ms")
 
     # 生成完整数据集
     logger.info("\n生成完整数据集...")

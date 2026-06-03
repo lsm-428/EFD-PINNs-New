@@ -33,18 +33,19 @@ def _is_public(name: str) -> bool:
     """判断是否为公开函数/方法名。"""
     if name.startswith("__") and name.endswith("__"):
         return False  # dunder methods
-    if name.startswith("_"):
-        return False
-    return True
+    return not name.startswith("_")
 
 
 def _has_docstring(node: ast.AST) -> bool:
     """检查 AST 节点是否有 docstring。"""
-    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Module)):
-        if node.body and isinstance(node.body[0], ast.Expr):
-            expr = node.body[0].value
-            if isinstance(expr, ast.Constant) and isinstance(expr.value, str):
-                return True
+    if (
+        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Module))
+        and node.body
+        and isinstance(node.body[0], ast.Expr)
+        and isinstance(node.body[0].value, ast.Constant)
+        and isinstance(node.body[0].value.value, str)
+    ):
+        return True
     return False
 
 
@@ -113,9 +114,8 @@ def count_test_assertions(path: Path) -> dict:
             if isinstance(node.func, ast.Attribute):
                 if node.func.attr.startswith("assert"):
                     result["assert_count"] += 1
-            elif isinstance(node.func, ast.Name):
-                if node.func.id.startswith("assert"):
-                    result["assert_count"] += 1
+            elif isinstance(node.func, ast.Name) and node.func.id.startswith("assert"):
+                result["assert_count"] += 1
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if node.name.startswith("test_"):
                 result["test_functions"] += 1

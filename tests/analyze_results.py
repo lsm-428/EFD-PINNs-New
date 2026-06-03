@@ -42,9 +42,9 @@ def test_training_log_exists():
     latest = run_dirs[-1]
     log_path = os.path.join(latest, "training.log")
 
-    assert os.path.isfile(
-        log_path
-    ), f"Latest training run {os.path.basename(latest)} missing training.log"
+    assert os.path.isfile(log_path), (
+        f"Latest training run {os.path.basename(latest)} missing training.log"
+    )
 
 
 def test_config_consistency():
@@ -88,10 +88,7 @@ def test_config_physics_params():
     def find_key(d, key):
         if key in d:
             return True
-        for v in d.values():
-            if isinstance(v, dict) and find_key(v, key):
-                return True
-        return False
+        return any(isinstance(v, dict) and find_key(v, key) for v in d.values())
 
     for key in essential_keys:
         found = find_key(cfg, key)
@@ -114,6 +111,6 @@ def test_training_config_structure():
     assert isinstance(cfg["physics"], dict), "'physics' should be a dict"
 
     # EW 权重应存在
-    assert (
-        "electrowetting_weight" in cfg["physics"]
-    ), "Missing electrowetting_weight in physics config"
+    assert "electrowetting_weight" in cfg["physics"], (
+        "Missing electrowetting_weight in physics config"
+    )

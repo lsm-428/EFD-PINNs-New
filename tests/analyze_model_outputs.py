@@ -58,9 +58,9 @@ def test_voltage_monotonicity():
 
     # Young-Lippmann: cosθ 随 V² 单调递增
     # cosθ 增大 → θ 减小 → 更亲水 → 开口率增大
-    assert (
-        cos_high > cos_low
-    ), f"cosθ should increase with V: cos({V_low}V)={cos_low:.3f}, cos({V_high}V)={cos_high:.3f}"
+    assert cos_high > cos_low, (
+        f"cosθ should increase with V: cos({V_low}V)={cos_low:.3f}, cos({V_high}V)={cos_high:.3f}"
+    )
 
 
 def test_field_dimensions():
@@ -69,10 +69,10 @@ def test_field_dimensions():
 
     assert Lx > 0, f"Lx should be positive: {Lx}"
     assert Ly > 0, f"Ly should be positive: {Ly}"
-    assert Lx == Ly, f"Expected square pixel: Lx={Lx*1e6:.0f}μm, Ly={Ly*1e6:.0f}μm"
+    assert Lx == Ly, f"Expected square pixel: Lx={Lx * 1e6:.0f}μm, Ly={Ly * 1e6:.0f}μm"
 
     # 域大小应在合理范围 (100-200μm 像素)
-    assert 100e-6 <= Lx <= 300e-6, f"Lx = {Lx*1e6:.0f}μm out of expected pixel range [100, 300]μm"
+    assert 100e-6 <= Lx <= 300e-6, f"Lx = {Lx * 1e6:.0f}μm out of expected pixel range [100, 300]μm"
 
 
 def test_bottom_grid_sampling():
@@ -100,7 +100,7 @@ def test_bottom_grid_sampling():
     assert pts.shape == (
         n_grid * n_grid,
         6,
-    ), f"Expected shape ({n_grid*n_grid}, 6), got {pts.shape}"
+    ), f"Expected shape ({n_grid * n_grid}, 6), got {pts.shape}"
 
     # z 应为 0
     assert np.allclose(pts[:, 2], 0.0), "z coordinate should be 0 at bottom"

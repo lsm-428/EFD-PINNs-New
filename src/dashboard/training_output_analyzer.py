@@ -40,13 +40,13 @@ def validate_path_safe(path: str, base_dir: str = "outputs/train") -> bool:
     try:
         # 检查路径中是否包含 ".."
         if ".." in path:
-            warnings.warn(f"路径包含 '..'，拒绝访问: {path}")
+            warnings.warn(f"路径包含 '..'，拒绝访问: {path}", stacklevel=2)
             return False
 
         # 检查是否为绝对路径
         path_obj = Path(path)
         if path_obj.is_absolute():
-            warnings.warn(f"路径为绝对路径，拒绝访问: {path}")
+            warnings.warn(f"路径为绝对路径，拒绝访问: {path}", stacklevel=2)
             return False
 
         # 解析为相对于基础目录的绝对路径
@@ -58,11 +58,11 @@ def validate_path_safe(path: str, base_dir: str = "outputs/train") -> bool:
             full_path.relative_to(base)
             return True
         except ValueError:
-            warnings.warn(f"路径不在基础目录内，拒绝访问: {path}")
+            warnings.warn(f"路径不在基础目录内，拒绝访问: {path}", stacklevel=2)
             return False
 
     except Exception as e:
-        warnings.warn(f"验证路径时出错: {path}, 错误: {e}")
+        warnings.warn(f"验证路径时出错: {path}, 错误: {e}", stacklevel=2)
         return False
 
 
@@ -84,13 +84,14 @@ def check_file_size(file_path: str, max_size: int = MAX_FILE_SIZE) -> bool:
         file_size = path.stat().st_size
         if file_size > max_size:
             warnings.warn(
-                f"文件大小超过限制 ({file_size / 1024 / 1024:.2f} MB > {max_size / 1024 / 1024:.2f} MB): {file_path}"
+                f"文件大小超过限制 ({file_size / 1024 / 1024:.2f} MB > {max_size / 1024 / 1024:.2f} MB): {file_path}",
+                stacklevel=2,
             )
             return False
         return True
 
     except Exception as e:
-        warnings.warn(f"检查文件大小时出错: {file_path}, 错误: {e}")
+        warnings.warn(f"检查文件大小时出错: {file_path}, 错误: {e}", stacklevel=2)
         return False
 
 
@@ -129,7 +130,7 @@ class TrainingOutputScanner:
 
         # 验证基础目录路径是否安全
         if not validate_path_safe(self.train_outputs_dir, base_dir="."):
-            warnings.warn(f"训练输出目录路径不安全: {self.train_outputs_dir}")
+            warnings.warn(f"训练输出目录路径不安全: {self.train_outputs_dir}", stacklevel=2)
             return runs
 
         train_dir = Path(self.train_outputs_dir)
@@ -142,14 +143,14 @@ class TrainingOutputScanner:
                     # 验证子目录路径是否安全
                     relative_path = run_dir.relative_to(train_dir)
                     if not validate_path_safe(str(relative_path), base_dir=self.train_outputs_dir):
-                        warnings.warn(f"子目录路径不安全: {run_dir.name}")
+                        warnings.warn(f"子目录路径不安全: {run_dir.name}", stacklevel=2)
                         continue
 
                     run_info = self._extract_run_info(run_dir)
                     if run_info:
                         runs.append(run_info)
         except Exception as e:
-            warnings.warn(f"扫描训练输出目录 {self.train_outputs_dir} 时出错: {e}")
+            warnings.warn(f"扫描训练输出目录 {self.train_outputs_dir} 时出错: {e}", stacklevel=2)
 
         return sorted(runs, key=lambda x: x.creation_time, reverse=True)
 
@@ -190,7 +191,7 @@ class TrainingOutputScanner:
             )
 
         except Exception as e:
-            warnings.warn(f"提取训练运行信息 {run_dir.name} 时出错: {e}")
+            warnings.warn(f"提取训练运行信息 {run_dir.name} 时出错: {e}", stacklevel=2)
             return None
 
     def _find_model_files(self, run_dir: Path) -> list[str]:
@@ -290,7 +291,7 @@ class TrainingOutputScanner:
         except Exception as e:
             import warnings
 
-            warnings.warn(f"读取配置文件 {run_info.config_path} 时出错: {e}")
+            warnings.warn(f"读取配置文件 {run_info.config_path} 时出错: {e}", stacklevel=2)
             return None
 
 
@@ -317,7 +318,7 @@ class TrainingConfigParser:
         try:
             path = Path(config_path)
             if not path.exists():
-                warnings.warn(f"配置文件不存在: {config_path}")
+                warnings.warn(f"配置文件不存在: {config_path}", stacklevel=2)
                 return None
 
             # Check file size to prevent DoS
@@ -328,7 +329,7 @@ class TrainingConfigParser:
                 raw_config = json.load(f)
 
             # 提取并结构化配置
-            structured_config = {
+            return {
                 "metadata": TrainingConfigParser._extract_metadata(raw_config),
                 "model_architecture": TrainingConfigParser._extract_model_architecture(raw_config),
                 "training_parameters": TrainingConfigParser._extract_training_parameters(
@@ -341,10 +342,8 @@ class TrainingConfigParser:
                 ),
             }
 
-            return structured_config
-
         except Exception as e:
-            warnings.warn(f"解析配置文件 {config_path} 时出错: {e}")
+            warnings.warn(f"解析配置文件 {config_path} 时出错: {e}", stacklevel=2)
             return None
 
     @staticmethod
@@ -504,7 +503,7 @@ class LossDataParser:
         try:
             path = Path(csv_path)
             if not path.exists():
-                warnings.warn(f"损失CSV文件不存在: {csv_path}")
+                warnings.warn(f"损失CSV文件不存在: {csv_path}", stacklevel=2)
                 return None
 
             # Check file size to prevent DoS
@@ -529,13 +528,13 @@ class LossDataParser:
 
             missing_columns = [col for col in required_columns if col not in df.columns]
             if missing_columns:
-                warnings.warn(f"损失CSV文件缺少必需的列: {missing_columns}")
+                warnings.warn(f"损失CSV文件缺少必需的列: {missing_columns}", stacklevel=2)
                 return None
 
             return df
 
         except Exception as e:
-            warnings.warn(f"解析损失CSV文件 {csv_path} 时出错: {e}")
+            warnings.warn(f"解析损失CSV文件 {csv_path} 时出错: {e}", stacklevel=2)
             return None
 
 
@@ -559,7 +558,7 @@ class MetricsParser:
         try:
             path = Path(csv_path)
             if not path.exists():
-                warnings.warn(f"RMSE CSV文件不存在: {csv_path}")
+                warnings.warn(f"RMSE CSV文件不存在: {csv_path}", stacklevel=2)
                 return None
 
             # Check file size to prevent DoS
@@ -573,13 +572,13 @@ class MetricsParser:
 
             missing_columns = [col for col in required_columns if col not in df.columns]
             if missing_columns:
-                warnings.warn(f"RMSE CSV文件缺少必需的列: {missing_columns}")
+                warnings.warn(f"RMSE CSV文件缺少必需的列: {missing_columns}", stacklevel=2)
                 return None
 
             return df
 
         except Exception as e:
-            warnings.warn(f"解析RMSE CSV文件 {csv_path} 时出错: {e}")
+            warnings.warn(f"解析RMSE CSV文件 {csv_path} 时出错: {e}", stacklevel=2)
             return None
 
     @staticmethod
@@ -604,7 +603,7 @@ class MetricsParser:
         try:
             path = Path(csv_path)
             if not path.exists():
-                warnings.warn(f"体积统计CSV文件不存在: {csv_path}")
+                warnings.warn(f"体积统计CSV文件不存在: {csv_path}", stacklevel=2)
                 return None
 
             # Check file size to prevent DoS
@@ -627,13 +626,13 @@ class MetricsParser:
 
             missing_columns = [col for col in required_columns if col not in df.columns]
             if missing_columns:
-                warnings.warn(f"体积统计CSV文件缺少必需的列: {missing_columns}")
+                warnings.warn(f"体积统计CSV文件缺少必需的列: {missing_columns}", stacklevel=2)
                 return None
 
             return df
 
         except Exception as e:
-            warnings.warn(f"解析体积统计CSV文件 {csv_path} 时出错: {e}")
+            warnings.warn(f"解析体积统计CSV文件 {csv_path} 时出错: {e}", stacklevel=2)
             return None
 
 
@@ -710,25 +709,25 @@ class ModelLoader:
 
             from src.models.pinn_two_phase import TwoPhasePINN
         except ImportError as e:
-            warnings.warn(f"导入必要的模块失败: {e}")
+            warnings.warn(f"导入必要的模块失败: {e}", stacklevel=2)
             return None, None
 
         run_dir = Path(run_path)
         if not run_dir.exists():
-            warnings.warn(f"训练运行目录不存在: {run_path}")
+            warnings.warn(f"训练运行目录不存在: {run_path}", stacklevel=2)
             return None, None
 
         # 1. 解析模型类型并确定模型路径
         model_path, actual_model_type, epoch = ModelLoader._resolve_model_path(run_dir, model_type)
 
         if model_path is None:
-            warnings.warn(f"无法找到任何模型文件: {run_path}")
+            warnings.warn(f"无法找到任何模型文件: {run_path}", stacklevel=2)
             return None, None
 
         # 2. 加载配置并构建模型
         config = ModelLoader._load_config(run_dir, config_path)
         if config is None:
-            warnings.warn("无法加载配置文件，使用默认配置")
+            warnings.warn("无法加载配置文件，使用默认配置", stacklevel=2)
             config = {}
 
         model_config = ModelLoader._build_model_config(config)
@@ -737,7 +736,7 @@ class ModelLoader:
         try:
             model = TwoPhasePINN(config=model_config)
         except Exception as e:
-            warnings.warn(f"初始化模型失败: {e}")
+            warnings.warn(f"初始化模型失败: {e}", stacklevel=2)
             return None, None
 
         # 4. 加载权重
@@ -756,7 +755,7 @@ class ModelLoader:
             model.to(device)
             model.eval()  # 设置为评估模式
         except Exception as e:
-            warnings.warn(f"加载模型权重失败: {e}")
+            warnings.warn(f"加载模型权重失败: {e}", stacklevel=2)
             return None, None
 
         # 5. 构建模型信息
@@ -798,7 +797,7 @@ class ModelLoader:
                 pass
 
             # epoch_N 不存在，回退到 best
-            warnings.warn(f"指定轮次的模型不存在: {model_type}，尝试回退")
+            warnings.warn(f"指定轮次的模型不存在: {model_type}，尝试回退", stacklevel=2)
             model_type = "best"
 
         # 检查标准模型类型
@@ -814,13 +813,13 @@ class ModelLoader:
                 fallback_pattern = ModelLoader.MODEL_PATTERNS[fallback_type]
                 fallback_path = run_dir / fallback_pattern
                 if fallback_path.exists():
-                    warnings.warn(f"模型 {model_type} 不存在，回退到 {fallback_type}")
+                    warnings.warn(f"模型 {model_type} 不存在，回退到 {fallback_type}", stacklevel=2)
                     return fallback_path, fallback_type, epoch
 
         # 最后尝试：查找任意 .pth 文件
         all_pth_files = sorted(run_dir.glob("*.pth"))
         if all_pth_files:
-            warnings.warn(f"使用找到的第一个模型文件: {all_pth_files[0].name}")
+            warnings.warn(f"使用找到的第一个模型文件: {all_pth_files[0].name}", stacklevel=2)
             return all_pth_files[0], "fallback", epoch
 
         return None, None, None
@@ -836,10 +835,7 @@ class ModelLoader:
         Returns:
             配置字典，如果加载失败则返回 None
         """
-        if config_path:
-            config_file = Path(config_path)
-        else:
-            config_file = run_dir / "config.json"
+        config_file = Path(config_path) if config_path else run_dir / "config.json"
 
         if not config_file.exists():
             return None
@@ -848,7 +844,7 @@ class ModelLoader:
             with open(config_file, encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            warnings.warn(f"加载配置文件失败: {e}")
+            warnings.warn(f"加载配置文件失败: {e}", stacklevel=2)
             return None
 
     @staticmethod
@@ -924,7 +920,7 @@ class ModelLoader:
 
                 models.append(model_info)
         except Exception as e:
-            warnings.warn(f"列出模型文件时出错: {e}")
+            warnings.warn(f"列出模型文件时出错: {e}", stacklevel=2)
 
         return models
 
@@ -969,7 +965,8 @@ class TrainingOutputAnalyzer:
         try:
             import streamlit as st
         except ImportError:
-            raise ImportError("Streamlit 未安装。请运行: pip install streamlit")
+            msg = "Streamlit 未安装。请运行: pip install streamlit"
+            raise ImportError(msg)
 
         st.title("📊 训练输出分析器")
         st.markdown("分析和可视化训练输出目录中的训练运行。")
@@ -1209,7 +1206,7 @@ class TrainingOutputAnalyzer:
                 y=df["loss_total"],
                 mode="lines",
                 name="原始损失",
-                line=dict(color="rgba(150, 150, 150, 0.3)", width=1),
+                line={"color": "rgba(150, 150, 150, 0.3)", "width": 1},
                 hovertemplate="轮次: %{x}<br>损失: %{y:.4e}<extra></extra>",
             )
         )
@@ -1221,7 +1218,7 @@ class TrainingOutputAnalyzer:
                 y=df_smooth["loss_total_smooth"],
                 mode="lines",
                 name="平滑损失",
-                line=dict(color="#1f77b4", width=2.5),
+                line={"color": "#1f77b4", "width": 2.5},
                 hovertemplate="轮次: %{x}<br>平滑损失: %{y:.4e}<extra></extra>",
             )
         )
@@ -1235,15 +1232,15 @@ class TrainingOutputAnalyzer:
                 stage_df = df[df["stage"] == stage]
                 if len(stage_df) > 0:
                     first_epoch = stage_df["epoch"].iloc[0]
-                    last_epoch = stage_df["epoch"].iloc[-1]
+                    stage_df["epoch"].iloc[-1]
 
                     # 阶段开始标记
                     fig.add_vline(
                         x=first_epoch,
-                        line=dict(color=stage_colors.get(stage, "gray"), dash="dash", width=1),
+                        line={"color": stage_colors.get(stage, "gray"), "dash": "dash", "width": 1},
                         annotation_text=stage_names.get(stage, f"阶段{stage}"),
                         annotation_position="top",
-                        annotation=dict(font_size=10, font_color=stage_colors.get(stage, "gray")),
+                        annotation={"font_size": 10, "font_color": stage_colors.get(stage, "gray")},
                     )
 
         # 设置布局
@@ -1253,7 +1250,7 @@ class TrainingOutputAnalyzer:
             yaxis_title="总损失 (Total Loss)",
             hovermode="x unified",
             showlegend=True,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1},
             template="plotly_white",
         )
 
@@ -1301,7 +1298,7 @@ class TrainingOutputAnalyzer:
                         y=smooth_values,
                         mode="lines",
                         name=config["name"],
-                        line=dict(color=config["color"], width=2),
+                        line={"color": config["color"], "width": 2},
                         hovertemplate=f"{config['name']}: %{{y:.4e}}<extra></extra>",
                     )
                 )
@@ -1312,7 +1309,7 @@ class TrainingOutputAnalyzer:
             yaxis_title="损失值",
             hovermode="x unified",
             showlegend=True,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1},
             template="plotly_white",
         )
 
@@ -1338,7 +1335,7 @@ class TrainingOutputAnalyzer:
                 y=df["lr"],
                 mode="lines",
                 name="学习率",
-                line=dict(color="#17becf", width=2.5),
+                line={"color": "#17becf", "width": 2.5},
                 fill="tozeroy",
                 fillcolor="rgba(23, 190, 207, 0.1)",
                 hovertemplate="轮次: %{x}<br>学习率: %{y:.4e}<extra></extra>",
@@ -1355,7 +1352,7 @@ class TrainingOutputAnalyzer:
                     first_epoch = stage_df["epoch"].iloc[0]
                     fig.add_vline(
                         x=first_epoch,
-                        line=dict(color=stage_colors.get(stage, "gray"), dash="dash", width=1),
+                        line={"color": stage_colors.get(stage, "gray"), "dash": "dash", "width": 1},
                     )
 
         fig.update_layout(
@@ -1364,9 +1361,9 @@ class TrainingOutputAnalyzer:
             yaxis_title="学习率 (Learning Rate)",
             hovermode="x unified",
             showlegend=True,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1},
             template="plotly_white",
-            yaxis=dict(type="log"),
+            yaxis={"type": "log"},
         )
 
         return fig
@@ -1682,7 +1679,7 @@ class TrainingOutputAnalyzer:
         st.markdown("**体积误差趋势分析:**")
         if "final" in df.columns:
             final_values = df["final"].values
-            stages = df["stage"].values if "stage" in df.columns else range(len(df))
+            df["stage"].values if "stage" in df.columns else range(len(df))
 
             # 判断趋势
             if len(final_values) >= 2:
@@ -1840,7 +1837,7 @@ class TrainingOutputAnalyzer:
                 ]:
                     image_files.append(str(file_path))
         except Exception as e:
-            warnings.warn(f"查找图像文件时出错: {e}")
+            warnings.warn(f"查找图像文件时出错: {e}", stacklevel=2)
 
         return sorted(image_files)
 
@@ -2291,7 +2288,7 @@ class TrainingOutputAnalyzer:
                     y=result["u"],
                     mode="lines",
                     name="u",
-                    line=dict(color="#1f77b4"),
+                    line={"color": "#1f77b4"},
                 ),
                 row=1,
                 col=1,
@@ -2302,7 +2299,7 @@ class TrainingOutputAnalyzer:
                     y=result["v"],
                     mode="lines",
                     name="v",
-                    line=dict(color="#ff7f0e"),
+                    line={"color": "#ff7f0e"},
                 ),
                 row=1,
                 col=1,
@@ -2313,7 +2310,7 @@ class TrainingOutputAnalyzer:
                     y=result["w"],
                     mode="lines",
                     name="w",
-                    line=dict(color="#2ca02c"),
+                    line={"color": "#2ca02c"},
                 ),
                 row=1,
                 col=1,
@@ -2326,7 +2323,7 @@ class TrainingOutputAnalyzer:
                     y=result["phi"],
                     mode="lines",
                     name="φ",
-                    line=dict(color="#9467bd"),
+                    line={"color": "#9467bd"},
                     fill="tozeroy",
                 ),
                 row=1,
@@ -2340,7 +2337,7 @@ class TrainingOutputAnalyzer:
                     y=result["p"],
                     mode="lines",
                     name="p",
-                    line=dict(color="#d62728"),
+                    line={"color": "#d62728"},
                 ),
                 row=2,
                 col=1,
@@ -2354,7 +2351,7 @@ class TrainingOutputAnalyzer:
                     y=vel_mag,
                     mode="lines",
                     name="|v|",
-                    line=dict(color="#17becf"),
+                    line={"color": "#17becf"},
                 ),
                 row=2,
                 col=2,
@@ -2580,7 +2577,7 @@ class TrainingOutputAnalyzer:
                     y=y_coords,
                     colorscale="RdBu",
                     zmid=0.5,
-                    colorbar=dict(title="φ", x=0.15),
+                    colorbar={"title": "φ", "x": 0.15},
                     name="φ",
                 ),
                 row=1,
@@ -2594,7 +2591,7 @@ class TrainingOutputAnalyzer:
                     x=x_coords,
                     y=y_coords,
                     colorscale="Viridis",
-                    colorbar=dict(title="|v| (m/s)", x=0.48),
+                    colorbar={"title": "|v| (m/s)", "x": 0.48},
                     name="|v|",
                 ),
                 row=1,
@@ -2608,7 +2605,7 @@ class TrainingOutputAnalyzer:
                     x=x_coords,
                     y=y_coords,
                     colorscale="Plasma",
-                    colorbar=dict(title="p (Pa)", x=0.82),
+                    colorbar={"title": "p (Pa)", "x": 0.82},
                     name="p",
                 ),
                 row=1,
@@ -2623,7 +2620,7 @@ class TrainingOutputAnalyzer:
                     y=y_coords,
                     colorscale="RdBu",
                     zmid=0,
-                    colorbar=dict(title="u (m/s)", x=0.15),
+                    colorbar={"title": "u (m/s)", "x": 0.15},
                     name="u",
                 ),
                 row=2,
@@ -2637,7 +2634,7 @@ class TrainingOutputAnalyzer:
                     y=y_coords,
                     colorscale="RdBu",
                     zmid=0,
-                    colorbar=dict(title="v (m/s)", x=0.48),
+                    colorbar={"title": "v (m/s)", "x": 0.48},
                     name="v",
                 ),
                 row=2,
@@ -2651,7 +2648,7 @@ class TrainingOutputAnalyzer:
                     y=y_coords,
                     colorscale="RdBu",
                     zmid=0,
-                    colorbar=dict(title="w (m/s)", x=0.82),
+                    colorbar={"title": "w (m/s)", "x": 0.82},
                     name="w",
                 ),
                 row=2,
@@ -2885,10 +2882,10 @@ class TrainingOutputAnalyzer:
             st.markdown("检查整个3D体积的墨水质量守恒情况。")
 
             # 质量守恒检查参数
-            mc_col1, mc_col2, mc_col3 = st.columns(3)
+            mc_col1, mc_col2, _mc_col3 = st.columns(3)
 
             with mc_col1:
-                mc_resolution = st.slider(
+                st.slider(
                     "分辨率",
                     min_value=20,
                     max_value=50,

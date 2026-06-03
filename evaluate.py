@@ -60,7 +60,7 @@ class PINNEvaluator:
     Integrates metrics, physical field visualization, and performance benchmarking.
     """
 
-    def __init__(self, config_path: str = None):
+    def __init__(self, config_path: str | None = None):
         self.config_path = config_path or str(CONFIG_PATH)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.stage1_model = EnhancedApertureModel(config_path=self.config_path)
@@ -85,9 +85,9 @@ class PINNEvaluator:
             if "physics" in config:
                 for k, v in config["physics"].items():
                     PHYSICS[k] = v
-                print(
-                    f"ℹ️ Updated PHYSICS from checkpoint: Lx={PHYSICS['Lx'] * 1e6:.0f}um, Lz={PHYSICS['Lz'] * 1e6:.0f}um"
-                )
+                lx_um = PHYSICS["Lx"] * 1e6
+                lz_um = PHYSICS["Lz"] * 1e6
+                print(f"ℹ️ Updated PHYSICS from checkpoint: Lx={lx_um:.0f}um, Lz={lz_um:.0f}um")
 
             # 重新初始化分析模型以匹配物理参数
             self.stage1_model = EnhancedApertureModel(config_path=self.config_path)
@@ -163,14 +163,15 @@ class PINNEvaluator:
 
             # 诊断信息
             phi_min, phi_max = np.min(phi_np), np.max(phi_np)
-            if phi_max - phi_min < 1e-3:
+            if phi_max - phi_min < 1e-3 and not (np.abs(t_since) < 1e-5 and np.abs(V_to) < 1e-5):
                 # Only warn if not in a trivial state (e.g. t=0 where full ink is expected)
-                if not (np.abs(t_since) < 1e-5 and np.abs(V_to) < 1e-5):
-                    print(
-                        f"⚠️ Warning: Constant phi field detected in {plane} plane (min={phi_min:.4f}, max={phi_max:.4f}) at V={V_to}V, t={t_since}s"
-                    )
+                msg = (
+                    f"⚠️ Warning: Constant phi field in {plane} plane "
+                    f"(min={phi_min:.4f}, max={phi_max:.4f}) at V={V_to}V, t={t_since}s"
+                )
+                print(msg)
 
-            results = {
+            return {
                 "u": out_np[:, 0].reshape(n, n),
                 "v": out_np[:, 1].reshape(n, n),
                 "w": out_np[:, 2].reshape(n, n),
@@ -178,7 +179,6 @@ class PINNEvaluator:
                 "phi": phi_np,
                 "grid": grid,
             }
-        return results
 
     def compute_aperture(
         self,
@@ -336,7 +336,7 @@ class PINNEvaluator:
 
     def plot_phi_grid(self, model: TwoPhasePINN, output_path: str):
         """Plot a 7x6 grid of phi fields for various voltages and times."""
-        fig, axes = plt.subplots(7, 6, figsize=(24, 28))
+        _fig, axes = plt.subplots(7, 6, figsize=(24, 28))
         h_ink = PHYSICS["h_ink"]
         z_sample = h_ink / 2
 
@@ -450,7 +450,7 @@ class PINNEvaluator:
             if phi.min() > 0.5 or phi.max() < 0.5:
                 pass  # 没有界面，无需绘制
             else:
-                verts, faces, normals, values = measure.marching_cubes(
+                verts, faces, _normals, _values = measure.marching_cubes(
                     phi, level=0.5, spacing=(Lx / n, Ly / n, Lz / n)
                 )
 
@@ -565,7 +565,7 @@ class PINNEvaluator:
         # 初始化 Stage1 解析模型 (使用已加载的 self.stage1_model)
         # stage1_model = self.stage1_model
 
-        for (v_start, v_target, label), color in zip(cycles, colors, strict=False):
+        for (_v_start, v_target, label), color in zip(cycles, colors, strict=False):
             etas = []
             analytical_etas = []  # 解析解 (Stage 1)
 
@@ -707,9 +707,9 @@ class PINNEvaluator:
                     fontweight="bold",
                 )
 
-            print(
-                f"Voltage {V}V: t_on={t_on_val * 1000 if not np.isnan(t_on_val) else '>25'}ms, t_off={t_off_val * 1000 if not np.isnan(t_off_val) else '>25'}ms"
-            )
+            t_on_ms = f"{t_on_val * 1000:.0f}" if not np.isnan(t_on_val) else ">25"
+            t_off_ms = f"{t_off_val * 1000:.0f}" if not np.isnan(t_off_val) else ">25"
+            print(f"Voltage {V}V: t_on={t_on_ms}ms, t_off={t_off_ms}ms")
 
         plt.axvline(t_switch * 1000, color="k", linestyle="--", alpha=0.3, label="Switch OFF")
 
@@ -829,11 +829,11 @@ class PINNEvaluator:
         print()
 
         # Create a simple bar chart
-        fig, ax = plt.subplots(figsize=(8, 6))
+        _fig, ax = plt.subplots(figsize=(8, 6))
 
         # Group errors by voltage
         voltage_errors = {}
-        for i, (v_from, v_to, t_since) in enumerate(tests):
+        for i, (_v_from, v_to, _t_since) in enumerate(tests):
             v_key = f"{int(v_to)}V"
             if v_key not in voltage_errors:
                 voltage_errors[v_key] = []
@@ -854,7 +854,7 @@ class PINNEvaluator:
         ax.grid(axis="y", alpha=0.3)
 
         # Add value labels on bars
-        for i, (v, err) in enumerate(zip(voltages, avg_errors, strict=False)):
+        for i, (_v, err) in enumerate(zip(voltages, avg_errors, strict=False)):
             ax.text(i, err + 0.5, f"{err:.1f}%", ha="center", fontsize=9)
 
         plt.tight_layout()
@@ -942,7 +942,7 @@ class PINNEvaluator:
                 break
 
         # Plot
-        fig, ax = plt.subplots(figsize=(8, 6))
+        _fig, ax = plt.subplots(figsize=(8, 6))
         ax.plot(voltages, etas, "b-o", linewidth=2, markersize=5, label="PINN eta(V)")
 
         # Mark threshold
@@ -1019,14 +1019,14 @@ class PINNEvaluator:
             voltages = [0, 5, 10, 15, 20, 25, 30]
 
         Lx, Ly, Lz = PHYSICS["Lx"], PHYSICS["Ly"], PHYSICS["Lz"]
-        cx, cy = Lx / 2, Ly / 2
+        _cx, cy = Lx / 2, Ly / 2
 
         n_r = 50
         n_z = 50
 
         results = {}
 
-        fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+        _fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 
         # --- Panel 1: Wall-edge phi vs Voltage ---
         ax1 = axes[0]
@@ -1150,7 +1150,7 @@ class PINNEvaluator:
         - V_climb: oil starts climbing the wall (wall-top phi > 0.3)
         """
         Lx, Ly, Lz = PHYSICS["Lx"], PHYSICS["Ly"], PHYSICS["Lz"]
-        cx, cy = Lx / 2, Ly / 2
+        _cx, cy = Lx / 2, Ly / 2
 
         voltages = np.arange(V_range[0], V_range[1] + V_step, V_step)
         etas = []
@@ -1191,7 +1191,7 @@ class PINNEvaluator:
                 V_climb = V
                 break
 
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+        _fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
         ax1.plot(voltages, etas, "b-", linewidth=2, label="eta (aperture ratio)")
         ax1.axhline(0.02, color="gray", linestyle=":", alpha=0.5, label="eta=0.02 (open threshold)")
@@ -1291,10 +1291,7 @@ class PINNEvaluator:
             # Compute aperture at this position
             phi0 = self.aperture_phi0
             eps = self.aperture_eps
-            if eps <= 0:
-                eta = float(phi < phi0)
-            else:
-                eta = 0.5 * (1.0 + np.tanh((phi0 - phi) / eps))
+            eta = float(phi < phi0) if eps <= 0 else 0.5 * (1.0 + np.tanh((phi0 - phi) / eps))
 
             aperture_values.append(eta)
 
@@ -1305,7 +1302,7 @@ class PINNEvaluator:
         model1: TwoPhasePINN,
         model2: TwoPhasePINN,
         output_path: str,
-        test_voltages: list[float] = None,
+        test_voltages: list[float] | None = None,
     ) -> dict[str, Any]:
         """
         Statistical comparison between two models (e.g., best vs final).
@@ -1336,7 +1333,7 @@ class PINNEvaluator:
             "summary": {},
         }
 
-        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+        _fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
         # Test at different voltages
         all_eta1 = []
@@ -1434,7 +1431,7 @@ class PINNEvaluator:
             fontsize=11,
             verticalalignment="center",
             fontfamily="monospace",
-            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+            bbox={"boxstyle": "round", "facecolor": "wheat", "alpha": 0.5},
         )
 
         plt.suptitle(
@@ -1513,7 +1510,7 @@ def main():
 
         if model1 and model2:
             output_path = os.path.join(args.model_dir, "statistical_comparison.png")
-            results = evaluator.compare_models_statistically(model1, model2, output_path)
+            evaluator.compare_models_statistically(model1, model2, output_path)
             print(f"\n✅ Statistical test complete. Results saved to {output_path}")
 
     elif args.compare:
@@ -1557,10 +1554,7 @@ def main():
 
         # Determine which checkpoints to evaluate
         ckpts_to_eval = []
-        if args.ckpt == "both" or args.ckpt == "all":
-            ckpts_to_eval = ["best", "final"]
-        else:
-            ckpts_to_eval = [args.ckpt]
+        ckpts_to_eval = ["best", "final"] if args.ckpt in {"both", "all"} else [args.ckpt]
 
         for ckpt_type in ckpts_to_eval:
             if ckpt_type == "best":

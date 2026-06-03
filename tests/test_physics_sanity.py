@@ -32,9 +32,9 @@ class TestParameterConsistency:
 
         # 验证关键参数
         assert abs(config.theta0 - 120.0) < 1e-6, f"theta0 应为 120.0, 实际为 {config.theta0}"
-        assert (
-            abs(config.epsilon_r - 12.0) < 1e-6
-        ), f"epsilon_r 应为 12.0, 实际为 {config.epsilon_r}"
+        assert abs(config.epsilon_r - 12.0) < 1e-6, (
+            f"epsilon_r 应为 12.0, 实际为 {config.epsilon_r}"
+        )
         assert abs(config.sigma - 0.02505) < 1e-6, f"sigma 应为 0.02505, 实际为 {config.sigma}"
         assert abs(config.tau - 0.0119) < 1e-6, f"tau 应为 0.0119, 实际为 {config.tau}"
         assert abs(config.zeta - 1.0) < 1e-6, f"zeta 应为 1.0, 实际为 {config.zeta}"
@@ -85,7 +85,7 @@ class TestCoreResiduals:
 
     def test_compute_core_residuals_returns_all_keys(self, setup_model_and_data):
         """验证 compute_core_residuals 返回所有核心残差项"""
-        model, pc, x_phys, device = setup_model_and_data
+        model, pc, x_phys, _device = setup_model_and_data
         model.eval()
         predictions = model(x_phys)
 
@@ -99,7 +99,7 @@ class TestCoreResiduals:
 
     def test_residuals_no_nan_inf(self, setup_model_and_data):
         """验证残差中无 NaN/Inf"""
-        model, pc, x_phys, device = setup_model_and_data
+        model, pc, x_phys, _device = setup_model_and_data
 
         residuals = pc.compute_core_residuals(x_phys, None, model=model)
 

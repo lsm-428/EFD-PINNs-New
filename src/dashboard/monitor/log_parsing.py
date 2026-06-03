@@ -71,7 +71,8 @@ def find_log_path(model_dir: str | None = None) -> tuple[str, str]:
     if model_dir is not None:
         log_path = os.path.join(model_dir, "training.log")
         if not os.path.exists(log_path):
-            raise FileNotFoundError(f"training.log not found in {model_dir}")
+            msg = f"training.log not found in {model_dir}"
+            raise FileNotFoundError(msg)
         return log_path, model_dir
 
     # Search for latest output directory
@@ -101,7 +102,8 @@ def find_log_path(model_dir: str | None = None) -> tuple[str, str]:
         if os.path.exists(log_path):
             return log_path, d
 
-    raise FileNotFoundError("No training.log found in outputs/train/pinn_* or outputs_pinn_*")
+    msg = "No training.log found in outputs/train/pinn_* or outputs_pinn_*"
+    raise FileNotFoundError(msg)
 
 
 # =============================================================================
@@ -187,11 +189,12 @@ def parse_training_log(log_path: str) -> dict[str, list[Any]]:
                     records[name].append(np.nan)
 
     if matched_count == 0:
-        raise RuntimeError(
+        msg = (
             f"No valid epoch lines found in {log_path}\n"
             f"Total lines read: {line_count}\n"
             f"Expected format: 'Epoch X [S1] | Loss: X.XX ...'"
         )
+        raise RuntimeError(msg)
 
     print(f"✅ Parsed {matched_count} training records (of {line_count} lines)")
 

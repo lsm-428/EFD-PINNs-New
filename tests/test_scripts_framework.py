@@ -206,9 +206,7 @@ class CLITestCase:
     def assert_output_contains(self, result: subprocess.CompletedProcess, text: str):
         """Assert output contains specific text"""
         assert text in result.stdout or text in result.stderr, (
-            f"Expected output to contain '{text}'\n"
-            f"STDOUT: {result.stdout}\n"
-            f"STDERR: {result.stderr}"
+            f"Expected output to contain '{text}'\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
         )
 
     def assert_json_output(self, result: subprocess.CompletedProcess) -> dict[str, Any]:
@@ -270,9 +268,9 @@ class FunctionTestCase:
 
         sig = inspect.signature(func)
         actual_params = list(sig.parameters.keys())
-        assert (
-            actual_params == expected_params
-        ), f"Expected parameters {expected_params}, got {actual_params}"
+        assert actual_params == expected_params, (
+            f"Expected parameters {expected_params}, got {actual_params}"
+        )
 
     def assert_return_type(self, func: Callable, *args, expected_type: type):
         """
@@ -284,9 +282,9 @@ class FunctionTestCase:
             expected_type: Expected return type
         """
         result = func(*args)
-        assert isinstance(
-            result, expected_type
-        ), f"Expected return type {expected_type}, got {type(result)}"
+        assert isinstance(result, expected_type), (
+            f"Expected return type {expected_type}, got {type(result)}"
+        )
         return result
 
     def assert_raises(self, func: Callable, *args, exception: type):
@@ -310,9 +308,9 @@ class FunctionTestCase:
             expected_shape: Expected shape tuple
         """
         if hasattr(result, "shape"):
-            assert (
-                result.shape == expected_shape
-            ), f"Expected shape {expected_shape}, got {result.shape}"
+            assert result.shape == expected_shape, (
+                f"Expected shape {expected_shape}, got {result.shape}"
+            )
         else:
             msg = "Result has no shape attribute"
             raise TypeError(msg)
@@ -412,9 +410,9 @@ class IntegrationTestCase:
         """
         with open(log_path) as f:
             content = f.read()
-        assert (
-            expected_text in content
-        ), f"Expected text '{expected_text}' not found in log {log_path}"
+        assert expected_text in content, (
+            f"Expected text '{expected_text}' not found in log {log_path}"
+        )
 
 
 @pytest.fixture
@@ -599,7 +597,7 @@ class ExampleIntegrationTests(IntegrationTestCase):
 
     def test_end_to_end_workflow(self, integration_env):
         """Example: End-to-end workflow test"""
-        test_case, temp_dir = integration_env
+        _test_case, temp_dir = integration_env
 
         # Setup
         self.setup_test_environment(str(temp_dir))

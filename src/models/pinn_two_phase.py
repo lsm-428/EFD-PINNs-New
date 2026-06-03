@@ -185,7 +185,7 @@ class TwoPhasePINN(nn.Module):
     - V_from > V_to: 降压过程（表面张力恢复）
     """
 
-    def __init__(self, config: dict[str, Any] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         super().__init__()
         config = config or DEFAULT_CONFIG
 
@@ -262,7 +262,8 @@ class TwoPhasePINN(nn.Module):
           - 初始条件: φ(t=0) = φ_IC(z)  →  φ = φ_IC + t/t_max * (φ_learned - φ_IC)
         """
         if not torch.jit.is_tracing() and x.shape[1] != 6:
-            raise ValueError("TwoPhasePINN expects input of shape (batch, 6).")
+            msg = "TwoPhasePINN expects input of shape (batch, 6)."
+            raise ValueError(msg)
         x_coord = x[:, 0:1]
         y_coord = x[:, 1:2]
         z_coord = x[:, 2:3]
@@ -486,12 +487,10 @@ class PhysicsLoss:
         V_initial = PHYSICS["Lx"] * PHYSICS["Ly"] * PHYSICS["h_ink"]
 
         # 相对误差
-        volume_error = torch.abs(volume_integral - V_initial) / (V_initial + 1e-10)
-
-        return volume_error
+        return torch.abs(volume_integral - V_initial) / (V_initial + 1e-10)
 
     def compute_total_loss(
-        self, model: nn.Module, points: torch.Tensor, weights: dict[str, float] = None
+        self, model: nn.Module, points: torch.Tensor, weights: dict[str, float] | None = None
     ) -> dict[str, torch.Tensor]:
         """
         计算总物理损失（推荐入口）
@@ -785,7 +784,7 @@ class DataGenerator:
         z: float,
         t: float,
         V: float,
-        V_prev: float = None,
+        V_prev: float | None = None,
         t_step: float = 0.0,
     ) -> float:
         """
@@ -1030,8 +1029,7 @@ class DataGenerator:
             """
             # Beta(0.5, 1.0) 类似于 1/sqrt(x)，在 0 处概率密度高，向右递减
             # 这非常适合模拟暂态过程（变化集中在早期）
-            t_samples = np.random.beta(0.5, 1.0, n_samples) * self.t_max
-            return t_samples
+            return np.random.beta(0.5, 1.0, n_samples) * self.t_max
 
         # ============================================================
         # 1. 界面数据（核心训练数据）
@@ -1439,7 +1437,7 @@ class DataGenerator:
 class Trainer:
     """两相流 PINN 训练器"""
 
-    def __init__(self, config: dict[str, Any] = None, resume_path: str | None = None):
+    def __init__(self, config: dict[str, Any] | None = None, resume_path: str | None = None):
         self.config = config or DEFAULT_CONFIG
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logger.info(f"使用设备: {self.device}")
@@ -1603,12 +1601,12 @@ class Trainer:
             final_path = os.path.join(self.output_dir, "final_model.pth")
             torch.save(checkpoint, final_path)
 
-    def _plot_curves(self, epoch: int = None):
+    def _plot_curves(self, epoch: int | None = None):
         """
         绘制并保存训练曲线 — 所有 loss 在一张图上
         """
         try:
-            fig, ax = plt.subplots(1, 1, figsize=(16, 8))
+            _fig, ax = plt.subplots(1, 1, figsize=(16, 8))
             ep = self.history["epoch"]
             h = self.history
 
@@ -2049,10 +2047,7 @@ class Trainer:
             _s3_total = max(1, self.epochs - self.stage2_epochs)
             _s3_prog = (_epoch - self.stage2_epochs) / _s3_total
             # S3 前半段权重=1.0，后半段线性退火到 0.3
-            if _s3_prog < 0.5:
-                _volt_anneal = 1.0
-            else:
-                _volt_anneal = max(0.1, 1.0 - 0.9 * ((_s3_prog - 0.5) / 0.5))
+            _volt_anneal = 1.0 if _s3_prog < 0.5 else max(0.1, 1.0 - 0.9 * ((_s3_prog - 0.5) / 0.5))
         else:
             _volt_anneal = 1.0
 
@@ -2281,7 +2276,7 @@ class Trainer:
         if spatial_pts_center:
             all_center_pts = torch.cat(spatial_pts_center, dim=0)
             all_phi_center = self.model(all_center_pts)[:, 4]
-            for i, rng in enumerate(center_valid_ranges):
+            for _i, rng in enumerate(center_valid_ranges):
                 if rng is not None:
                     s, n = rng
                     phi_c = all_phi_center[s : s + n]
@@ -2292,7 +2287,7 @@ class Trainer:
         if spatial_pts_edge:
             all_edge_pts = torch.cat(spatial_pts_edge, dim=0)
             all_phi_edge = self.model(all_edge_pts)[:, 4]
-            for i, rng in enumerate(edge_valid_ranges):
+            for _i, rng in enumerate(edge_valid_ranges):
                 if rng is not None:
                     s, n = rng
                     phi_e = all_phi_edge[s : s + n]
@@ -2611,7 +2606,7 @@ class Trainer:
         data_fit_loss: torch.Tensor,
         epoch: int,
         stage: int,
-        data: dict[str, torch.Tensor] = None,
+        data: dict[str, torch.Tensor] | None = None,
     ):
         """
         8. 物理方程损失 - 通过 PhysicsLoss.compute_total_loss 计算
@@ -2938,8 +2933,7 @@ class Trainer:
                 logger.warning(f"Teacher 模型初始化失败: {e}")
                 return torch.tensor(0.0, device=self.device)
 
-        loss = torch.tensor(0.0, device=self.device)
-        count = 0
+        torch.tensor(0.0, device=self.device)
 
         # 选取典型工况（减少到 4 个，每 epoch 随机选 2-3 个）
         test_cases = [
@@ -2993,11 +2987,10 @@ class Trainer:
         # PINN 前向（带梯度）
         phi_pinn = self.model(points_tensor)[:, 4]
 
-        loss = F.mse_loss(phi_pinn, phi_targets)
-        return loss
+        return F.mse_loss(phi_pinn, phi_targets)
 
     def eta_recovery_constraint_loss(
-        self, t_fall: float = 0.015, tau_recovery: float = None, weight: float = 100.0
+        self, t_fall: float = 0.015, tau_recovery: float | None = None, weight: float = 100.0
     ) -> torch.Tensor:
         """
         开口率恢复的软约束（降压后）
@@ -3125,7 +3118,7 @@ class Trainer:
 
         # 记录网络结构图到 TensorBoard
         try:
-            for key, value in data.items():
+            for _key, value in data.items():
                 if isinstance(value, torch.Tensor) and value.dim() > 1:
                     self.tb_writer.add_graph(self.model, value[:1])
                     break

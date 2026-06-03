@@ -43,7 +43,8 @@ class PINNInferenceEngine:
     def _load_model(self):
         """Load model from checkpoint"""
         if not self.checkpoint_path.exists():
-            raise FileNotFoundError(f"Checkpoint not found: {self.checkpoint_path}")
+            msg = f"Checkpoint not found: {self.checkpoint_path}"
+            raise FileNotFoundError(msg)
 
         logger.info(f"Loading model from {self.checkpoint_path} to {self.device}")
 
@@ -109,7 +110,7 @@ class PINNInferenceEngine:
                         )
                         self.config["model"]["hidden_phi"] = [h1, h1, 64, 32]
 
-            is_lstm = any("lstm_encoder" in k for k in state_dict.keys())
+            is_lstm = any("lstm_encoder" in k for k in state_dict)
 
             if is_lstm:
                 logger.info("Detected LSTM Hybrid Model structure.")
@@ -130,7 +131,8 @@ class PINNInferenceEngine:
 
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
-            raise RuntimeError(f"Model loading failed: {e}")
+            msg = f"Model loading failed: {e}"
+            raise RuntimeError(msg)
 
     def _init_physics(self):
         """Initialize physics parameters"""
@@ -426,7 +428,6 @@ class PINNInferenceEngine:
             device=self.device,
         )
 
-        voltages = []
         etas = []
 
         # Batch over time steps to improve speed?
@@ -564,9 +565,10 @@ class PINNInferenceEngine:
         """
         points = np.asarray(points, dtype=np.float32)
         if points.ndim != 2 or points.shape[1] != 6:
-            raise ValueError(f"points must be (N, 6) array, got shape {points.shape}")
+            msg = f"points must be (N, 6) array, got shape {points.shape}"
+            raise ValueError(msg)
 
-        n_points = points.shape[0]
+        points.shape[0]
 
         if LSTMHybridPINN is not None and isinstance(self.model, LSTMHybridPINN):
             # Separate inputs for LSTM model
@@ -635,7 +637,7 @@ class PINNInferenceEngine:
         x = np.linspace(0, self.Lx, res)
         y = np.linspace(0, self.Ly, res)
         z = np.linspace(0, self.Lz, res // 2)
-        X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
+        _X, _Y, _Z = np.meshgrid(x, y, z, indexing="ij")
 
         vol_data = self.predict_3d_volume(
             t, voltage_from, voltage_to, resolution_xy=res, resolution_z=res // 2
@@ -646,8 +648,7 @@ class PINNInferenceEngine:
         dy = self.Ly / (res - 1)
         dz = self.Lz / (res // 2 - 1)
 
-        volume = np.sum(phi) * dx * dy * dz
-        return volume
+        return np.sum(phi) * dx * dy * dz
 
     def compute_residuals(
         self,
@@ -713,7 +714,7 @@ class PINNInferenceEngine:
             outputs = self.model(inputs_tensor)
             spatial_tensor = inputs_tensor  # For grad calculation reference
 
-        u, v, w = outputs[:, 0], outputs[:, 1], outputs[:, 2]
+        _u, _v, _w = outputs[:, 0], outputs[:, 1], outputs[:, 2]
 
         # Compute derivatives
         # grad_u = torch.autograd.grad(u, spatial_tensor, grad_outputs=torch.ones_like(u), create_graph=True)[0]

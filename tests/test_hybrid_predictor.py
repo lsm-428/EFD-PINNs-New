@@ -73,7 +73,7 @@ class TestHybridPredictor:
         V_to = 30.0
 
         # 使用step_response方法
-        t, thetas = predictor.step_response(
+        _t, thetas = predictor.step_response(
             V_start=V_from, V_end=V_to, duration=0.05, t_step=0.001, num_points=5
         )
 
@@ -92,7 +92,7 @@ class TestHybridPredictor:
         V_to = 0.0
 
         # 使用step_response方法
-        t, thetas = predictor.step_response(
+        _t, thetas = predictor.step_response(
             V_start=V_from, V_end=V_to, duration=0.05, t_step=0.001, num_points=5
         )
 

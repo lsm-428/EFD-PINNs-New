@@ -14,7 +14,7 @@ def test_ew_source_magnitude():
 
     # 构造测试点：底面中心，高电压
     n = 100
-    Lx, Ly, Lz = 174e-6, 174e-6, 20e-6
+    Lx, Ly, _Lz = 174e-6, 174e-6, 20e-6
     h_ink = 3e-6
 
     x_phys = torch.zeros(n, 6, device=device)
@@ -32,9 +32,9 @@ def test_ew_source_magnitude():
 
     # 手动计算 EW 源项
     eps0 = 8.854e-12
-    eps_r = params.get("relative_permittivity", 12.0)
-    eps_h = params.get("epsilon_hydrophobic", 1.934)
-    d_d = params.get("dielectric_thickness", 8e-7)
+    params.get("relative_permittivity", 12.0)
+    params.get("epsilon_hydrophobic", 1.934)
+    params.get("dielectric_thickness", 8e-7)
     sigma_ac = params.get("surface_tension_polar_ink", 0.02505)
     eps_ac = params.get("ac_interface_width", 5e-07)
     M_ac = params.get("ac_mobility", 1e-10)
@@ -59,17 +59,17 @@ def test_ew_source_magnitude():
 
     # 断言: 源项非零且有合理量级 (ε=0.5μm 后 EW 源项 ~1e6, ∝ 1/ε²)
     assert ew_source.max().item() > 0, "EW source must be positive at oil-covered bottom"
-    assert (
-        ew_source.mean().item() < 1e8
-    ), f"EW source mean {ew_source.mean().item():.4e} too large, expected < 1e8 1/s (eps=0.5um)"
+    assert ew_source.mean().item() < 1e8, (
+        f"EW source mean {ew_source.mean().item():.4e} too large, expected < 1e8 1/s (eps=0.5um)"
+    )
 
     # 断言: z_decay 在 z=0 处为 1，在 z=h_ink 处衰减到 1/e
-    assert (
-        abs(z_decay[0].item() - 1.0) < 0.01
-    ), f"z_decay at z=0 should be ~1.0, got {z_decay[0].item():.4f}"
-    assert (
-        abs(z_decay[-1].item() - 1.0 / torch.e) < 0.05
-    ), f"z_decay at z=h_ink should be ~1/e, got {z_decay[-1].item():.4f}"
+    assert abs(z_decay[0].item() - 1.0) < 0.01, (
+        f"z_decay at z=0 should be ~1.0, got {z_decay[0].item():.4f}"
+    )
+    assert abs(z_decay[-1].item() - 1.0 / torch.e) < 0.05, (
+        f"z_decay at z=h_ink should be ~1/e, got {z_decay[-1].item():.4f}"
+    )
 
 
 def test_ew_source_gradient():

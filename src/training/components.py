@@ -20,7 +20,7 @@ except ImportError:
 class DataNormalizer:
     """增强版数据标准化器"""
 
-    def __init__(self, method: str = "standard", config: dict = None):
+    def __init__(self, method: str = "standard", config: dict | None = None):
         self.method = method
         self.config = config or {}
         self.scaler = None

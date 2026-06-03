@@ -64,10 +64,7 @@ def setup_logging(
     root_logger.handlers.clear()
 
     # 选择格式
-    if format_type == "verbose" or verbose:
-        log_format = VERBOSE_FORMAT
-    else:
-        log_format = DEFAULT_FORMAT
+    log_format = VERBOSE_FORMAT if format_type == "verbose" or verbose else DEFAULT_FORMAT
 
     formatter = logging.Formatter(log_format, datefmt=DEFAULT_DATE_FORMAT)
 

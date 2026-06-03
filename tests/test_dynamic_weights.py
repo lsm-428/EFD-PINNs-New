@@ -173,7 +173,7 @@ class TestDynamicPhysicsWeightScheduler:
         scheduler = DynamicPhysicsWeightScheduler(initial_weight=0.1, adjustment_interval=100)
 
         # 前 99 步权重不应改变
-        for i in range(99):
+        for _i in range(99):
             scheduler.update(data_loss=2.0, physics_loss=1.0, val_loss=None)
         assert scheduler.current_weight == 0.1
 
@@ -186,7 +186,7 @@ class TestDynamicPhysicsWeightScheduler:
         scheduler = DynamicPhysicsWeightScheduler()
 
         # 运行一些更新
-        for i in range(10):
+        for _i in range(10):
             scheduler.update(data_loss=1.0, physics_loss=1.0, val_loss=1.0)
 
         # 重置
@@ -271,10 +271,7 @@ class TestPhysicsWeightIntegration:
         integration = PhysicsWeightIntegration(scheduler)
 
         # CUDA 设备测试（如果可用）
-        if torch.cuda.is_available():
-            device = torch.device("cuda")
-        else:
-            device = torch.device("cpu")
+        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
         physics_loss = torch.tensor(1.0, device=device)
         data_loss = torch.tensor(2.0, device=device)

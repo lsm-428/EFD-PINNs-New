@@ -92,7 +92,8 @@ class LogParser:
             Dictionary with parsed data, each key maps to a list.
         """
         if not os.path.exists(log_path):
-            raise FileNotFoundError(f"log file not found: {log_path}")
+            msg = f"log file not found: {log_path}"
+            raise FileNotFoundError(msg)
 
         # For non-incremental parsing, use the shared function directly
         if not increment:

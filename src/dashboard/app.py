@@ -237,9 +237,10 @@ def create_app():
         pn.Tabs: Panel application with integrated components or error messages
     """
     if not PANEL_AVAILABLE:
-        raise ImportError("Panel is required to run the dashboard application")
+        msg = "Panel is required to run the dashboard application"
+        raise ImportError(msg)
 
-    tabs = pn.Tabs(
+    return pn.Tabs(
         ("Parameter Sweep", create_parameter_sweep_tab()),
         ("Model Comparison", create_model_comparison_tab()),
         ("Experiment Simulator", create_experiment_simulator_tab()),
@@ -249,14 +250,9 @@ def create_app():
         height=800,
     )
 
-    return tabs
-
 
 # Main application entry point
-if PANEL_AVAILABLE:
-    app = create_app()
-else:
-    app = None
+app = create_app() if PANEL_AVAILABLE else None
 
 if __name__ == "__main__":
     if app:

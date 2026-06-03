@@ -88,9 +88,9 @@ class TestVOFTransportEquation:
         vof_residual = physics_constraints._compute_vof_residual(x_phys, predictions)
 
         # 验证: 零速度场下，VOF残差应接近0
-        assert torch.allclose(
-            vof_residual, torch.zeros_like(vof_residual), atol=1e-5
-        ), f"Zero velocity VOF residual should be ~0, got {vof_residual.mean().item():.6f}"
+        assert torch.allclose(vof_residual, torch.zeros_like(vof_residual), atol=1e-5), (
+            f"Zero velocity VOF residual should be ~0, got {vof_residual.mean().item():.6f}"
+        )
 
     def test_constant_velocity_phi_advection(self, physics_constraints):
         """
@@ -129,9 +129,9 @@ class TestVOFTransportEquation:
 
         # 期望: VOF残差 ≈ u * ∂φ/∂x = u * 0 = 0
         # 因为 phi 只依赖于 z，不依赖于 x
-        assert torch.allclose(
-            vof_residual.mean(), torch.tensor(0.0), atol=1e-4
-        ), f"Expected residual ~0, got {vof_residual.mean().item():.6f}"
+        assert torch.allclose(vof_residual.mean(), torch.tensor(0.0), atol=1e-4), (
+            f"Expected residual ~0, got {vof_residual.mean().item():.6f}"
+        )
 
     def test_vof_residual_numerical_stability(self, physics_constraints):
         """
@@ -168,9 +168,9 @@ class TestVOFTransportEquation:
 
             vof_residual = physics_constraints._compute_vof_residual(x_phys, predictions)
 
-            assert torch.isfinite(
-                vof_residual
-            ).all(), f"VOF residual contains NaN/Inf at iteration {_}"
+            assert torch.isfinite(vof_residual).all(), (
+                f"VOF residual contains NaN/Inf at iteration {_}"
+            )
 
     def test_volume_conservation_initial_state(self, physics_constraints):
         """
@@ -207,9 +207,9 @@ class TestVOFTransportEquation:
         residuals = physics_constraints.compute_volume_conservation_residual(x_phys, predictions)
 
         # 初始状态应该满足体积守恒
-        assert (
-            residuals["volume_conservation"].abs().mean() <= 0.1 + 1e-6
-        ), "Initial state should have ~0 volume conservation loss"
+        assert residuals["volume_conservation"].abs().mean() <= 0.1 + 1e-6, (
+            "Initial state should have ~0 volume conservation loss"
+        )
 
     def test_volume_conservation_violation_detection(self, physics_constraints):
         """
@@ -315,9 +315,9 @@ class TestVOFTransportEquation:
         near_interface = (phi > 0.3) & (phi < 0.7)
         near_pure = (phi < 0.1) | (phi > 0.9)
 
-        assert (
-            factor[near_interface].mean() > factor[near_pure].mean()
-        ), "Interface region should have higher compression"
+        assert factor[near_interface].mean() > factor[near_pure].mean(), (
+            "Interface region should have higher compression"
+        )
 
     def test_vof_implementation_consistency(self, physics_constraints):
         """

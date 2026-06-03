@@ -86,7 +86,7 @@ class HTMLReport:
             records: Training records dict
             log_scale: Whether to use log scale for y-axis
         """
-        epochs = records.get("epoch", list(range(len(list(records.values())[0]))))
+        epochs = records.get("epoch", list(range(len(next(iter(records.values()))))))
 
         # Identify loss components
         exclude = {"epoch", "stage", "loss_total", "lr"}
@@ -102,7 +102,7 @@ class HTMLReport:
                     y=records["loss_total"],
                     name="Total Loss",
                     mode="lines",
-                    line=dict(color="black", width=2),
+                    line={"color": "black", "width": 2},
                 )
             )
 
@@ -128,7 +128,7 @@ class HTMLReport:
                         y=records[name],
                         name=name,
                         mode="lines",
-                        line=dict(color=colors[i % len(colors)], width=1.5),
+                        line={"color": colors[i % len(colors)], "width": 1.5},
                         opacity=0.85,
                     )
                 )
@@ -140,7 +140,7 @@ class HTMLReport:
             yaxis_title="Loss",
             hovermode="x unified",
             template="plotly_white",
-            legend=dict(traceorder="normal"),
+            legend={"traceorder": "normal"},
         )
 
         if log_scale:
@@ -155,7 +155,7 @@ class HTMLReport:
         Args:
             records: Training records dict
         """
-        epochs = records.get("epoch", list(range(len(list(records.values())[0]))))
+        epochs = records.get("epoch", list(range(len(next(iter(records.values()))))))
 
         fig = make_subplots(
             rows=2,
@@ -173,7 +173,7 @@ class HTMLReport:
                     y=records["loss_total"],
                     name="Loss",
                     mode="lines",
-                    line=dict(color="#1f77b4", width=1.5),
+                    line={"color": "#1f77b4", "width": 1.5},
                 ),
                 row=1,
                 col=1,
@@ -191,7 +191,7 @@ class HTMLReport:
                         y=[lr[i] for i in valid],
                         name="LR",
                         mode="lines",
-                        line=dict(color="#ff7f0e", width=1.5),
+                        line={"color": "#ff7f0e", "width": 1.5},
                     ),
                     row=2,
                     col=1,
@@ -210,7 +210,7 @@ class HTMLReport:
         Args:
             records: Training records dict
         """
-        epochs = records.get("epoch", list(range(len(list(records.values())[0]))))
+        epochs = records.get("epoch", list(range(len(next(iter(records.values()))))))
 
         # Identify loss components
         exclude = {"epoch", "stage", "loss_total", "lr"}
@@ -279,9 +279,9 @@ class HTMLReport:
             title="Relative Loss Contributions",
             xaxis_title="Epoch",
             yaxis_title="Fraction",
-            yaxis=dict(range=[0, 1]),
+            yaxis={"range": [0, 1]},
             template="plotly_white",
-            legend=dict(traceorder="normal"),
+            legend={"traceorder": "normal"},
         )
 
         self.charts.append({"title": "Loss Fraction", "figure": fig, "type": "loss_fraction"})
@@ -305,18 +305,18 @@ class HTMLReport:
         fig = go.Figure(
             data=[
                 go.Table(
-                    header=dict(
-                        values=["Metric", "Value", "Unit"],
-                        fill_color="#667eea",
-                        font=dict(color="white", family="Arial", size=12),
-                        align="left",
-                    ),
-                    cells=dict(
-                        values=[names, values, units],
-                        fill_color="white",
-                        font=dict(color="black", family="Arial", size=11),
-                        align="left",
-                    ),
+                    header={
+                        "values": ["Metric", "Value", "Unit"],
+                        "fill_color": "#667eea",
+                        "font": {"color": "white", "family": "Arial", "size": 12},
+                        "align": "left",
+                    },
+                    cells={
+                        "values": [names, values, units],
+                        "fill_color": "white",
+                        "font": {"color": "black", "family": "Arial", "size": 11},
+                        "align": "left",
+                    },
                 )
             ]
         )
@@ -324,7 +324,7 @@ class HTMLReport:
         fig.update_layout(
             title="Training Metrics",
             template="plotly_white",
-            margin=dict(l=0, r=0, t=30, b=0),
+            margin={"l": 0, "r": 0, "t": 30, "b": 0},
         )
 
         self.charts.append({"title": "Metrics", "figure": fig, "type": "metrics_table"})
@@ -336,7 +336,7 @@ class HTMLReport:
         Args:
             records: Training records dict
         """
-        epochs = records.get("epoch", list(range(len(list(records.values())[0]))))
+        epochs = records.get("epoch", list(range(len(next(iter(records.values()))))))
         loss_total = records.get("loss_total", [0])
 
         epochs = [e for e in epochs if e is not None and str(e) != "nan"]

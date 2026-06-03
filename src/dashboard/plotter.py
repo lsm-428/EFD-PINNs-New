@@ -42,9 +42,8 @@ class FlowFieldPlotter:
             return data[grid_key]
         if key in data:
             return data[key]
-        raise KeyError(
-            f"Neither '{grid_key}' nor '{key}' found in data. Available keys: {list(data.keys())}"
-        )
+        msg = f"Neither '{grid_key}' nor '{key}' found in data. Available keys: {list(data.keys())}"
+        raise KeyError(msg)
 
     def plot_phase_field(
         self,
@@ -342,7 +341,7 @@ class FlowFieldPlotter:
                 isomax=isovalue,
                 surface_count=1,
                 colorscale="Blues",
-                caps=dict(x_show=False, y_show=False),
+                caps={"x_show": False, "y_show": False},
             )
         )
 
@@ -350,13 +349,13 @@ class FlowFieldPlotter:
         t_value = data.get("t", 0)  # Default to 0 if 't' key is missing
         fig.update_layout(
             title=f"3D Ink Interface (t={t_value * 1000:.1f}ms)",
-            scene=dict(
-                xaxis_title="X (μm)",
-                yaxis_title="Y (μm)",
-                zaxis_title="Z (μm)",
-                aspectmode="data",  # Maintain physical aspect ratio
-            ),
-            margin=dict(l=0, r=0, b=0, t=0),
+            scene={
+                "xaxis_title": "X (μm)",
+                "yaxis_title": "Y (μm)",
+                "zaxis_title": "Z (μm)",
+                "aspectmode": "data",  # Maintain physical aspect ratio
+            },
+            margin={"l": 0, "r": 0, "b": 0, "t": 0},
         )
 
         return fig

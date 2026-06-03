@@ -100,7 +100,7 @@ def compare_training_runs(run_dirs: list[str]) -> go.Figure:
                         y=m["loss_total"],
                         mode="lines",
                         name=run["id"][-12:],
-                        line=dict(color=COMPARE_COLORS[i % len(COMPARE_COLORS)], width=2),
+                        line={"color": COMPARE_COLORS[i % len(COMPARE_COLORS)], "width": 2},
                         legendgroup="loss",
                     ),
                     row=1,
@@ -131,7 +131,7 @@ def compare_training_runs(run_dirs: list[str]) -> go.Figure:
         height=400,
         width=900,
         showlegend=True,
-        legend=dict(x=0.65, y=0.95, bgcolor="rgba(255,255,255,0.8)"),
+        legend={"x": 0.65, "y": 0.95, "bgcolor": "rgba(255,255,255,0.8)"},
     )
 
     return fig
@@ -168,14 +168,14 @@ def compare_stage1_vs_stage2(model_path: str) -> go.Figure:
     # Create subplots
     fig = make_subplots(rows=2, cols=2, subplot_titles=[case[3] for case in cases])
 
-    for idx, (V_from, V_to, t_max, name) in enumerate(cases):
+    for idx, (V_from, V_to, t_max, _name) in enumerate(cases):
         times = np.linspace(0, t_max, 50)
 
         # Stage 1
         eta_s1 = [stage1.theta_eta_from_triad(V_from, V_to, t)[1] for t in times]
 
         # Stage 2 (PINN)
-        Lx, Ly, Lz = PHYSICS["Lx"], PHYSICS["Ly"], PHYSICS["Lz"]
+        Lx, Ly, _Lz = PHYSICS["Lx"], PHYSICS["Ly"], PHYSICS["Lz"]
         h_ink = PHYSICS["h_ink"]
         n = 500
         x = np.random.uniform(0, Lx, n)
@@ -211,7 +211,7 @@ def compare_stage1_vs_stage2(model_path: str) -> go.Figure:
                 y=np.array(eta_s1) * 100,
                 mode="lines",
                 name="Stage 1" if idx == 0 else None,
-                line=dict(color="#1f77b4", dash="dash", width=2),
+                line={"color": "#1f77b4", "dash": "dash", "width": 2},
                 showlegend=(idx == 0),
             ),
             row=(idx // 2) + 1,
@@ -225,7 +225,7 @@ def compare_stage1_vs_stage2(model_path: str) -> go.Figure:
                 y=np.array(eta_pinn) * 100,
                 mode="lines",
                 name="Stage 2" if idx == 0 else None,
-                line=dict(color="#ff7f0e", width=2),
+                line={"color": "#ff7f0e", "width": 2},
                 showlegend=(idx == 0),
             ),
             row=(idx // 2) + 1,
@@ -244,7 +244,7 @@ def compare_stage1_vs_stage2(model_path: str) -> go.Figure:
         height=600,
         width=900,
         showlegend=True,
-        legend=dict(x=0.5, y=1.05, orientation="h", bgcolor="rgba(255,255,255,0.8)"),
+        legend={"x": 0.5, "y": 1.05, "orientation": "h", "bgcolor": "rgba(255,255,255,0.8)"},
     )
 
     return fig
@@ -373,7 +373,7 @@ def render_compare_tab() -> None:
         return
 
     # Compare button
-    col1, col2, col3 = st.columns([1, 1, 4])
+    col1, col2, _col3 = st.columns([1, 1, 4])
     with col1:
         compare_clicked = st.button("Compare Runs", type="primary")
 

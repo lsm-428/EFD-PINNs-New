@@ -104,5 +104,4 @@ def mean_curvature_3d(
         - 2 * (phi_x * phi_y * phi_xy + phi_x * phi_z * phi_xz + phi_y * phi_z * phi_yz)
     )
 
-    kappa = -numerator / (grad_mag_sq * grad_mag + eps)
-    return kappa
+    return -numerator / (grad_mag_sq * grad_mag + eps)

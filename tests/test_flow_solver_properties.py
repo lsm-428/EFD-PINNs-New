@@ -101,9 +101,9 @@ class TestMeshGeneratorProperties:
         mesh = generator.generate_structured_mesh(nx=nx, ny=ny, nz=nz)
 
         expected_total = nx * ny * nz
-        assert (
-            mesh.total_cells == expected_total
-        ), f"Expected total_cells={expected_total}, got {mesh.total_cells}"
+        assert mesh.total_cells == expected_total, (
+            f"Expected total_cells={expected_total}, got {mesh.total_cells}"
+        )
 
     @given(nx=mesh_size_strategy, ny=mesh_size_strategy, nz=mesh_size_strategy)
     @settings(max_examples=100, deadline=None)
@@ -190,9 +190,9 @@ class TestMeshGeneratorProperties:
         max_idx = mesh.total_cells - 1
         for boundary_name, indices in mesh.boundary_cells.items():
             assert np.all(indices >= 0), f"Negative index in {boundary_name}"
-            assert np.all(
-                indices <= max_idx
-            ), f"Index out of range in {boundary_name}: max={indices.max()}, limit={max_idx}"
+            assert np.all(indices <= max_idx), (
+                f"Index out of range in {boundary_name}: max={indices.max()}, limit={max_idx}"
+            )
 
 
 # ============================================================
@@ -347,9 +347,9 @@ class TestContactLineHandlerProperties:
 
         # 验证一致性（1° 容差）
         diff = abs(theta_handler - theta_predictor)
-        assert (
-            diff <= 1.0
-        ), f"Contact angle mismatch: handler={theta_handler}, predictor={theta_predictor}"
+        assert diff <= 1.0, (
+            f"Contact angle mismatch: handler={theta_handler}, predictor={theta_predictor}"
+        )
 
     @given(voltage=voltage_strategy)
     @settings(max_examples=100, deadline=None)
@@ -464,9 +464,9 @@ class TestMassConservationProperties:
 
         mass_error = solver.compute_mass_conservation_error()
 
-        assert (
-            mass_error["total_error"] == 0.0
-        ), f"Initial mass error should be 0, got {mass_error['total_error']}"
+        assert mass_error["total_error"] == 0.0, (
+            f"Initial mass error should be 0, got {mass_error['total_error']}"
+        )
 
     @given(
         nx=st.integers(min_value=8, max_value=12),
@@ -501,9 +501,9 @@ class TestMassConservationProperties:
         mass_error = solver.compute_mass_conservation_error()
 
         # 质量误差应在 0.1% 以内
-        assert (
-            mass_error["total_error"] < 0.001
-        ), f"Mass error {mass_error['total_error'] * 100:.4f}% exceeds 0.1% tolerance"
+        assert mass_error["total_error"] < 0.001, (
+            f"Mass error {mass_error['total_error'] * 100:.4f}% exceeds 0.1% tolerance"
+        )
 
 
 # ============================================================
@@ -741,9 +741,9 @@ class TestApertureRatioProperties:
             comparison = simulator.compare_with_aperture_model(voltage=voltage, duration=0.01)
 
             # 对于 hybrid 方法，应该完全一致
-            assert (
-                comparison["relative_error"] < 0.01
-            ), f"Aperture ratio mismatch at {voltage}V: {comparison['relative_error'] * 100:.2f}%"
+            assert comparison["relative_error"] < 0.01, (
+                f"Aperture ratio mismatch at {voltage}V: {comparison['relative_error'] * 100:.2f}%"
+            )
 
 
 # ============================================================
@@ -779,9 +779,9 @@ class TestValidationProperties:
         validation = simulator.validate_against_experiment(exp_data)
 
         # 由于差异很大，应该标记错误
-        assert validation[
-            "error_flag"
-        ], f"Error flag should be True for high error, got {validation['error_flag']}"
+        assert validation["error_flag"], (
+            f"Error flag should be True for high error, got {validation['error_flag']}"
+        )
 
     def test_validation_returns_required_fields(self):
         """

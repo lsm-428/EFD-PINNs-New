@@ -159,7 +159,8 @@ class SimulationResult:
         """获取指定时间步的场数据"""
         field = getattr(self, field_name, None)
         if field is None:
-            raise ValueError(f"Field '{field_name}' not available")
+            msg = f"Field '{field_name}' not available"
+            raise ValueError(msg)
         return field[time_idx]
 
 
@@ -303,7 +304,8 @@ class MeshGenerator:
             Mesh 对象
         """
         if nx <= 0 or ny <= 0 or nz <= 0:
-            raise MeshGenerationError(f"网格数必须为正整数: nx={nx}, ny={ny}, nz={nz}")
+            msg = f"网格数必须为正整数: nx={nx}, ny={ny}, nz={nz}"
+            raise MeshGenerationError(msg)
 
         # 计算网格间距
         dx = self.Lx / nx
@@ -323,7 +325,7 @@ class MeshGenerator:
         # 识别边界单元
         boundary_cells = self._identify_boundary_cells(nx, ny, nz)
 
-        mesh = Mesh(
+        return Mesh(
             x=x,
             y=y,
             z=z,
@@ -338,8 +340,6 @@ class MeshGenerator:
             nz=nz,
             boundary_cells=boundary_cells,
         )
-
-        return mesh
 
     def _identify_boundary_cells(self, nx: int, ny: int, nz: int) -> dict[str, np.ndarray]:
         """
@@ -546,9 +546,7 @@ class InterfaceTracker:
                     phi_new[i, j, k] -= dt / dz * (flux_z_p - flux_z)
 
         # 限制 phi 在 [0, 1] 范围内
-        phi_new = np.clip(phi_new, 0.0, 1.0)
-
-        return phi_new
+        return np.clip(phi_new, 0.0, 1.0)
 
     def compute_interface_normal(
         self, phi: np.ndarray
@@ -720,12 +718,7 @@ class InterfaceTracker:
 
         # 取平均厚度
         nonzero_columns = thickness_per_column[thickness_per_column > 0]
-        if len(nonzero_columns) > 0:
-            avg_thickness = np.mean(nonzero_columns)
-        else:
-            avg_thickness = 0.0
-
-        return avg_thickness
+        return np.mean(nonzero_columns) if len(nonzero_columns) > 0 else 0.0
 
     def clip_volume_fraction(self, phi: np.ndarray) -> np.ndarray:
         """
@@ -828,11 +821,9 @@ class ContactLineHandler:
             t_step = self.t_step
 
         # 使用 HybridPredictor 获取动态接触角
-        theta = self.predictor.predict(
+        return self.predictor.predict(
             voltage=voltage, time=time, V_initial=V_initial, t_step=t_step
         )
-
-        return theta
 
     def get_equilibrium_contact_angle(self, voltage: float) -> float:
         """
@@ -981,9 +972,7 @@ class ContactLineHandler:
         r_prev = get_contact_radius(phi_prev)
 
         # 接触线速度
-        velocity = (r_current - r_prev) / dt if dt > 0 else 0.0
-
-        return velocity
+        return (r_current - r_prev) / dt if dt > 0 else 0.0
 
 
 # ============================================================
@@ -1118,7 +1107,6 @@ class FlowSolver:
         if self.u is None:
             return
 
-        mesh = self.mesh
         bc_type = self.bc_config.get("walls", "no_slip")
 
         if bc_type == "no_slip":
@@ -1180,9 +1168,7 @@ class FlowSolver:
         rho_min = min(self.rho_oil, self.rho_water)
         dt_sigma = 0.5 * np.sqrt(rho_min * min(dx, dy, dz) ** 3 / (np.pi * self.sigma + 1e-10))
 
-        dt = min(dt_cfl, dt_visc, dt_sigma)
-
-        return dt
+        return min(dt_cfl, dt_visc, dt_sigma)
 
     def _get_density_field(self) -> np.ndarray:
         """获取混合密度场"""
@@ -1209,9 +1195,8 @@ class FlowSolver:
             包含 u, v, w, p, phi 的字典
         """
         if self.phi is None:
-            raise FlowSolverError(
-                "Initial conditions not set. Call set_initial_conditions() first."
-            )
+            msg = "Initial conditions not set. Call set_initial_conditions() first."
+            raise FlowSolverError(msg)
 
         mesh = self.mesh
         nx, ny, nz = mesh.nx, mesh.ny, mesh.nz
@@ -1391,10 +1376,7 @@ class FlowSolver:
         step = 0
         while self.current_time < t_end:
             # 计算时间步长
-            if dt is None:
-                dt_step = self._compute_dt()
-            else:
-                dt_step = dt
+            dt_step = self._compute_dt() if dt is None else dt
 
             # 确保不超过结束时间
             if self.current_time + dt_step > t_end:
@@ -1418,7 +1400,7 @@ class FlowSolver:
         computation_time = time_module.time() - start_time
 
         # 创建结果对象
-        result = SimulationResult(
+        return SimulationResult(
             t=np.array(t_list),
             u=np.array(u_list),
             v=np.array(v_list),
@@ -1438,8 +1420,6 @@ class FlowSolver:
             computation_time=computation_time,
             method="cfd",
         )
-
-        return result
 
     def compute_mass_conservation_error(self) -> dict[str, float]:
         """
@@ -1775,9 +1755,7 @@ class PINNSolver:
         u, v, w = output[:, 0], output[:, 1], output[:, 2]
 
         # 无滑移边界条件：壁面速度为零
-        bc_loss = torch.mean(u**2 + v**2 + w**2)
-
-        return bc_loss
+        return torch.mean(u**2 + v**2 + w**2)
 
     def train(
         self,
@@ -1877,7 +1855,8 @@ class PINNSolver:
             预测的流场
         """
         if self.model is None:
-            raise FlowSolverError("Model not built. Call build_network() first.")
+            msg = "Model not built. Call build_network() first."
+            raise FlowSolverError(msg)
 
         self.model.eval()
 
@@ -1912,7 +1891,8 @@ class PINNSolver:
             path: 保存路径
         """
         if self.model is None:
-            raise FlowSolverError("No model to save.")
+            msg = "No model to save."
+            raise FlowSolverError(msg)
 
         torch.save(
             {
@@ -2065,7 +2045,8 @@ class FlowFieldSimulator:
         elif method == "hybrid":
             result = self._simulate_hybrid(voltage, duration, V_initial, t_step)
         else:
-            raise ValueError(f"Unknown method: {method}")
+            msg = f"Unknown method: {method}"
+            raise ValueError(msg)
 
         result.computation_time = time_module.time() - start_time
         result.method = method
@@ -2135,15 +2116,13 @@ class FlowFieldSimulator:
             theta = self.contact_handler.get_dynamic_contact_angle(voltage, t, V_initial, t_step)
             contact_angles.append(theta)
 
-        result = SimulationResult(
+        return SimulationResult(
             t=t_array,
             aperture_ratio=np.array(aperture_list),
             contact_angle=np.array(contact_angles),
             config={"voltage": voltage, "duration": duration},
             method="pinn",
         )
-
-        return result
 
     def _simulate_hybrid(
         self, voltage: float, duration: float, V_initial: float, t_step: float
@@ -2275,7 +2254,8 @@ class FlowFieldSimulator:
         elif format == "json":
             self._export_json(result, output_dir)
         else:
-            raise ValueError(f"Unknown format: {format}")
+            msg = f"Unknown format: {format}"
+            raise ValueError(msg)
 
     def _export_vtk(self, result: SimulationResult, output_dir: str):
         """导出为 VTK 格式"""
@@ -2294,7 +2274,7 @@ class FlowFieldSimulator:
             return
 
         # 导出每个时间步
-        for i, t in enumerate(result.t):
+        for i, _t in enumerate(result.t):
             # 创建结构化网格
             grid = pv.RectilinearGrid(self.mesh.x, self.mesh.y, self.mesh.z)
 
@@ -2384,7 +2364,7 @@ def create_initial_conditions(mesh: Mesh, ink_thickness: float = 3e-6) -> dict[s
 
 
 def compute_aperture_ratio_from_phi(
-    phi: np.ndarray, mesh: Mesh, z_threshold: float = None
+    phi: np.ndarray, mesh: Mesh, z_threshold: float | None = None
 ) -> float:
     """
     从体积分数场计算开口率
@@ -2412,9 +2392,7 @@ def compute_aperture_ratio_from_phi(
     transparent_area = np.sum(phi_bottom < 0.5) * mesh.dx * mesh.dy
     total_area = mesh.nx * mesh.ny * mesh.dx * mesh.dy
 
-    aperture_ratio = transparent_area / total_area
-
-    return aperture_ratio
+    return transparent_area / total_area
 
 
 def demo_flow_solver():

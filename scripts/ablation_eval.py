@@ -252,7 +252,7 @@ def main():
 
     results = {}
     for name, run_dir in RUNS.items():
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Evaluating: {name}")
         ckpt = os.path.join(run_dir, "best_model.pth")
         if not os.path.exists(ckpt):

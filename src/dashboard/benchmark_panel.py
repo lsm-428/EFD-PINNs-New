@@ -332,8 +332,8 @@ def render_benchmark_tab(engine: Optional["PINNInferenceEngine"]) -> None:
                 y=throughputs,
                 mode="lines+markers",
                 name="Throughput",
-                line=dict(color="#2ca02c", width=3),
-                marker=dict(size=10),
+                line={"color": "#2ca02c", "width": 3},
+                marker={"size": 10},
                 text=[f"{tp:,.0f} samples/s" for tp in throughputs],
             )
         )
@@ -347,7 +347,7 @@ def render_benchmark_tab(engine: Optional["PINNInferenceEngine"]) -> None:
             showarrow=True,
             arrowhead=2,
             arrowcolor="#ff7f0e",
-            font=dict(color="#ff7f0e", size=12),
+            font={"color": "#ff7f0e", "size": 12},
         )
 
         fig_throughput.update_layout(

@@ -129,7 +129,8 @@ class ModelManager:
         if path is None:
             path = self.get_latest_model()
             if path is None:
-                raise FileNotFoundError(f"No model checkpoints found in {self.outputs_dir}")
+                msg = f"No model checkpoints found in {self.outputs_dir}"
+                raise FileNotFoundError(msg)
 
         # Check if already cached
         if path in self._cache:
@@ -155,7 +156,8 @@ class ModelManager:
             return engine
 
         except Exception as e:
-            raise RuntimeError(f"Failed to load model from {path}: {e}")
+            msg = f"Failed to load model from {path}: {e}"
+            raise RuntimeError(msg)
 
     def clear_cache(self) -> None:
         """Clear all cached models."""

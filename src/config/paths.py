@@ -38,10 +38,7 @@ DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / DEFAULT_CONFIG_FILENAME
 
 # 支持环境变量覆盖
 _env_config_path = os.getenv("EFD_CONFIG_PATH")
-if _env_config_path:
-    CONFIG_PATH = Path(_env_config_path)
-else:
-    CONFIG_PATH = DEFAULT_CONFIG_PATH
+CONFIG_PATH = Path(_env_config_path) if _env_config_path else DEFAULT_CONFIG_PATH
 
 # ============================================================================
 # 输出目录
@@ -49,10 +46,7 @@ else:
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "outputs"
 
 _env_output_dir = os.getenv("EFD_OUTPUT_DIR")
-if _env_output_dir:
-    OUTPUT_DIR = Path(_env_output_dir)
-else:
-    OUTPUT_DIR = DEFAULT_OUTPUT_DIR
+OUTPUT_DIR = Path(_env_output_dir) if _env_output_dir else DEFAULT_OUTPUT_DIR
 
 # ============================================================================
 # 辅助函数
@@ -86,9 +80,8 @@ def get_config_path(config_path: str | None = None) -> Path:
         path = CONFIG_PATH
 
     if not path.exists():
-        raise FileNotFoundError(
-            f"配置文件未找到: {path}\n请确保文件存在，或设置环境变量 EFD_CONFIG_PATH"
-        )
+        msg = f"配置文件未找到: {path}\n请确保文件存在，或设置环境变量 EFD_CONFIG_PATH"
+        raise FileNotFoundError(msg)
 
     return path
 

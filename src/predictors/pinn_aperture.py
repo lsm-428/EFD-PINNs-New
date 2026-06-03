@@ -105,7 +105,7 @@ class PINNAperturePredictor:
             config = checkpoint.get("config", DEFAULT_CONFIG)
             self.config = config
             self.model = TwoPhasePINN(config).to(self.device)
-            self.model, missing_keys, unexpected_keys = load_model_with_mismatch_handling(
+            self.model, _missing_keys, _unexpected_keys = load_model_with_mismatch_handling(
                 self.model, checkpoint_path, strict=False
             )
             self.model.to(self.device)
@@ -144,12 +144,11 @@ class PINNAperturePredictor:
             RuntimeError: 如果模型不可用
         """
         if not self.is_available:
-            raise RuntimeError("PINN 模型不可用，请先加载模型或使用解析方法")
+            msg = "PINN 模型不可用，请先加载模型或使用解析方法"
+            raise RuntimeError(msg)
 
         phi_field = self.predict_phi_field(voltage, time, n_points)
-        aperture = self._integrate_aperture(phi_field)
-
-        return aperture
+        return self._integrate_aperture(phi_field)
 
     def predict_phi_field(
         self, voltage: float, time: float, n_points: int = 100, z: float = 0.0
@@ -167,7 +166,8 @@ class PINNAperturePredictor:
             φ 场，shape (n_points, n_points)
         """
         if not self.is_available:
-            raise RuntimeError("PINN 模型不可用")
+            msg = "PINN 模型不可用"
+            raise RuntimeError(msg)
 
         Lx, Ly = self.physics["Lx"], self.physics["Ly"]
 
@@ -216,7 +216,8 @@ class PINNAperturePredictor:
             }
         """
         if not self.is_available:
-            raise RuntimeError("PINN 模型不可用")
+            msg = "PINN 模型不可用"
+            raise RuntimeError(msg)
 
         nx, ny, nz = n_points
         Lx, Ly, Lz = self.physics["Lx"], self.physics["Ly"], self.physics["Lz"]
@@ -472,7 +473,7 @@ class PINNAperturePredictor:
 
 
 # 便捷函数
-def predict_aperture_pinn(voltage: float, time: float, checkpoint_path: str = None) -> float:
+def predict_aperture_pinn(voltage: float, time: float, checkpoint_path: str | None = None) -> float:
     """
     便捷函数：使用 PINN 预测开口率
 

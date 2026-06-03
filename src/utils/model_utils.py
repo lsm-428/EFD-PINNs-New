@@ -36,7 +36,8 @@ def extract_predictions(raw_output) -> torch.Tensor:
             val = raw_output["main_predictions"]
             if isinstance(val, torch.Tensor):
                 return val
-            raise ValueError("'main_predictions' 存在但不是 torch.Tensor")
+            msg = "'main_predictions' 存在但不是 torch.Tensor"
+            raise ValueError(msg)
 
         # 其次尝试 'prediction' 键（兼容旧名）
         if "prediction" in raw_output and isinstance(raw_output["prediction"], torch.Tensor):
@@ -48,7 +49,8 @@ def extract_predictions(raw_output) -> torch.Tensor:
                 logger.warning(f"未找到 'main_predictions'，使用字典中第一个张量键: {k}")
                 return v
 
-    raise ValueError(f"无法从模型输出中提取预测张量，类型={type(raw_output)}")
+    msg = f"无法从模型输出中提取预测张量，类型={type(raw_output)}"
+    raise ValueError(msg)
 
 
 def load_model_with_mismatch_handling(
@@ -85,7 +87,7 @@ def load_model_with_mismatch_handling(
     missing_keys = []
     unexpected_keys = list(state_dict.keys())
 
-    for key in model_state.keys():
+    for key in model_state:
         if key in state_dict:
             if model_state[key].shape == state_dict[key].shape:
                 model_state[key] = state_dict[key]

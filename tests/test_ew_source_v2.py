@@ -32,9 +32,9 @@ def test_ew_source_magnitude():
     assert C_ink < C_open, f"C_ink ({C_ink:.4e}) must be less than C_open ({C_open:.4e})"
 
     # EW 源项应在合理量级 (0.001 ~ 10 1/s)
-    assert (
-        0.0001 < ew_at_surface < 100
-    ), f"EW source magnitude {ew_at_surface:.4e} out of reasonable range [1e-4, 1e2]"
+    assert 0.0001 < ew_at_surface < 100, (
+        f"EW source magnitude {ew_at_surface:.4e} out of reasonable range [1e-4, 1e2]"
+    )
 
     # 电容量级验证（μF/m² 量级）
     assert 1e-6 < C_open < 1e-3, f"C_open = {C_open:.4e} F/m² out of range [1e-6, 1e-3] (μF/m²)"

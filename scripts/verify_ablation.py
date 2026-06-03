@@ -169,7 +169,7 @@ for name, run_dir in RUNS:
     # --- Physical validity ---
     if vol_mean < 1.0 and if_quality == "Sharp" and ap_err < 20:
         valid = "Yes"
-    elif if_quality == "Degraded" or if_quality == "Diffuse":
+    elif if_quality in {"Degraded", "Diffuse"}:
         valid = "No"
     else:
         valid = "Partial"
@@ -185,7 +185,7 @@ for name, run_dir in RUNS:
 
     w_str = f"{avg_width:.1f}" if not np.isnan(avg_width) else "N/A"
 
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"  {name}")
     print(f"  Best Loss: {best_loss:.1f}")
     print(f"  Volume Error: {vol_mean:.2f}%")
@@ -196,8 +196,8 @@ for name, run_dir in RUNS:
     print(f"  Physically Valid: {valid}")
 
 # Final summary table
-print(f"\n\n{'='*100}")
+print(f"\n\n{'=' * 100}")
 print(
     f"{'Variant':<18} {'Loss':>7} {'Vol.Err':>8} {'η_PINN':>8} {'η_Ref':>8} {'Ap.Err':>8} {'If.Qual':>10} {'Valid':>8}"
 )
-print(f"{'-'*100}")
+print(f"{'-' * 100}")

@@ -233,9 +233,7 @@ class DynamicPhysicsWeightScheduler:
             adjustment_factor = 1.0
 
         # 应用调整因子
-        new_weight = self.current_weight * adjustment_factor
-
-        return new_weight
+        return self.current_weight * adjustment_factor
 
     def _performance_based_adjustment(self, val_loss: float) -> float:
         """基于验证性能的权重调整"""

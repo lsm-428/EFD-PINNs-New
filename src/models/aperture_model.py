@@ -162,9 +162,7 @@ class ApertureModel:
         C_total_density = (1 - aperture_ratio) * C_ink_region + aperture_ratio * C_open_region
 
         # 总电容
-        C_total = C_total_density * self.pixel_area
-
-        return C_total
+        return C_total_density * self.pixel_area
 
     def capacitance_ratio(self, aperture_ratio: float) -> float:
         """
@@ -295,9 +293,7 @@ class ApertureModel:
         r_open = np.sqrt(aperture_ratio * self.pixel_area / np.pi)
 
         # 不能超过像素半径
-        r_open = min(r_open, self.R_pixel * 0.95)
-
-        return r_open
+        return min(r_open, self.R_pixel * 0.95)
 
     def calculate_ink_distribution(
         self, theta: float, num_points: int = 100
@@ -349,7 +345,7 @@ class ApertureModel:
 
         return r, h
 
-    def predict(self, voltage: float, theta: float = None) -> dict:
+    def predict(self, voltage: float, theta: float | None = None) -> dict:
         """
         预测给定电压下的开口率和油墨分布
 
@@ -405,7 +401,7 @@ class EnhancedApertureModel(ApertureModel):
 
     def __init__(
         self,
-        config_path: str = None,
+        config_path: str | None = None,
         predictor: Optional["HybridPredictor"] = None,
         tau_rc: float = 0.1e-3,  # RC 时间常数，默认 0.1ms
     ):
@@ -540,7 +536,8 @@ class EnhancedApertureModel(ApertureModel):
             measurements.append((v, target))
 
         if not measurements:
-            raise ValueError("实验数据为空或格式不正确")
+            msg = "实验数据为空或格式不正确"
+            raise ValueError(msg)
 
         k_values = np.linspace(k_range[0], k_range[1], num_k)
         theta_scale_values = np.linspace(
@@ -614,7 +611,7 @@ class EnhancedApertureModel(ApertureModel):
         eta = self.contact_angle_to_aperture_ratio(theta)
         return theta, eta
 
-    def _validate_inputs(self, voltage: float, time: float = None) -> None:
+    def _validate_inputs(self, voltage: float, time: float | None = None) -> None:
         """
         验证输入参数
 
@@ -626,11 +623,14 @@ class EnhancedApertureModel(ApertureModel):
             ValueError: 如果输入参数无效
         """
         if voltage < 0:
-            raise ValueError(f"电压不能为负: {voltage}")
+            msg = f"电压不能为负: {voltage}"
+            raise ValueError(msg)
         if voltage > 50:
-            raise ValueError(f"电压超出范围: {voltage} > 50V")
+            msg = f"电压超出范围: {voltage} > 50V"
+            raise ValueError(msg)
         if time is not None and time < 0:
-            raise ValueError(f"时间不能为负: {time}")
+            msg = f"时间不能为负: {time}"
+            raise ValueError(msg)
 
     def _get_predictor(self) -> "HybridPredictor":
         """
@@ -701,7 +701,7 @@ class EnhancedApertureModel(ApertureModel):
     def get_contact_angle(
         self,
         voltage: float,
-        time: float = None,
+        time: float | None = None,
         V_initial: float = 0.0,
         t_step: float = 0.0,
     ) -> float:
@@ -888,7 +888,7 @@ class EnhancedApertureModel(ApertureModel):
         num_points: int = 500,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         predictor = self._get_predictor()
-        t, V, theta, eta = predictor.square_wave_response(
+        t, V, _theta, eta = predictor.square_wave_response(
             V_low=0.0,
             V_high=V_target,
             duration=duration,
@@ -970,7 +970,7 @@ class EnhancedApertureModel(ApertureModel):
 
     # === 增强预测接口 ===
 
-    def predict_enhanced(self, voltage: float, time: float = None) -> dict:
+    def predict_enhanced(self, voltage: float, time: float | None = None) -> dict:
         """
         增强预测，包含电容器充电效应
 
@@ -1031,7 +1031,9 @@ class EnhancedApertureModel(ApertureModel):
 
     # === 可视化方法 ===
 
-    def plot_comparison(self, V_list: list[float] = None, save_path: str = None) -> None:
+    def plot_comparison(
+        self, V_list: list[float] | None = None, save_path: str | None = None
+    ) -> None:
         """
         生成电压-开口率对比图（原模型 vs 增强模型）
 
@@ -1057,7 +1059,7 @@ class EnhancedApertureModel(ApertureModel):
             enhanced_apertures.append(result["aperture_percent"])
 
         # 绘图
-        fig, ax = plt.subplots(figsize=(10, 6))
+        _fig, ax = plt.subplots(figsize=(10, 6))
         ax.plot(V_list, base_apertures, "b-o", linewidth=2, markersize=8, label="原模型")
         ax.plot(
             V_list,
@@ -1083,7 +1085,7 @@ class EnhancedApertureModel(ApertureModel):
             plt.show()
         plt.close()
 
-    def plot_ink_profile(self, theta: float, save_path: str = None) -> None:
+    def plot_ink_profile(self, theta: float, save_path: str | None = None) -> None:
         """
         生成油墨高度剖面图 (r vs h)
 
@@ -1095,7 +1097,7 @@ class EnhancedApertureModel(ApertureModel):
         aperture = self.contact_angle_to_aperture_ratio(theta)
         r_open = self.aperture_ratio_to_open_radius(aperture)
 
-        fig, ax = plt.subplots(figsize=(10, 6))
+        _fig, ax = plt.subplots(figsize=(10, 6))
         ax.plot(r * 1e6, h * 1e6, "b-", linewidth=2)
         ax.fill_between(r * 1e6, 0, h * 1e6, alpha=0.3, color="blue")
 
@@ -1131,7 +1133,7 @@ class EnhancedApertureModel(ApertureModel):
         V_start: float = 0.0,
         V_end: float = 30.0,
         duration: float = 0.10,
-        save_path: str = None,
+        save_path: str | None = None,
     ) -> None:
         """
         生成开口率动态响应图
@@ -1145,7 +1147,7 @@ class EnhancedApertureModel(ApertureModel):
         t, eta = self.aperture_step_response(V_start, V_end, duration, t_step=0.002)
         metrics = self.get_aperture_metrics(t, eta, t_step=0.002)
 
-        fig, ax = plt.subplots(figsize=(10, 6))
+        _fig, ax = plt.subplots(figsize=(10, 6))
         ax.plot(t * 1000, eta * 100, "b-", linewidth=2)
 
         # 标记关键点
@@ -1181,7 +1183,7 @@ class EnhancedApertureModel(ApertureModel):
             plt.show()
         plt.close()
 
-    def plot_pixel_view(self, theta: float, save_path: str = None) -> None:
+    def plot_pixel_view(self, theta: float, save_path: str | None = None) -> None:
         """
         生成像素俯视图
 
@@ -1193,7 +1195,7 @@ class EnhancedApertureModel(ApertureModel):
         r_open = self.aperture_ratio_to_open_radius(aperture) * 1e6  # 转换为 μm
         pixel_half = self.pixel_size * 1e6 / 2  # 转换为 μm
 
-        fig, ax = plt.subplots(figsize=(8, 8))
+        _fig, ax = plt.subplots(figsize=(8, 8))
         ax.set_aspect("equal")
 
         # 像素边界（方形）
@@ -1244,8 +1246,8 @@ class EnhancedApertureModel(ApertureModel):
     def visualize_3d(
         self,
         voltage: float,
-        time: float = None,
-        save_path: str = None,
+        time: float | None = None,
+        save_path: str | None = None,
     ):
         from scripts.visualization.generate_pyvista_3d import (
             create_aperture_model_visualization,
@@ -1447,7 +1449,7 @@ def demo():
     logger.info(f"   单调性: {'✅' if validation['monotonicity']['passed'] else '❌'}")
 
     # 绘图 - 4个子图
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    _fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
     # 图1: 电压-开口率对比曲线
     ax1 = axes[0, 0]
@@ -1584,11 +1586,11 @@ def demo():
     t_rise = 0.002
     t_fall = 0.040
     num_points = 1000
-    fig2, ax = plt.subplots(figsize=(14, 9), dpi=150)
+    _fig2, ax = plt.subplots(figsize=(14, 9), dpi=150)
     norm = plt.Normalize(V_start, V_end)
     cmap = cm.turbo
     for V in voltages_cycle:
-        t_cycle, V_t_cycle, eta_cycle = model.aperture_cycle_response(
+        t_cycle, _V_t_cycle, eta_cycle = model.aperture_cycle_response(
             V_target=V,
             duration=duration,
             t_rise=t_rise,
@@ -1658,7 +1660,7 @@ def demo():
             "• Result: Full Return to 0%",
         )
     )
-    props = dict(boxstyle="round", facecolor="white", alpha=0.8)
+    props = {"boxstyle": "round", "facecolor": "white", "alpha": 0.8}
     ax.text(
         0.02,
         0.85,

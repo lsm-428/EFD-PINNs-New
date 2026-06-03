@@ -187,9 +187,9 @@ class PhysicsConstraints:
             sigma = self.materials_params["surface_tension_polar_ink"]
 
             # 电润湿参数
-            Lx = self.materials_params.get("Lx", 174e-6)
-            Ly = self.materials_params.get("Ly", 174e-6)
-            Lz = self.materials_params.get("domain_height", 20e-6)
+            self.materials_params.get("Lx", 174e-6)
+            self.materials_params.get("Ly", 174e-6)
+            self.materials_params.get("domain_height", 20e-6)
 
             # 双层串联电容 (SU-8 + Teflon)，含有效面积校正因子 A_eff
             C_ew = self._compute_capacitance()
@@ -238,7 +238,7 @@ class PhysicsConstraints:
 
             # 表面张力 (CSF 模型 - 精确曲率)
 
-            grad_phi_mag_sq, grad_phi_mag = gradient_magnitude(phi_x, phi_y, phi_z)
+            _grad_phi_mag_sq, _grad_phi_mag = gradient_magnitude(phi_x, phi_y, phi_z)
 
             # 精确曲率公式: kappa = -div(grad(phi)/|grad(phi)|)
             kappa = mean_curvature_3d(
@@ -276,8 +276,8 @@ class PhysicsConstraints:
             f_ew_magnitude = 0.5 * C_ew * V_eff_ew**2
 
             # 空间坐标
-            x_coord = x[:, 0]
-            y_coord = x[:, 1]
+            x[:, 0]
+            x[:, 1]
             z_coord = x[:, 2]
 
             # 电润湿力作用在底面 (z=0)
@@ -388,56 +388,51 @@ class PhysicsConstraints:
                 "ink_potential_min": torch.zeros(batch_size, device=device, requires_grad=True),
             }
 
-            if isinstance(predictions, torch.Tensor):
-                if predictions.shape[1] >= 5:
-                    alpha = predictions[:, 4]
-                    alpha_clamped = torch.clamp(alpha, 0.0, 1.0)
-                    base_consistency = alpha - alpha_clamped
+            if isinstance(predictions, torch.Tensor) and predictions.shape[1] >= 5:
+                alpha = predictions[:, 4]
+                alpha_clamped = torch.clamp(alpha, 0.0, 1.0)
+                base_consistency = alpha - alpha_clamped
 
-                    ink_fraction_target = self.materials_params.get("ink_initial_fraction", 0.15)
-                    alpha_mean = torch.mean(alpha_clamped)
-                    global_volume_residual = (alpha_mean - ink_fraction_target) / max(
-                        ink_fraction_target, 1e-6
-                    )
-                    global_volume_residual_tensor = global_volume_residual.expand(batch_size)
+                ink_fraction_target = self.materials_params.get("ink_initial_fraction", 0.15)
+                alpha_mean = torch.mean(alpha_clamped)
+                global_volume_residual = (alpha_mean - ink_fraction_target) / max(
+                    ink_fraction_target, 1e-6
+                )
+                global_volume_residual_tensor = global_volume_residual.expand(batch_size)
 
-                    overflow_penalty = torch.zeros(batch_size, device=device, requires_grad=True)
-                    if (
-                        isinstance(x_phys, torch.Tensor)
-                        and x_phys.dim() == 2
-                        and x_phys.size(1) >= 3
-                    ):
-                        coords = x_phys.detach()
-                        x = coords[:, 0]
-                        y = coords[:, 1]
-                        z = coords[:, 2]
+                overflow_penalty = torch.zeros(batch_size, device=device, requires_grad=True)
+                if isinstance(x_phys, torch.Tensor) and x_phys.dim() == 2 and x_phys.size(1) >= 3:
+                    coords = x_phys.detach()
+                    x = coords[:, 0]
+                    y = coords[:, 1]
+                    z = coords[:, 2]
 
-                        x_min, x_max = torch.min(x), torch.max(x)
-                        y_min, y_max = torch.min(y), torch.max(y)
+                    x_min, x_max = torch.min(x), torch.max(x)
+                    y_min, y_max = torch.min(y), torch.max(y)
 
-                        Lx = (x_max - x_min).clamp(min=1e-9)
-                        Ly = (y_max - y_min).clamp(min=1e-9)
+                    Lx = (x_max - x_min).clamp(min=1e-9)
+                    Ly = (y_max - y_min).clamp(min=1e-9)
 
-                        ink_thickness = self.materials_params.get("ink_thickness", 3e-6)
-                        margin_x = 0.1 * Lx
-                        margin_y = 0.1 * Ly
+                    self.materials_params.get("ink_thickness", 3e-6)
+                    margin_x = 0.1 * Lx
+                    margin_y = 0.1 * Ly
 
-                        near_left = (x - x_min).abs() < margin_x
-                        near_right = (x_max - x).abs() < margin_x
-                        near_front = (y - y_min).abs() < margin_y
-                        near_back = (y_max - y_min).abs() < margin_y
+                    near_left = (x - x_min).abs() < margin_x
+                    near_right = (x_max - x).abs() < margin_x
+                    near_front = (y - y_min).abs() < margin_y
+                    near_back = (y_max - y_min).abs() < margin_y
 
-                        near_wall = near_left | near_right | near_front | near_back
-                        wall_h = self.materials_params.get("wall_height", 3.5e-6)
-                        above_wall = z > wall_h
-                        overflow_mask = near_wall & above_wall
+                    near_wall = near_left | near_right | near_front | near_back
+                    wall_h = self.materials_params.get("wall_height", 3.5e-6)
+                    above_wall = z > wall_h
+                    overflow_mask = near_wall & above_wall
 
-                        if overflow_mask.any():
-                            overflow_alpha = alpha_clamped * overflow_mask.float()
-                            overflow_penalty = overflow_alpha
+                    if overflow_mask.any():
+                        overflow_alpha = alpha_clamped * overflow_mask.float()
+                        overflow_penalty = overflow_alpha
 
-                    residuals["volume_conservation"] = global_volume_residual_tensor
-                    residuals["volume_consistency"] = base_consistency + overflow_penalty
+                residuals["volume_conservation"] = global_volume_residual_tensor
+                residuals["volume_consistency"] = base_consistency + overflow_penalty
 
             if isinstance(predictions, torch.Tensor) and predictions.shape[1] >= 6:
                 ink_potential = predictions[:, 5]
@@ -625,7 +620,7 @@ class PhysicsConstraints:
         """
         try:
             device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
-            batch_size = x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
+            x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
             zero = torch.zeros(1, device=device, requires_grad=True)
             res = {"laplace_pressure": zero}
 
@@ -663,7 +658,7 @@ class PhysicsConstraints:
                 phi_x = grad_phi[:, 0]
                 phi_y = grad_phi[:, 1]
                 phi_z = grad_phi[:, 2]
-                grad_mag_sq, grad_mag = gradient_magnitude(phi_x, phi_y, phi_z)
+                _grad_mag_sq, grad_mag = gradient_magnitude(phi_x, phi_y, phi_z)
                 try:
                     lap_x = compute_gradient(phi_x.sum(), x_phys)[:, 0]
                     lap_y = compute_gradient(phi_y.sum(), x_phys)[:, 1]
@@ -806,7 +801,7 @@ class PhysicsConstraints:
         """
         try:
             device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
-            batch_size = x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
+            x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
 
             if not isinstance(x_phys, torch.Tensor) or not isinstance(predictions, torch.Tensor):
                 return {"phase_field_wetting": torch.tensor(0.0, device=device)}
@@ -1074,8 +1069,8 @@ class PhysicsConstraints:
             if not is_top.any():
                 return res
 
-            u_t = predictions[is_top, 0]
-            v_t = predictions[is_top, 1]
+            predictions[is_top, 0]
+            predictions[is_top, 1]
             w_t = predictions[is_top, 2]
             phi_t = predictions[is_top, 4]
 

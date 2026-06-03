@@ -140,7 +140,7 @@ def create_stage1_plots(results: dict[str, Any], plot_type: str = "dynamic") -> 
                 y=results["theta"],
                 mode="lines",
                 name="Contact Angle",
-                line=dict(color="blue", width=2),
+                line={"color": "blue", "width": 2},
             ),
             row=1,
             col=1,
@@ -153,7 +153,7 @@ def create_stage1_plots(results: dict[str, Any], plot_type: str = "dynamic") -> 
                 y=results["aperture_ratio"] * 100,  # Convert to %
                 mode="lines",
                 name="Aperture Ratio",
-                line=dict(color="red", width=2),
+                line={"color": "red", "width": 2},
             ),
             row=2,
             col=1,
@@ -188,7 +188,7 @@ def create_stage1_plots(results: dict[str, Any], plot_type: str = "dynamic") -> 
                 mode="lines+markers",
                 name="Contact Angle",
                 yaxis="y",
-                line=dict(color="blue", width=2),
+                line={"color": "blue", "width": 2},
             )
         )
 
@@ -200,25 +200,25 @@ def create_stage1_plots(results: dict[str, Any], plot_type: str = "dynamic") -> 
                 mode="lines+markers",
                 name="Aperture Ratio",
                 yaxis="y2",
-                line=dict(color="red", width=2),
+                line={"color": "red", "width": 2},
             )
         )
 
         # Create dual y-axis
         fig.update_layout(
-            yaxis=dict(
-                title="Contact Angle (°)",
-                title_font=dict(color="blue"),
-                tickfont=dict(color="blue"),
-            ),
-            yaxis2=dict(
-                title="Aperture Ratio (%)",
-                title_font=dict(color="red"),
-                tickfont=dict(color="red"),
-                overlaying="y",
-                side="right",
-            ),
-            xaxis=dict(title="Voltage (V)"),
+            yaxis={
+                "title": "Contact Angle (°)",
+                "title_font": {"color": "blue"},
+                "tickfont": {"color": "blue"},
+            },
+            yaxis2={
+                "title": "Aperture Ratio (%)",
+                "title_font": {"color": "red"},
+                "tickfont": {"color": "red"},
+                "overlaying": "y",
+                "side": "right",
+            },
+            xaxis={"title": "Voltage (V)"},
             height=500,
             title_text="Stage 1 Steady-State Characteristics",
             showlegend=True,
@@ -248,7 +248,7 @@ def create_stage1_plots(results: dict[str, Any], plot_type: str = "dynamic") -> 
                 y=theta_list,
                 mode="lines+markers",
                 name="Contact Angle",
-                line=dict(color="blue", width=2),
+                line={"color": "blue", "width": 2},
             ),
             row=1,
             col=1,
@@ -264,7 +264,7 @@ def create_stage1_plots(results: dict[str, Any], plot_type: str = "dynamic") -> 
                 y=aperture_list,
                 mode="lines+markers",
                 name="Aperture Ratio",
-                line=dict(color="red", width=2),
+                line={"color": "red", "width": 2},
             ),
             row=1,
             col=2,
@@ -278,7 +278,7 @@ def create_stage1_plots(results: dict[str, Any], plot_type: str = "dynamic") -> 
                     y=results["theta"],
                     mode="lines",
                     name="Dynamic θ",
-                    line=dict(color="darkblue", width=2),
+                    line={"color": "darkblue", "width": 2},
                 ),
                 row=2,
                 col=1,
@@ -292,7 +292,7 @@ def create_stage1_plots(results: dict[str, Any], plot_type: str = "dynamic") -> 
                     y=results["aperture_ratio"] * 100,
                     mode="lines",
                     name="Dynamic η",
-                    line=dict(color="darkred", width=2),
+                    line={"color": "darkred", "width": 2},
                 ),
                 row=2,
                 col=2,
@@ -315,7 +315,8 @@ def create_stage1_plots(results: dict[str, Any], plot_type: str = "dynamic") -> 
         )
 
     else:
-        raise ValueError(f"Unknown plot_type: {plot_type}. Must be 'dynamic', 'steady', or 'both'.")
+        msg = f"Unknown plot_type: {plot_type}. Must be 'dynamic', 'steady', or 'both'."
+        raise ValueError(msg)
 
     return fig
 

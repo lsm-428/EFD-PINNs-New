@@ -315,7 +315,7 @@ class HybridPredictor:
         return np.degrees(np.arccos(cos_theta))
 
     def dynamic_response(
-        self, t: float, theta_start: float, theta_eq: float, V_to: float = None
+        self, t: float, theta_start: float, theta_eq: float, V_to: float | None = None
     ) -> float:
         """
         二阶欠阻尼动态响应（电润湿驱动）
@@ -351,7 +351,11 @@ class HybridPredictor:
         )
 
     def surface_tension_recovery(
-        self, t: float, theta_start: float, theta_eq: float = None, V_from: float = None
+        self,
+        t: float,
+        theta_start: float,
+        theta_eq: float | None = None,
+        V_from: float | None = None,
     ) -> float:
         """
         表面张力恢复动力学（电压撤除后）
@@ -608,7 +612,7 @@ class HybridPredictor:
 
         # 计算稳态开口率
         eta_low = self._theta_to_aperture(np.array([theta_low]))[0]  # ~0
-        eta_high = self._theta_to_aperture(np.array([theta_high]))[0]  # ~83%
+        self._theta_to_aperture(np.array([theta_high]))[0]  # ~83%
 
         eta_at_fall = None  # 电压撤除时刻的开口率
 
@@ -842,7 +846,7 @@ def demo():
     )
 
     # 绘图 - 4 个子图
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    _fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
     # 1. 方波电压
     ax1 = axes[0, 0]
