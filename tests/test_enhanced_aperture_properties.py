@@ -249,9 +249,9 @@ class TestNoOvershootProperty:
 
         metrics = self.model.get_aperture_metrics(t, eta, t_step=0.002)
 
-        assert metrics["overshoot_percent"] == 0.0, (
-            f"Expected 0% overshoot for monotonic response, got {metrics['overshoot_percent']:.2f}%"
-        )
+        assert (
+            metrics["overshoot_percent"] == 0.0
+        ), f"Expected 0% overshoot for monotonic response, got {metrics['overshoot_percent']:.2f}%"
 
     def test_overshoot_detected_when_present(self):
         """
@@ -309,9 +309,9 @@ class TestConfigSerializationProperty:
 
             # 验证所有参数匹配
             for key in original_config:
-                assert original_config[key] == loaded_config[key], (
-                    f"Config mismatch for {key}: {original_config[key]} != {loaded_config[key]}"
-                )
+                assert (
+                    original_config[key] == loaded_config[key]
+                ), f"Config mismatch for {key}: {original_config[key]} != {loaded_config[key]}"
         finally:
             # 清理临时文件
             if os.path.exists(temp_path):
@@ -343,9 +343,9 @@ class TestConfigSerializationProperty:
             loaded_config = loaded_model.get_config()
 
             # 验证 tau_rc 匹配
-            assert abs(original_config["tau_rc"] - loaded_config["tau_rc"]) < 1e-15, (
-                f"tau_rc mismatch: {original_config['tau_rc']} != {loaded_config['tau_rc']}"
-            )
+            assert (
+                abs(original_config["tau_rc"] - loaded_config["tau_rc"]) < 1e-15
+            ), f"tau_rc mismatch: {original_config['tau_rc']} != {loaded_config['tau_rc']}"
         finally:
             # 清理临时文件
             if os.path.exists(temp_path):

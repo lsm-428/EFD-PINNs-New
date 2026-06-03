@@ -59,15 +59,15 @@ def test_ew_source_magnitude():
 
     # 断言: 源项非零且有合理量级 (ε=0.5μm 后 EW 源项 ~1e6, ∝ 1/ε²)
     assert ew_source.max().item() > 0, "EW source must be positive at oil-covered bottom"
-    assert ew_source.mean().item() < 1e8, (
-        f"EW source mean {ew_source.mean().item():.4e} too large, expected < 1e8 1/s (eps=0.5um)"
-    )
+    assert (
+        ew_source.mean().item() < 1e8
+    ), f"EW source mean {ew_source.mean().item():.4e} too large, expected < 1e8 1/s (eps=0.5um)"
 
     # 断言: z_decay 在 z=0 处为 1，在 z=h_ink 处衰减到 1/e
     assert abs(z_decay[0].item() - 1.0) < 0.01, f"z_decay at z=0 should be ~1.0, got {z_decay[0].item():.4f}"
-    assert abs(z_decay[-1].item() - 1.0 / torch.e) < 0.05, (
-        f"z_decay at z=h_ink should be ~1/e, got {z_decay[-1].item():.4f}"
-    )
+    assert (
+        abs(z_decay[-1].item() - 1.0 / torch.e) < 0.05
+    ), f"z_decay at z=h_ink should be ~1/e, got {z_decay[-1].item():.4f}"
 
 
 def test_ew_source_gradient():
@@ -135,6 +135,6 @@ def test_capacitance_components():
     assert Z_teflon > 0
     # Teflon 虽然是疏水层但电容串联后 C 应小于单独 SU-8
     C_su8_only = eps0 * eps_su8 / d_su8
-    assert C_su8_only > C_open, (
-        f"C_open ({C_open:.4e}) should be less than C_su8_only ({C_su8_only:.4e}) (series adds impedance)"
-    )
+    assert (
+        C_su8_only > C_open
+    ), f"C_open ({C_open:.4e}) should be less than C_su8_only ({C_su8_only:.4e}) (series adds impedance)"

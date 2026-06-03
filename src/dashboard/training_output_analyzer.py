@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 import warnings
 
 import numpy as np
@@ -664,14 +664,14 @@ class ModelLoader:
     """
 
     # 模型文件名模式
-    MODEL_PATTERNS = {
+    MODEL_PATTERNS: ClassVar[dict[str, str]] = {
         "best": "best_model.pth",
         "final": "final_model.pth",
         "latest": "latest_model.pth",
     }
 
     # 回退顺序
-    FALLBACK_ORDER = {
+    FALLBACK_ORDER: ClassVar[dict[str, list[str]]] = {
         "best": ["latest", "final"],
         "final": ["latest", "best"],
         "latest": ["best", "final"],

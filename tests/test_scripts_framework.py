@@ -185,21 +185,21 @@ class CLITestCase:
 
     def assert_exit_success(self, result: subprocess.CompletedProcess):
         """Assert script exited with success (return code 0)"""
-        assert result.returncode == 0, (
-            f"Script failed with return code {result.returncode}\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"Script failed with return code {result.returncode}\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
 
     def assert_exit_failure(self, result: subprocess.CompletedProcess):
         """Assert script exited with failure (non-zero return code)"""
-        assert result.returncode != 0, (
-            f"Script succeeded when it should have failed\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
-        )
+        assert (
+            result.returncode != 0
+        ), f"Script succeeded when it should have failed\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
 
     def assert_output_contains(self, result: subprocess.CompletedProcess, text: str):
         """Assert output contains specific text"""
-        assert text in result.stdout or text in result.stderr, (
-            f"Expected output to contain '{text}'\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
-        )
+        assert (
+            text in result.stdout or text in result.stderr
+        ), f"Expected output to contain '{text}'\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
 
     def assert_json_output(self, result: subprocess.CompletedProcess) -> dict[str, Any]:
         """Assert output is valid JSON and return parsed data"""

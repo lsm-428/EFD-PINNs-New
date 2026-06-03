@@ -58,9 +58,9 @@ def test_voltage_monotonicity():
 
     # Young-Lippmann: cosθ 随 V² 单调递增
     # cosθ 增大 → θ 减小 → 更亲水 → 开口率增大
-    assert cos_high > cos_low, (
-        f"cosθ should increase with V: cos({V_low}V)={cos_low:.3f}, cos({V_high}V)={cos_high:.3f}"
-    )
+    assert (
+        cos_high > cos_low
+    ), f"cosθ should increase with V: cos({V_low}V)={cos_low:.3f}, cos({V_high}V)={cos_high:.3f}"
 
 
 def test_field_dimensions():
@@ -116,5 +116,4 @@ def test_time_sampling():
     assert 0 <= t <= 0.05, f"t={t} should be in training range [0, 0.05]"
 
     # 零时间应有 phi = phi_IC（初始条件）
-    assert 0.0 >= 0, "t=0 should be valid"
-    assert 0.05 >= 0.02, "max training time should cover 20ms"
+    assert t >= 0, "t should be non-negative"

@@ -629,7 +629,7 @@ class PhysicsConstraints:
                 phi_x = grads["phi_x"]
                 phi_y = grads["phi_y"]
                 phi_z = grads["phi_z"]
-                grad_mag_sq, grad_mag = gradient_magnitude(phi_x, phi_y, phi_z)
+                _grad_mag_sq, grad_mag = gradient_magnitude(phi_x, phi_y, phi_z)
                 laplacian_xy = grads["phi_xx"] + grads["phi_yy"]
             else:
                 # 回退：独立计算

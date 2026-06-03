@@ -423,8 +423,8 @@ def create_physics_sampling_dataset(config: dict, n_total: int = 100000) -> dict
         dataset["interface_targets"].append(phi)
 
     # 转换为numpy数组
-    for key in dataset:
-        dataset[key] = np.array(dataset[key])
+    for key, values in dataset.items():
+        dataset[key] = np.array(values)
 
     logger.info(
         f"数据集生成完成，总样本数: {len(dataset['interface_points']) + len(dataset['initial_points']) + len(dataset['boundary_points'])}"

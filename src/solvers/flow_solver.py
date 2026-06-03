@@ -1203,11 +1203,7 @@ class FlowSolver:
             for j in range(1, ny - 1):
                 for k in range(1, nz - 1):
                     # 对流项
-                    dudx = (
-                        (self.u[i + 1, j, k] - self.u[i - 1, j, k]) / (2 * dx)
-                        if self.u[i, j, k] > 0
-                        else (self.u[i + 1, j, k] - self.u[i - 1, j, k]) / (2 * dx)
-                    )
+                    dudx = (self.u[i + 1, j, k] - self.u[i - 1, j, k]) / (2 * dx)
                     dudy = (self.u[i, j + 1, k] - self.u[i, j - 1, k]) / (2 * dy)
                     dudz = (self.u[i, j, k + 1] - self.u[i, j, k - 1]) / (2 * dz)
 
