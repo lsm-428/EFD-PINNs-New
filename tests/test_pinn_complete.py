@@ -587,10 +587,8 @@ class RobustnessValidator:
         print(f"  边界 t=50ms: η={eta_50ms:.3f} (物理上限: {eta_max})")
         status = "✅" if passed else "❌"
         print(
-            (
-                f"  {status} 外推 t=60ms: η={eta_60ms:.3f}, "
-                f"t=80ms: η={eta_80ms:.3f}, t=100ms: η={eta_100ms:.3f}"
-            )
+            f"  {status} 外推 t=60ms: η={eta_60ms:.3f}, "
+            f"t=80ms: η={eta_80ms:.3f}, t=100ms: η={eta_100ms:.3f}"
         )
         if not within_physics:
             print(f"  ⚠️ 警告: 开口率超过物理约束 eta_max={eta_max}")

@@ -779,9 +779,9 @@ class TestValidationProperties:
         validation = simulator.validate_against_experiment(exp_data)
 
         # 由于差异很大，应该标记错误
-        assert (
-            validation["error_flag"]
-        ), f"Error flag should be True for high error, got {validation['error_flag']}"
+        assert validation[
+            "error_flag"
+        ], f"Error flag should be True for high error, got {validation['error_flag']}"
 
     def test_validation_returns_required_fields(self):
         """
