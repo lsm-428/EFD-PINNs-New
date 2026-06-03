@@ -111,7 +111,7 @@ class TestHybridPredictor:
         time = 0.01  # 10ms
         theta = predictor.predict(voltage=voltage, time=time, V_initial=0.0, t_step=0.0)
 
-        assert isinstance(theta, (float, np.floating))
+        assert isinstance(theta, float | np.floating)
         assert 0 < theta < 180
 
     def test_predict_angle_batch(self):
@@ -140,7 +140,7 @@ class TestHybridPredictor:
 
         theta = predictor.predict(voltage=V_to, time=t_since, V_initial=V_from, t_step=0.0)
 
-        assert isinstance(theta, (float, np.floating))
+        assert isinstance(theta, float | np.floating)
         assert 0 < theta < 180
 
     def test_theta_to_aperture_lazy_loading(self):
@@ -152,7 +152,7 @@ class TestHybridPredictor:
 
         # 首次调用应该自动创建模型
         try:
-            aperture = predictor._theta_to_aperture(120.0)
+            predictor._theta_to_aperture(120.0)
             assert predictor._aperture_model is not None
         except ImportError:
             # 如果 ApertureModel 无法导入，跳过测试

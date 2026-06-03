@@ -86,9 +86,7 @@ def predict_phi(model, device, x, y, z, V_from, V_to, t_since) -> np.ndarray:
 
     with torch.no_grad():
         outputs = model(torch.tensor(inputs, device=device))
-        phi = outputs[:, 4].cpu().numpy()
-
-    return phi
+        return outputs[:, 4].cpu().numpy()
 
 
 def compute_aperture(model, device, V_from, V_to, t_since, n=50) -> tuple[float, np.ndarray]:
@@ -367,9 +365,7 @@ class AnalyticalComparator:
 
         # 接触角到开口率
         theta_min = 60  # 最小接触角
-        eta = np.clip((theta0 - theta_t) / (theta0 - theta_min), 0, 0.9)
-
-        return eta
+        return np.clip((theta0 - theta_t) / (theta0 - theta_min), 0, 0.9)
 
     def test_steady_state(self) -> dict:
         """测试稳态开口率"""
@@ -591,7 +587,10 @@ class RobustnessValidator:
         print(f"  边界 t=50ms: η={eta_50ms:.3f} (物理上限: {eta_max})")
         status = "✅" if passed else "❌"
         print(
-            f"  {status} 外推 t=60ms: η={eta_60ms:.3f}, t=80ms: η={eta_80ms:.3f}, t=100ms: η={eta_100ms:.3f}"
+            (
+                f"  {status} 外推 t=60ms: η={eta_60ms:.3f}, "
+                f"t=80ms: η={eta_80ms:.3f}, t=100ms: η={eta_100ms:.3f}"
+            )
         )
         if not within_physics:
             print(f"  ⚠️ 警告: 开口率超过物理约束 eta_max={eta_max}")
@@ -798,7 +797,7 @@ def generate_report(model, device, output_dir: str, results: dict):
         fontsize=12,
         verticalalignment="top",
         fontfamily="monospace",
-        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+        bbox={"boxstyle": "round", "facecolor": "wheat", "alpha": 0.5},
     )
 
     # 6. 鲁棒性雷达图

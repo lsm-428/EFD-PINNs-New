@@ -14,7 +14,6 @@ def test_ew_source_magnitude():
     d_h = mp.get("hydrophobic_thickness", 4e-7)
     h_ink = mp.get("ink_thickness", 3e-6)
     eps_ink = mp.get("epsilon_ink", 4.0)
-    sigma_ac = mp.get("surface_tension_polar_ink", 0.02505)
     eps_ac = mp.get("ac_interface_width", 5e-6)
     M_ac = mp.get("ac_mobility", 5e-11)
 

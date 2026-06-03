@@ -780,7 +780,7 @@ class TestValidationProperties:
 
         # 由于差异很大，应该标记错误
         assert (
-            validation["error_flag"] == True
+            validation["error_flag"]
         ), f"Error flag should be True for high error, got {validation['error_flag']}"
 
     def test_validation_returns_required_fields(self):

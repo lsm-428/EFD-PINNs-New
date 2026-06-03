@@ -267,9 +267,7 @@ class TestVOFTransportEquation:
         normal_loss = residuals_normal["volume_conservation"].abs().mean()
         violated_loss = residuals_violated["volume_conservation"].abs().mean()
 
-        assert (
-            violated_loss > normal_loss
-        ), (
+        assert violated_loss > normal_loss, (
             f"Volume violation should increase loss: "
             f"normal={normal_loss:.6f}, violated={violated_loss:.6f}"
         )
