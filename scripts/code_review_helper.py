@@ -39,7 +39,7 @@ def _is_public(name: str) -> bool:
 def _has_docstring(node: ast.AST) -> bool:
     """检查 AST 节点是否有 docstring。"""
     return bool(
-        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Module))
+        isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Module)
         and node.body
         and isinstance(node.body[0], ast.Expr)
         and isinstance(node.body[0].value, ast.Constant)
@@ -62,7 +62,7 @@ def count_functions_without_docstrings(path: Path) -> dict:
         return result
 
     for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             if not _is_public(node.name):
                 continue
             result["total_public"] += 1
@@ -113,7 +113,7 @@ def count_test_assertions(path: Path) -> dict:
                     result["assert_count"] += 1
             elif isinstance(node.func, ast.Name) and node.func.id.startswith("assert"):
                 result["assert_count"] += 1
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_"):
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name.startswith("test_"):
             result["test_functions"] += 1
     return result
 

@@ -114,7 +114,7 @@ class PINNAperturePredictor:
             best_loss = checkpoint.get("best_loss", "N/A")
             epoch = checkpoint.get("epoch", "N/A")
             logger.info(f"✅ PINN 模型加载成功: {checkpoint_path}")
-            if isinstance(best_loss, (int, float)):
+            if isinstance(best_loss, int | float):
                 logger.info(f"   最佳损失: {best_loss:.4e}, 训练轮数: {epoch}")
 
         except Exception as e:
