@@ -577,19 +577,14 @@ class RobustnessValidator:
         # 1. 稳态应该保持（不应大幅波动）
         # 2. 不应超过物理约束 eta_max
         stable = abs(eta_60ms - eta_50ms) < 0.1 and abs(eta_100ms - eta_50ms) < 0.15
-        within_physics = all(
-            eta <= eta_max + 0.05 for eta in [eta_50ms, eta_60ms, eta_80ms, eta_100ms]
-        )
+        within_physics = all(eta <= eta_max + 0.05 for eta in [eta_50ms, eta_60ms, eta_80ms, eta_100ms])
         reasonable = all(0 <= eta <= 1 for eta in [eta_60ms, eta_80ms, eta_100ms])
 
         passed = stable and reasonable and within_physics
 
         print(f"  边界 t=50ms: η={eta_50ms:.3f} (物理上限: {eta_max})")
         status = "✅" if passed else "❌"
-        print(
-            f"  {status} 外推 t=60ms: η={eta_60ms:.3f}, "
-            f"t=80ms: η={eta_80ms:.3f}, t=100ms: η={eta_100ms:.3f}"
-        )
+        print(f"  {status} 外推 t=60ms: η={eta_60ms:.3f}, t=80ms: η={eta_80ms:.3f}, t=100ms: η={eta_100ms:.3f}")
         if not within_physics:
             print(f"  ⚠️ 警告: 开口率超过物理约束 eta_max={eta_max}")
 

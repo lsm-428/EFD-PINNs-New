@@ -48,9 +48,7 @@ class PINNAperturePredictor:
             checkpoint_path: 模型检查点路径，None 则自动查找最新的
             device: 计算设备 ('cuda', 'cpu', None=自动)
         """
-        self.device = torch.device(
-            device if device else ("cuda" if torch.cuda.is_available() else "cpu")
-        )
+        self.device = torch.device(device if device else ("cuda" if torch.cuda.is_available() else "cpu"))
 
         self.model = None
         self.config = None
@@ -150,9 +148,7 @@ class PINNAperturePredictor:
         phi_field = self.predict_phi_field(voltage, time, n_points)
         return self._integrate_aperture(phi_field)
 
-    def predict_phi_field(
-        self, voltage: float, time: float, n_points: int = 100, z: float = 0.0
-    ) -> np.ndarray:
+    def predict_phi_field(self, voltage: float, time: float, n_points: int = 100, z: float = 0.0) -> np.ndarray:
         """
         预测 φ 场
 
@@ -182,9 +178,7 @@ class PINNAperturePredictor:
         V_flat = np.full_like(x_flat, voltage)
         V_from_flat = np.zeros_like(x_flat)
 
-        inputs = np.stack([x_flat, y_flat, z_flat, V_from_flat, V_flat, t_flat], axis=1).astype(
-            np.float32
-        )
+        inputs = np.stack([x_flat, y_flat, z_flat, V_from_flat, V_flat, t_flat], axis=1).astype(np.float32)
 
         with torch.no_grad():
             outputs = self.model(torch.tensor(inputs, device=self.device))
@@ -234,9 +228,7 @@ class PINNAperturePredictor:
         V_flat = np.full_like(x_flat, voltage)
         V_from_flat = np.zeros_like(x_flat)
 
-        inputs = np.stack([x_flat, y_flat, z_flat, V_from_flat, V_flat, t_flat], axis=1).astype(
-            np.float32
-        )
+        inputs = np.stack([x_flat, y_flat, z_flat, V_from_flat, V_flat, t_flat], axis=1).astype(np.float32)
 
         with torch.no_grad():
             outputs = self.model(torch.tensor(inputs, device=self.device)).cpu().numpy()

@@ -95,9 +95,7 @@ def load_model_with_mismatch_handling(
                 unexpected_keys.remove(key)
             else:
                 logger.warning(
-                    f"Shape mismatch for {key}: "
-                    f"model={model_state[key].shape}, "
-                    f"checkpoint={state_dict[key].shape}"
+                    f"Shape mismatch for {key}: model={model_state[key].shape}, checkpoint={state_dict[key].shape}"
                 )
                 missing_keys.append(key)
         else:

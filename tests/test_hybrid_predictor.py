@@ -73,9 +73,7 @@ class TestHybridPredictor:
         V_to = 30.0
 
         # 使用step_response方法
-        _t, thetas = predictor.step_response(
-            V_start=V_from, V_end=V_to, duration=0.05, t_step=0.001, num_points=5
-        )
+        _t, thetas = predictor.step_response(V_start=V_from, V_end=V_to, duration=0.05, t_step=0.001, num_points=5)
 
         assert len(thetas) == 5
         assert all(0 < theta < 180 for theta in thetas)
@@ -92,9 +90,7 @@ class TestHybridPredictor:
         V_to = 0.0
 
         # 使用step_response方法
-        _t, thetas = predictor.step_response(
-            V_start=V_from, V_end=V_to, duration=0.05, t_step=0.001, num_points=5
-        )
+        _t, thetas = predictor.step_response(V_start=V_from, V_end=V_to, duration=0.05, t_step=0.001, num_points=5)
 
         assert len(thetas) == 5
         assert all(0 < theta < 180 for theta in thetas)
@@ -121,9 +117,7 @@ class TestHybridPredictor:
         # 预测多个电压点的接触角
         voltages = np.array([0.0, 10.0, 20.0, 30.0])
         time = 0.01  # 10ms
-        thetas = np.array(
-            [predictor.predict(voltage=V, time=time, V_initial=0.0, t_step=0.0) for V in voltages]
-        )
+        thetas = np.array([predictor.predict(voltage=V, time=time, V_initial=0.0, t_step=0.0) for V in voltages])
 
         assert isinstance(thetas, np.ndarray)
         assert len(thetas) == len(voltages)

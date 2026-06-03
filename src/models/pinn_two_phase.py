@@ -284,9 +284,7 @@ class TwoPhasePINN(nn.Module):
             spatial_ff = self.fourier(torch.cat([x_norm, y_norm, z_norm], dim=-1))
             phi_features = torch.cat([spatial_ff, V_from_norm, V_to_norm, t_norm], dim=-1)
         else:
-            phi_features = torch.cat(
-                [x_norm, y_norm, z_norm, V_from_norm, V_to_norm, t_norm], dim=-1
-            )
+            phi_features = torch.cat([x_norm, y_norm, z_norm, V_from_norm, V_to_norm, t_norm], dim=-1)
 
         # Phi 预测
         phi_input = phi_features
@@ -326,9 +324,7 @@ class TwoPhasePINN(nn.Module):
 
         return torch.cat([u, v, w, p, phi], dim=-1)
 
-    def forward_triplet(
-        self, spatial_coords: torch.Tensor, voltage_triplet: torch.Tensor
-    ) -> torch.Tensor:
+    def forward_triplet(self, spatial_coords: torch.Tensor, voltage_triplet: torch.Tensor) -> torch.Tensor:
         """
         三元组格式的前向传播（与 LSTM-Hybrid-PINN 接口一致）
 
@@ -440,9 +436,7 @@ class PhysicsLoss:
             tensor = torch.where(torch.isfinite(tensor), tensor, torch.zeros_like(tensor))
         return tensor
 
-    def compute_all_residuals(
-        self, model: nn.Module, points: torch.Tensor
-    ) -> dict[str, torch.Tensor]:
+    def compute_all_residuals(self, model: nn.Module, points: torch.Tensor) -> dict[str, torch.Tensor]:
         """
         计算所有物理残差（通过 PhysicsConstraints）
 
@@ -456,9 +450,7 @@ class PhysicsLoss:
         points = points.clone().requires_grad_(True)
 
         predictions = model(points)
-        residuals = self.physics_constraints.compute_core_residuals(
-            x_phys=points, predictions=predictions, model=model
-        )
+        residuals = self.physics_constraints.compute_core_residuals(x_phys=points, predictions=predictions, model=model)
 
         # 清理所有残差中的 NaN/Inf
         for key in residuals:
@@ -562,9 +554,7 @@ class PhysicsLoss:
                 if key not in self._loss_ema:
                     self._loss_ema[key] = val
                 else:
-                    self._loss_ema[key] = (
-                        self._ema_decay * self._loss_ema[key] + (1 - self._ema_decay) * val
-                    )
+                    self._loss_ema[key] = self._ema_decay * self._loss_ema[key] + (1 - self._ema_decay) * val
                 # 预热后使用归一化
                 if self._ema_step > self._ema_warmup_steps:
                     ref = self._loss_ema.get(key, 1.0)
@@ -675,9 +665,7 @@ class DataGenerator:
             接触角 θ(t) (度)
         """
         if self.contact_angle_predictor is not None:
-            return self.contact_angle_predictor.predict(
-                voltage=V, time=t, V_initial=0.0, t_step=0.0
-            )
+            return self.contact_angle_predictor.predict(voltage=V, time=t, V_initial=0.0, t_step=0.0)
         return self._analytical_contact_angle(V, t)
 
     def _analytical_contact_angle(self, V: float, t: float) -> float:
@@ -722,9 +710,7 @@ class DataGenerator:
             omega_d = omega_0 * np.sqrt(max(0, 1 - zeta**2))
             exp_term = np.exp(-zeta * omega_0 * t)
             damping = zeta / np.sqrt(1 - zeta**2) if zeta < 1 else 1.0
-            theta_t = theta_eq + (theta0 - theta_eq) * exp_term * (
-                np.cos(omega_d * t) + damping * np.sin(omega_d * t)
-            )
+            theta_t = theta_eq + (theta0 - theta_eq) * exp_term * (np.cos(omega_d * t) + damping * np.sin(omega_d * t))
         else:
             # 表面张力恢复: 一阶指数 (过阻尼, 无振荡)
             # τ_recovery = τ × 0.4 (恢复快于驱动)
@@ -835,10 +821,7 @@ class DataGenerator:
             if is_voltage_down:
                 tau_recovery = PHYSICS["tau_recovery"]
                 eta_max = self.get_opening_rate(V_prev, 0.020)
-                if t_step is not None and t_step >= 0:
-                    t_since_local = max(0, t - t_step)
-                else:
-                    t_since_local = max(0, t - 0.015)
+                t_since_local = max(0, t - t_step) if t_step is not None and t_step >= 0 else max(0, t - 0.015)
                 eta = eta_max * np.exp(-t_since_local / tau_recovery)
                 return self._phi_center_opening_mode(x, y, z, eta, h_ink)
             eta = self.get_opening_rate(V, t)
@@ -907,9 +890,7 @@ class DataGenerator:
 
         return np.clip(phi_z, 0, 1)
 
-    def _phi_center_opening_mode(
-        self, x: float, y: float, z: float, eta: float, h_ink: float
-    ) -> float:
+    def _phi_center_opening_mode(self, x: float, y: float, z: float, eta: float, h_ink: float) -> float:
         """
         中心开口模式的 φ 分布（用于升压和降压）
 
@@ -994,10 +975,7 @@ class DataGenerator:
             y = np.random.rand() * self.Ly
 
         # z 方向：在油墨层附近加密
-        if np.random.rand() < 0.5:
-            z = np.random.rand() * self.h_ink * 3
-        else:
-            z = np.random.rand() * self.h_ink * 2
+        z = np.random.rand() * self.h_ink * 3 if np.random.rand() < 0.5 else np.random.rand() * self.h_ink * 2
 
         return x, y, z
 
@@ -1038,9 +1016,7 @@ class DataGenerator:
         interface_points = []
         interface_targets = []
 
-        use_physics_sampler = (
-            self.sampling_strategy == "physics_based" and self.physics_sampler is not None
-        )
+        use_physics_sampler = self.sampling_strategy == "physics_based" and self.physics_sampler is not None
 
         if use_physics_sampler:
             sampler = self.physics_sampler
@@ -1403,19 +1379,11 @@ class DataGenerator:
 
         return {
             # 界面数据（核心训练数据）
-            "interface_points": torch.tensor(
-                np.array(interface_points), dtype=torch.float32, device=self.device
-            ),
-            "interface_targets": torch.tensor(
-                np.array(interface_targets), dtype=torch.float32, device=self.device
-            ),
+            "interface_points": torch.tensor(np.array(interface_points), dtype=torch.float32, device=self.device),
+            "interface_targets": torch.tensor(np.array(interface_targets), dtype=torch.float32, device=self.device),
             # 接触角边界条件
-            "contact_points": torch.tensor(
-                np.array(contact_points), dtype=torch.float32, device=self.device
-            ),
-            "contact_theta": torch.tensor(
-                np.array(contact_theta), dtype=torch.float32, device=self.device
-            ),
+            "contact_points": torch.tensor(np.array(contact_points), dtype=torch.float32, device=self.device),
+            "contact_theta": torch.tensor(np.array(contact_theta), dtype=torch.float32, device=self.device),
             # 初始条件
             "ic_points": torch.tensor(np.array(ic_points), dtype=torch.float32, device=self.device),
             "ic_values": torch.tensor(np.array(ic_values), dtype=torch.float32, device=self.device),
@@ -1423,9 +1391,7 @@ class DataGenerator:
             "bc_points": torch.tensor(np.array(bc_points), dtype=torch.float32, device=self.device),
             "bc_values": torch.tensor(np.array(bc_values), dtype=torch.float32, device=self.device),
             # 域内配点
-            "domain_points": torch.tensor(
-                np.array(domain_points), dtype=torch.float32, device=self.device
-            ),
+            "domain_points": torch.tensor(np.array(domain_points), dtype=torch.float32, device=self.device),
         }
 
 
@@ -1462,9 +1428,7 @@ class Trainer:
             self.stage1_model = EnhancedApertureModel(config_path=str(CONFIG_PATH))
         else:
             self.stage1_model = None
-        self.enable_stage1_tutor = self.config.get(
-            "stage1_eta_tutor", True
-        )  # 默认启用 Stage1 tutor
+        self.enable_stage1_tutor = self.config.get("stage1_eta_tutor", True)  # 默认启用 Stage1 tutor
         # 训练配置
         training_cfg = self.config.get("training", {})
         self.epochs = training_cfg.get("epochs", 30000)
@@ -1551,9 +1515,7 @@ class Trainer:
         log_file = os.path.join(self.output_dir, "training.log")
         file_handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
         file_handler.setFormatter(
-            logging.Formatter(
-                "[%(asctime)s] %(levelname)s | %(name)s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-            )
+            logging.Formatter("[%(asctime)s] %(levelname)s | %(name)s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
         )
         logging.getLogger().addHandler(file_handler)
         logging.getLogger().setLevel(logging.INFO)
@@ -1667,9 +1629,7 @@ class Trainer:
                 title += f"  (Epoch {epoch})"
             ax.set_title(title, fontsize=12)
 
-            filename = (
-                "training_curve.png" if epoch is None else f"training_curve_epoch_{epoch}.png"
-            )
+            filename = "training_curve.png" if epoch is None else f"training_curve_epoch_{epoch}.png"
             plt.tight_layout()
             plt.savefig(os.path.join(self.output_dir, "training_curve.png"), dpi=150)
             milestones = {0, 5000, 10000, 20000, 30000, 40000, 50000, 60000}
@@ -1731,9 +1691,7 @@ class Trainer:
                 "dielectric_charge": 0.0,
                 "contact_line_dynamics": 0.0,
                 "top_boundary": 0.0,
-                "explicit_volume": physics_cfg.get("explicit_volume_weight", 0.0)
-                * smooth_factor
-                * 0.1,
+                "explicit_volume": physics_cfg.get("explicit_volume_weight", 0.0) * smooth_factor * 0.1,
                 "sharpening": physics_cfg.get("sharpening_weight", 0.0) * smooth_factor * 0.1,
             }
         # 阶段3：完整物理约束（平滑增加，跨度可配置）
@@ -1746,18 +1704,14 @@ class Trainer:
             "ns": physics_cfg.get("ns_weight", 0.01) * smooth_factor,
             "electrowetting": physics_cfg.get("electrowetting_weight", 2.0) * smooth_factor,
             "laplace_pressure": physics_cfg.get("laplace_pressure_weight", 0.2) * smooth_factor,
-            "sidewall_contact_angle": physics_cfg.get("sidewall_contact_angle", 5.0)
-            * smooth_factor,
+            "sidewall_contact_angle": physics_cfg.get("sidewall_contact_angle", 5.0) * smooth_factor,
             "interface_energy": physics_cfg.get("interface_energy_weight", 0.05) * smooth_factor,
             "wall_wetting": physics_cfg.get("wall_wetting_weight", 0.1) * smooth_factor,
             "bottom_wetting": physics_cfg.get("bottom_wetting_weight", 0.5) * smooth_factor,
-            "phase_field_wetting": physics_cfg.get("phase_field_wetting_weight", 10.0)
-            * smooth_factor,
-            "temporal_smoothness": physics_cfg.get("temporal_smoothness_weight", 0.1)
-            * smooth_factor,
+            "phase_field_wetting": physics_cfg.get("phase_field_wetting_weight", 10.0) * smooth_factor,
+            "temporal_smoothness": physics_cfg.get("temporal_smoothness_weight", 0.1) * smooth_factor,
             "dielectric_charge": physics_cfg.get("dielectric_charge_weight", 0.05) * smooth_factor,
-            "contact_line_dynamics": physics_cfg.get("contact_line_dynamics_weight", 0.1)
-            * smooth_factor,
+            "contact_line_dynamics": physics_cfg.get("contact_line_dynamics_weight", 0.1) * smooth_factor,
             "top_boundary": physics_cfg.get("top_boundary_weight", 0.05) * smooth_factor,
             "explicit_volume": physics_cfg.get("explicit_volume_weight", 0.0) * smooth_factor,
             "sharpening": physics_cfg.get("sharpening_weight", 0.0) * smooth_factor,
@@ -1774,11 +1728,7 @@ class Trainer:
         S3 后期保留适度数据锚定（min_factor=0.05），防止物理约束权重过大时
         梯度在接触线高阶项处爆炸（NaN 崩溃，见 pinn_20260528_192413 复盘）。
         """
-        training_cfg = (
-            self.config.get("training", {})
-            if isinstance(self.config.get("training", {}), dict)
-            else {}
-        )
+        training_cfg = self.config.get("training", {}) if isinstance(self.config.get("training", {}), dict) else {}
 
         # S2 退火: stage1_epochs → stage2_epochs, factor 1.0 → 0.1
         s2_start = self.stage1_epochs
@@ -1821,14 +1771,10 @@ class Trainer:
         # 记录当前 epoch，供各子损失方法读取（用于 S3 权重退火）
         self._current_epoch = epoch
 
-        current_stage = (
-            1 if epoch < self.stage1_epochs else (2 if epoch < self.stage2_epochs else 3)
-        )
+        current_stage = 1 if epoch < self.stage1_epochs else (2 if epoch < self.stage2_epochs else 3)
 
         # 1. 界面数据拟合损失 (核心)
-        losses["interface"], data_fit_loss = self._compute_data_loss(
-            data, physics_cfg, stage1_factor
-        )
+        losses["interface"], data_fit_loss = self._compute_data_loss(data, physics_cfg, stage1_factor)
 
         # 2. 接触角边界条件损失 + Phase调度
         losses["contact_angle"] = self._compute_contact_angle_loss(data)
@@ -1908,9 +1854,7 @@ class Trainer:
         losses["total"] = total_loss
         return losses
 
-    def _compute_data_loss(
-        self, data: dict[str, torch.Tensor], physics_cfg: dict, stage1_factor: float
-    ):
+    def _compute_data_loss(self, data: dict[str, torch.Tensor], physics_cfg: dict, stage1_factor: float):
         """1. 界面数据拟合损失"""
         idx = torch.randperm(len(data["interface_points"]))[: self.batch_size]
         interface_pts = data["interface_points"][idx]
@@ -1932,9 +1876,7 @@ class Trainer:
         contact_pts = data["contact_points"][idx].clone().requires_grad_(True)
         phi = self.model(contact_pts)[:, 4]
 
-        grad_phi = torch.autograd.grad(
-            phi.sum(), contact_pts, create_graph=True, retain_graph=True
-        )[0]
+        grad_phi = torch.autograd.grad(phi.sum(), contact_pts, create_graph=True, retain_graph=True)[0]
         dphi_dz = grad_phi[:, 2]
         grad_mag = torch.sqrt(torch.sum(grad_phi[:, :3] ** 2, dim=1) + 1e-10)
 
@@ -1972,9 +1914,7 @@ class Trainer:
         # BC
         idx_bc = torch.randperm(len(data["bc_points"]))[: self.batch_size // 4]
         pred_bc = self.model(data["bc_points"][idx_bc])
-        res["bc"] = F.mse_loss(pred_bc[:, :3], data["bc_values"][idx_bc][:, :3]) * physics_cfg.get(
-            "bc_weight", 50.0
-        )
+        res["bc"] = F.mse_loss(pred_bc[:, :3], data["bc_values"][idx_bc][:, :3]) * physics_cfg.get("bc_weight", 50.0)
         res["bc"] += F.mse_loss(pred_bc[:, 4:5], data["bc_values"][idx_bc][:, 4:5]) * 80.0
         return res
 
@@ -2247,9 +2187,7 @@ class Trainer:
             r_edge_max = min(Lx, Ly) / 2 * 0.95
             if r_edge_max > r_edge_min:
                 theta_a = torch.rand(n_spatial_pts, device=self.device) * 2 * np.pi
-                rr = r_edge_min + torch.rand(n_spatial_pts, device=self.device) * (
-                    r_edge_max - r_edge_min
-                )
+                rr = r_edge_min + torch.rand(n_spatial_pts, device=self.device) * (r_edge_max - r_edge_min)
                 xe = cx + rr * torch.cos(theta_a)
                 ye = cy + rr * torch.sin(theta_a)
                 xe = torch.clamp(xe, 1e-6, Lx - 1e-6)
@@ -2355,9 +2293,7 @@ class Trainer:
 
             if r_edge_max_g > r_edge_min and h_edge > 1e-7:
                 theta = torch.rand(n_geom_pts, device=self.device) * 2 * np.pi
-                rr = r_edge_min + torch.rand(n_geom_pts, device=self.device) * (
-                    r_edge_max_g - r_edge_min
-                )
+                rr = r_edge_min + torch.rand(n_geom_pts, device=self.device) * (r_edge_max_g - r_edge_min)
                 xe = torch.clamp(cx + rr * torch.cos(theta), 1e-9, Lx - 1e-9)
                 ye = torch.clamp(cy + rr * torch.sin(theta), 1e-9, Ly - 1e-9)
                 # 油墨层内
@@ -2381,8 +2317,7 @@ class Trainer:
                             [
                                 xe,
                                 ye,
-                                z_top_min
-                                + torch.rand(n_geom_pts, device=self.device) * (Lz - z_top_min),
+                                z_top_min + torch.rand(n_geom_pts, device=self.device) * (Lz - z_top_min),
                                 torch.full((n_geom_pts,), Vf2, device=self.device),
                                 torch.full((n_geom_pts,), Vt2, device=self.device),
                                 torch.full((n_geom_pts,), ts2, device=self.device),
@@ -2440,11 +2375,7 @@ class Trainer:
         将 N 个 (V_from, V_to, t_since) 场景的空间点与坐标拼接为一次大前向，
         替代 N 次独立前向，并用 torch.no_grad() 省去梯度构建开销。
         """
-        training_cfg = (
-            self.config.get("training", {})
-            if isinstance(self.config.get("training", {}), dict)
-            else {}
-        )
+        training_cfg = self.config.get("training", {}) if isinstance(self.config.get("training", {}), dict) else {}
         n_vol = int(training_cfg.get("volume_n_vol", 10000))  # 30000→10000
         n_vol = max(2000, n_vol)
         Lx, Ly, Lz, h_ink = (
@@ -2485,9 +2416,7 @@ class Trainer:
         xyz = torch.stack([x, y, z], dim=1)  # (n_vol, 3)
         xyz_all = xyz.repeat_interleave(N, dim=0)  # (N*n_vol, 3)
 
-        v_from_all = torch.tensor([t[0] for t in tests], device=self.device).repeat(
-            n_vol
-        )  # (N*n_vol,)
+        v_from_all = torch.tensor([t[0] for t in tests], device=self.device).repeat(n_vol)  # (N*n_vol,)
         v_to_all = torch.tensor([t[1] for t in tests], device=self.device).repeat(n_vol)
         t_since_all = torch.tensor([t[2] for t in tests], device=self.device).repeat(n_vol)
 
@@ -2592,11 +2521,7 @@ class Trainer:
         loss_vel = torch.mean((pred_r[:, :, :3] - pred_f[:, :, :3]) ** 2, dim=(1, 2))  # (N,)
         loss_continuity = torch.mean(loss_phi + 0.1 * loss_vel)
 
-        training_cfg = (
-            self.config.get("training", {})
-            if isinstance(self.config.get("training", {}), dict)
-            else {}
-        )
+        training_cfg = self.config.get("training", {}) if isinstance(self.config.get("training", {}), dict) else {}
         base_weight = float(training_cfg.get("continuity_transition_weight", 2000.0))
         return loss_continuity * base_weight
 
@@ -2680,21 +2605,16 @@ class Trainer:
                 "momentum_w": float(weights.get("ns", 0.0)) * ns_mult,
                 "electrowetting": float(weights.get("electrowetting", 2.0)) * ew_penalty_mult,
                 "laplace_pressure": float(weights.get("laplace_pressure", 0.2)) * lp_mult,
-                "sidewall_contact_angle": float(weights.get("sidewall_contact_angle", 5.0))
-                * contact_mult,
+                "sidewall_contact_angle": float(weights.get("sidewall_contact_angle", 5.0)) * contact_mult,
                 "interface_energy": float(weights.get("interface_energy", 0.05)) * ac_mult,
                 "wall_wetting": float(weights.get("wall_wetting", 0.1)) * contact_mult,
                 "bottom_wetting": float(weights.get("bottom_wetting", 0.5)) * contact_mult,
-                "phase_field_wetting": float(weights.get("phase_field_wetting", 10.0))
-                * contact_mult,
+                "phase_field_wetting": float(weights.get("phase_field_wetting", 10.0)) * contact_mult,
                 "temporal_smoothness": float(weights.get("temporal_smoothness", 0.1)) * ns_mult,
                 "dielectric_charge": float(weights.get("dielectric_charge", 0.05)) * ns_mult,
-                "contact_line_dynamics": float(weights.get("contact_line_dynamics", 0.1))
-                * contact_mult,
+                "contact_line_dynamics": float(weights.get("contact_line_dynamics", 0.1)) * contact_mult,
                 "top_boundary": float(weights.get("top_boundary", 0.05)) * ns_mult,
-                "volume_conservation": float(
-                    self.config.get("physics", {}).get("volume_conservation_weight", 0.0)
-                ),
+                "volume_conservation": float(self.config.get("physics", {}).get("volume_conservation_weight", 0.0)),
                 "explicit_volume": float(weights.get("explicit_volume", 0.0)),
                 "sharpening": float(weights.get("sharpening", 0.0)),
             }
@@ -2723,20 +2643,14 @@ class Trainer:
                     "contact_line_dynamics",
                     "top_boundary",
                 ]:
-                    if (
-                        k in losses
-                        and isinstance(losses[k], torch.Tensor)
-                        and torch.isfinite(losses[k])
-                    ):
+                    if k in losses and isinstance(losses[k], torch.Tensor) and torch.isfinite(losses[k]):
                         res[f"pinn_{k}"] = losses[k]
 
         except Exception as e:
             logger.warning(f"Physics loss failed: {e}")
         return res
 
-    def compute_aperture_ratio(
-        self, V_from: float, V_to: float, t_since: float, n_grid: int = 30
-    ) -> torch.Tensor:
+    def compute_aperture_ratio(self, V_from: float, V_to: float, t_since: float, n_grid: int = 30) -> torch.Tensor:
         """
         计算开口率：z=0 底面上“极性液体覆盖面积”的比例（软统计）
 
@@ -2749,9 +2663,7 @@ class Trainer:
         if V_from is None:
             V_from = V_to
 
-        return self.compute_aperture_ratio_batch(
-            [(float(V_from), float(V_to), float(t_since))], n_grid=n_grid
-        )[0]
+        return self.compute_aperture_ratio_batch([(float(V_from), float(V_to), float(t_since))], n_grid=n_grid)[0]
 
     def compute_aperture_ratio_batch(self, triplets: list, n_grid: int = 30) -> torch.Tensor:
         """
@@ -2791,9 +2703,7 @@ class Trainer:
             all_points[s, 4] = float(Vt)
             all_points[s, 5] = float(ts)
 
-        eval_cfg = (
-            self.config.get("eval", {}) if isinstance(self.config.get("eval", {}), dict) else {}
-        )
+        eval_cfg = self.config.get("eval", {}) if isinstance(self.config.get("eval", {}), dict) else {}
         phi0 = float(eval_cfg.get("aperture_phi0", 0.3))
         eval_eps = max(1e-6, float(eval_cfg.get("aperture_eps", 0.05)))
 
@@ -2840,9 +2750,7 @@ class Trainer:
         points[:, 4] = float(V_to)
         points[:, 5] = float(t_since)
 
-        eval_cfg = (
-            self.config.get("eval", {}) if isinstance(self.config.get("eval", {}), dict) else {}
-        )
+        eval_cfg = self.config.get("eval", {}) if isinstance(self.config.get("eval", {}), dict) else {}
         phi0 = float(eval_cfg.get("aperture_phi0", 0.3))
         eval_eps = max(1e-6, float(eval_cfg.get("aperture_eps", 0.05)))
 
@@ -2964,16 +2872,12 @@ class Trainer:
                 y = np.random.uniform(0, self.model.Ly)
                 # z 在油膜层加密
                 if np.random.rand() < 0.6:
-                    z = np.random.uniform(
-                        0, min(self.model.h_ink * 3 / max(1 - eta, 0.15), self.model.Lz)
-                    )
+                    z = np.random.uniform(0, min(self.model.h_ink * 3 / max(1 - eta, 0.15), self.model.Lz))
                 else:
                     z = np.random.uniform(0, self.model.Lz)
 
                 # 用 target_phi_3d 构造 φ target
-                phi_target = self.data_generator.target_phi_3d(
-                    x, y, z, t_since, V_to, V_prev=V_from, t_step=0.0
-                )
+                phi_target = self.data_generator.target_phi_3d(x, y, z, t_since, V_to, V_prev=V_from, t_step=0.0)
 
                 all_points.append([x, y, z, V_from, V_to, t_since])
                 all_phi_targets.append(phi_target)
@@ -3022,9 +2926,7 @@ class Trainer:
         loss = torch.tensor(0.0, device=self.device)
         for t in t_samples:
             t_since = t - t_fall
-            eta_target = eta_at_fall * torch.exp(
-                torch.tensor(-t_since / tau_recovery, device=self.device)
-            )
+            eta_target = eta_at_fall * torch.exp(torch.tensor(-t_since / tau_recovery, device=self.device))
             eta_pred = self.compute_aperture_ratio(V_from=30.0, V_to=0.0, t_since=t_since)
             loss = loss + (eta_pred - eta_target) ** 2
         return loss * weight / len(t_samples)
@@ -3112,9 +3014,7 @@ class Trainer:
         # 后台重采样线程（避免阻塞训练循环）
         _resample_future = None
         _resample_lock = threading.Lock()
-        _resample_executor = (
-            concurrent.futures.ThreadPoolExecutor(max_workers=1) if resample_interval > 0 else None
-        )
+        _resample_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1) if resample_interval > 0 else None
 
         # 记录网络结构图到 TensorBoard
         try:
@@ -3130,9 +3030,7 @@ class Trainer:
         for epoch in range(self.start_epoch, self.epochs):
             # 学习率预热
             if epoch < self.warmup_epochs:
-                warmup_lr = self.warmup_start_lr + (self.lr - self.warmup_start_lr) * (
-                    epoch / self.warmup_epochs
-                )
+                warmup_lr = self.warmup_start_lr + (self.lr - self.warmup_start_lr) * (epoch / self.warmup_epochs)
                 for param_group in self.optimizer.param_groups:
                     param_group["lr"] = warmup_lr
 
@@ -3146,9 +3044,7 @@ class Trainer:
             if resample_interval > 0 and epoch > 0 and epoch % resample_interval == 0:
                 if _resample_future is None:
                     # 提交后台重采样任务
-                    _resample_future = _resample_executor.submit(
-                        self.data_generator.generate_all_data
-                    )
+                    _resample_future = _resample_executor.submit(self.data_generator.generate_all_data)
                     logger.info(f"Epoch {epoch}: 后台重采样已启动")
                 elif _resample_future.done():
                     # 后台任务完成，原子替换数据
@@ -3183,9 +3079,7 @@ class Trainer:
                 if has_nan:
                     if hasattr(self, "_last_valid_state"):
                         self.model.load_state_dict(self._last_valid_state)
-                        logger.warning(
-                            f"Epoch {epoch}: step 后检测到 NaN 权重，已回滚到上一个有效状态"
-                        )
+                        logger.warning(f"Epoch {epoch}: step 后检测到 NaN 权重，已回滚到上一个有效状态")
                     self.optimizer.zero_grad()
             else:
                 logger.warning(
@@ -3264,23 +3158,15 @@ class Trainer:
             self.history["pinn_momentum_v"].append(get_val(losses, "pinn_momentum_v"))
             self.history["pinn_momentum_w"].append(get_val(losses, "pinn_momentum_w"))
             self.history["pinn_electrowetting"].append(get_val(losses, "pinn_electrowetting"))
-            self.history["pinn_temporal_smoothness"].append(
-                get_val(losses, "pinn_temporal_smoothness")
-            )
+            self.history["pinn_temporal_smoothness"].append(get_val(losses, "pinn_temporal_smoothness"))
             self.history["pinn_laplace_pressure"].append(get_val(losses, "pinn_laplace_pressure"))
-            self.history["pinn_sidewall_contact_angle"].append(
-                get_val(losses, "pinn_sidewall_contact_angle")
-            )
+            self.history["pinn_sidewall_contact_angle"].append(get_val(losses, "pinn_sidewall_contact_angle"))
             self.history["pinn_interface_energy"].append(get_val(losses, "pinn_interface_energy"))
             self.history["pinn_wall_wetting"].append(get_val(losses, "pinn_wall_wetting"))
             self.history["pinn_bottom_wetting"].append(get_val(losses, "pinn_bottom_wetting"))
-            self.history["pinn_phase_field_wetting"].append(
-                get_val(losses, "pinn_phase_field_wetting")
-            )
+            self.history["pinn_phase_field_wetting"].append(get_val(losses, "pinn_phase_field_wetting"))
             self.history["pinn_dielectric_charge"].append(get_val(losses, "pinn_dielectric_charge"))
-            self.history["pinn_contact_line_dynamics"].append(
-                get_val(losses, "pinn_contact_line_dynamics")
-            )
+            self.history["pinn_contact_line_dynamics"].append(get_val(losses, "pinn_contact_line_dynamics"))
             self.history["pinn_top_boundary"].append(get_val(losses, "pinn_top_boundary"))
             self.history["contact_angle"].append(get_val(losses, "contact_angle"))
             self.history["volume"].append(get_val(losses, "volume_conservation"))
@@ -3428,9 +3314,7 @@ class Trainer:
                         os.path.join(self.output_dir, "pro_dashboard.png"),
                         model_name=self.output_dir,
                     )
-                    evaluator.plot_phi_grid(
-                        model, os.path.join(self.output_dir, "phi_grid_evolution.png")
-                    )
+                    evaluator.plot_phi_grid(model, os.path.join(self.output_dir, "phi_grid_evolution.png"))
                     evaluator.plot_interface_3d(
                         model,
                         os.path.join(self.output_dir, "interface_3d_steady.png"),
@@ -3438,9 +3322,7 @@ class Trainer:
                         0.02,
                         30.0,
                     )
-                    logger.info(
-                        f"✅ 专业评估套件已生成 (model={os.path.basename(eval_ckpt)}): {self.output_dir}/"
-                    )
+                    logger.info(f"✅ 专业评估套件已生成 (model={os.path.basename(eval_ckpt)}): {self.output_dir}/")
         except Exception as e:
             logger.error(f"生成专业评估仪表盘失败: {e}")
 

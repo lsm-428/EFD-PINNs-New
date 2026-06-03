@@ -295,9 +295,7 @@ class ApertureModel:
         # 不能超过像素半径
         return min(r_open, self.R_pixel * 0.95)
 
-    def calculate_ink_distribution(
-        self, theta: float, num_points: int = 100
-    ) -> tuple[np.ndarray, np.ndarray]:
+    def calculate_ink_distribution(self, theta: float, num_points: int = 100) -> tuple[np.ndarray, np.ndarray]:
         """
         计算油墨高度分布 h(r)
 
@@ -492,9 +490,7 @@ class EnhancedApertureModel(ApertureModel):
         # 从配置更新开口率映射参数
         aperture_mapping = self.config.get("aperture_mapping", {})
         self.aperture_k = aperture_mapping.get("k", PHYSICS.get("aperture_k", 3.0))
-        self.aperture_theta_scale = aperture_mapping.get(
-            "theta_scale", PHYSICS.get("aperture_theta_scale", 19.0)
-        )
+        self.aperture_theta_scale = aperture_mapping.get("theta_scale", PHYSICS.get("aperture_theta_scale", 19.0))
         self.aperture_alpha = aperture_mapping.get("alpha", PHYSICS.get("aperture_alpha", 0.03))
         self.aperture_max = aperture_mapping.get("aperture_max", PHYSICS.get("eta_max", 0.85))
 
@@ -540,14 +536,10 @@ class EnhancedApertureModel(ApertureModel):
             raise ValueError(msg)
 
         k_values = np.linspace(k_range[0], k_range[1], num_k)
-        theta_scale_values = np.linspace(
-            theta_scale_range[0], theta_scale_range[1], num_theta_scale
-        )
+        theta_scale_values = np.linspace(theta_scale_range[0], theta_scale_range[1], num_theta_scale)
 
         original_k = getattr(self, "aperture_k", PHYSICS.get("aperture_k", 0.8))
-        original_theta_scale = getattr(
-            self, "aperture_theta_scale", PHYSICS.get("aperture_theta_scale", 6.0)
-        )
+        original_theta_scale = getattr(self, "aperture_theta_scale", PHYSICS.get("aperture_theta_scale", 6.0))
 
         best_k = original_k
         best_theta_scale = original_theta_scale
@@ -605,9 +597,7 @@ class EnhancedApertureModel(ApertureModel):
             if t_val <= 0.0:
                 theta = theta_start
             else:
-                theta = predictor.surface_tension_recovery(
-                    t_val, theta_start, theta_eq, V_from=V_from_val
-                )
+                theta = predictor.surface_tension_recovery(t_val, theta_start, theta_eq, V_from=V_from_val)
         eta = self.contact_angle_to_aperture_ratio(theta)
         return theta, eta
 
@@ -649,9 +639,7 @@ class EnhancedApertureModel(ApertureModel):
             config_path = self.config_path
             if not Path(config_path).exists() and not config_path.startswith("config/"):
                 config_path = f"config/{config_path}"
-            self._internal_predictor = HybridPredictor(
-                config_path=config_path, use_model_for_steady_state=False
-            )
+            self._internal_predictor = HybridPredictor(config_path=config_path, use_model_for_steady_state=False)
 
         return self._internal_predictor
 
@@ -730,9 +718,7 @@ class EnhancedApertureModel(ApertureModel):
 
     # === 油墨分布计算 ===
 
-    def calculate_ink_distribution_enhanced(
-        self, theta: float, num_points: int = 100
-    ) -> tuple[np.ndarray, np.ndarray]:
+    def calculate_ink_distribution_enhanced(self, theta: float, num_points: int = 100) -> tuple[np.ndarray, np.ndarray]:
         """
         计算满足体积守恒的油墨分布
 
@@ -827,12 +813,7 @@ class EnhancedApertureModel(ApertureModel):
         V_actual = h_avg * ink_area
 
         # 计算误差百分比
-        if self.ink_volume > 0:
-            error_percent = abs(V_actual - self.ink_volume) / self.ink_volume * 100
-        else:
-            error_percent = 0.0
-
-        return error_percent
+        return abs(V_actual - self.ink_volume) / self.ink_volume * 100 if self.ink_volume > 0 else 0.0
 
     # === 动态响应 ===
 
@@ -898,9 +879,7 @@ class EnhancedApertureModel(ApertureModel):
         )
         return t, V, eta
 
-    def get_aperture_metrics(
-        self, t: np.ndarray, eta: np.ndarray, t_step: float = 0.002
-    ) -> dict[str, float]:
+    def get_aperture_metrics(self, t: np.ndarray, eta: np.ndarray, t_step: float = 0.002) -> dict[str, float]:
         """
         计算响应指标 (t_90, t_10, overshoot)
 
@@ -1031,9 +1010,7 @@ class EnhancedApertureModel(ApertureModel):
 
     # === 可视化方法 ===
 
-    def plot_comparison(
-        self, V_list: list[float] | None = None, save_path: str | None = None
-    ) -> None:
+    def plot_comparison(self, V_list: list[float] | None = None, save_path: str | None = None) -> None:
         """
         生成电压-开口率对比图（原模型 vs 增强模型）
 
@@ -1415,9 +1392,7 @@ def demo():
 
     logger.info("\n📊 电压-接触角-开口率关系:")
     logger.info("-" * 70)
-    logger.info(
-        f"{'电压(V)':<8} {'接触角(°)':<12} {'开口率(%)':<12} {'透明半径(μm)':<15} {'体积误差(%)':<12}"
-    )
+    logger.info(f"{'电压(V)':<8} {'接触角(°)':<12} {'开口率(%)':<12} {'透明半径(μm)':<15} {'体积误差(%)':<12}")
     logger.info("-" * 70)
 
     results = []

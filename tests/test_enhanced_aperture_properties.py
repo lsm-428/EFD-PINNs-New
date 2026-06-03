@@ -53,9 +53,7 @@ class TestEffectiveVoltageProperty:
         expected = V_target * (1 - np.exp(-t / self.model.tau_rc))
 
         # 允许浮点误差
-        assert abs(V_eff - expected) < 1e-10, (
-            f"V_eff={V_eff}, expected={expected}, diff={abs(V_eff - expected)}"
-        )
+        assert abs(V_eff - expected) < 1e-10, f"V_eff={V_eff}, expected={expected}, diff={abs(V_eff - expected)}"
 
     @given(V_target=st.floats(min_value=0.1, max_value=50.0))
     def test_effective_voltage_at_zero(self, V_target):
@@ -145,9 +143,7 @@ class TestTransparentRegionBoundaryProperty:
             mask_open = r < r_open
             h_in_open = h[mask_open]
 
-            assert np.all(h_in_open == 0), (
-                f"Found non-zero ink height in transparent region at theta={theta}°"
-            )
+            assert np.all(h_in_open == 0), f"Found non-zero ink height in transparent region at theta={theta}°"
 
 
 class TestApertureRatioRangeProperty:
@@ -175,9 +171,7 @@ class TestApertureRatioRangeProperty:
         *For any* 有效输入，开口率应在物理合理范围内：
         0 ≤ η ≤ 1
         """
-        _t, eta = self.model.aperture_step_response(
-            V_start=0.0, V_end=V_end, duration=duration, t_step=0.002
-        )
+        _t, eta = self.model.aperture_step_response(V_start=0.0, V_end=V_end, duration=duration, t_step=0.002)
 
         assert np.all(eta >= 0), f"Found negative aperture ratio: min={np.min(eta)}"
         assert np.all(eta <= 1), f"Found aperture ratio > 1: max={np.max(eta)}"
@@ -222,9 +216,11 @@ class TestApertureMonotonicityProperty:
 
         # 检查单调递增
         for i in range(len(apertures) - 1):
-            assert apertures[i] <= apertures[i + 1] + 1e-10, (
-                f"Monotonicity violated: η({voltages[i]:.2f}V)={apertures[i]:.4f} > η({voltages[i + 1]:.2f}V)={apertures[i + 1]:.4f}"
+            msg = (
+                f"Monotonicity violated: η({voltages[i]:.2f}V)={apertures[i]:.4f} "
+                f"> η({voltages[i + 1]:.2f}V)={apertures[i + 1]:.4f}"
             )
+            assert apertures[i] <= apertures[i + 1] + 1e-10, msg
 
 
 class TestNoOvershootProperty:
@@ -271,9 +267,7 @@ class TestNoOvershootProperty:
         metrics = self.model.get_aperture_metrics(t, eta, t_step=0.002)
 
         # 超调应该被检测到
-        assert metrics["overshoot_percent"] > 0, (
-            f"Expected positive overshoot, got {metrics['overshoot_percent']:.2f}%"
-        )
+        assert metrics["overshoot_percent"] > 0, f"Expected positive overshoot, got {metrics['overshoot_percent']:.2f}%"
 
 
 class TestConfigSerializationProperty:

@@ -137,9 +137,7 @@ try:
         # Model paths state
         model_paths = param.List(default=[], doc="List of available model checkpoint paths")
 
-        current_model_path = param.String(
-            default=None, allow_None=True, doc="Currently selected model path"
-        )
+        current_model_path = param.String(default=None, allow_None=True, doc="Currently selected model path")
 
         # Simulation parameters (6D Triad format: [x, y, z, V_from, V_to, t_since])
         current_parameters = param.Dict(
@@ -155,9 +153,7 @@ try:
         )
 
         # Cached results
-        cached_results = param.Dict(
-            default={}, doc="Cached inference results keyed by parameter hash"
-        )
+        cached_results = param.Dict(default={}, doc="Cached inference results keyed by parameter hash")
 
         @param.depends("current_model_path", watch=True)
         def _on_model_change(self) -> None:

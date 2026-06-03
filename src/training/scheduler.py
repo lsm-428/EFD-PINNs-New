@@ -94,9 +94,7 @@ class DynamicPhysicsWeightScheduler:
             4: 1.0,  # 最后阶段，平衡物理约束和数据拟合
         }
 
-        logger.info(
-            f"动态物理权重调度器初始化: 初始权重={initial_weight}, 策略={adjustment_strategy}"
-        )
+        logger.info(f"动态物理权重调度器初始化: 初始权重={initial_weight}, 策略={adjustment_strategy}")
 
     def get_current_weight(self) -> float:
         """获取当前物理损失权重"""
@@ -138,10 +136,7 @@ class DynamicPhysicsWeightScheduler:
             new_weight = self._compute_new_weight(data_loss, physics_loss, val_loss, epoch, stage)
 
             # 应用平滑处理
-            smoothed_weight = (
-                self.smoothing_factor * self.current_weight
-                + (1 - self.smoothing_factor) * new_weight
-            )
+            smoothed_weight = self.smoothing_factor * self.current_weight + (1 - self.smoothing_factor) * new_weight
 
             # 确保权重在合理范围内
             smoothed_weight = max(self.min_weight, min(self.max_weight, smoothed_weight))
@@ -185,14 +180,10 @@ class DynamicPhysicsWeightScheduler:
             return self._performance_based_adjustment(val_loss)
         if self.adjustment_strategy == "combined":
             # 组合多种策略
-            stage_weight = (
-                self._stage_based_adjustment(stage) if stage is not None else self.current_weight
-            )
+            stage_weight = self._stage_based_adjustment(stage) if stage is not None else self.current_weight
             adaptive_weight = self._adaptive_adjustment(data_loss, physics_loss)
             performance_weight = (
-                self._performance_based_adjustment(val_loss)
-                if val_loss is not None
-                else self.current_weight
+                self._performance_based_adjustment(val_loss) if val_loss is not None else self.current_weight
             )
 
             # 加权平均

@@ -24,9 +24,7 @@ def test_fix2_ac_dimensional():
 
     # tau 应在 ms 量级（界面迁移时间 1-50ms）
     tau_ms = tau * 1000
-    assert 0.1 < tau_ms < 100, (
-        f"Interface migration time tau = {tau_ms:.1f}ms out of range [0.1, 100]"
-    )
+    assert 0.1 < tau_ms < 100, f"Interface migration time tau = {tau_ms:.1f}ms out of range [0.1, 100]"
 
 
 def test_fix1_ew_indicator_zdecay():
@@ -46,9 +44,7 @@ def test_fix1_ew_indicator_zdecay():
 
     # 单调递减
     for i in range(len(z_list) - 1):
-        assert z_decays[z_list[i]] >= z_decays[z_list[i + 1]], (
-            f"z_decay not monotonic at z={z_list[i]:.1e}"
-        )
+        assert z_decays[z_list[i]] >= z_decays[z_list[i + 1]], f"z_decay not monotonic at z={z_list[i]:.1e}"
 
     # z=0 → 1.0
     assert abs(z_decays[0] - 1.0) < 0.01

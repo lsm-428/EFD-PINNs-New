@@ -36,9 +36,7 @@ def create_parameter_sweep_tab():
             # Create basic controls for parameter sweep
             voltage_min = pn.widgets.FloatSlider(name="Min Voltage (V)", start=0, end=30, value=0)
             voltage_max = pn.widgets.FloatSlider(name="Max Voltage (V)", start=0, end=30, value=30)
-            time_step = pn.widgets.FloatSlider(
-                name="Time Step (s)", start=0.001, end=0.01, value=0.002
-            )
+            time_step = pn.widgets.FloatSlider(name="Time Step (s)", start=0.001, end=0.01, value=0.002)
 
             def run_sweep(*events):
                 results = param_sweep.perform_grid_sweep(
@@ -140,9 +138,7 @@ def create_experiment_simulator_tab():
                 # Store simulation parameters in shared datastore
                 params = {
                     "waveform_type": waveform_type.value,
-                    "initial_voltage": (
-                        step_params[0].value if waveform_type.value == "step" else 0
-                    ),
+                    "initial_voltage": (step_params[0].value if waveform_type.value == "step" else 0),
                     "final_voltage": (step_params[1].value if waveform_type.value == "step" else 0),
                 }
                 DATA_STORE.update_parameters(**params)
@@ -185,9 +181,7 @@ def create_training_monitor_tab():
             monitor = TrainingMonitor()
 
             # Log file input
-            log_file = pn.widgets.TextInput(
-                name="Training Log Path", placeholder="/path/to/training.log"
-            )
+            log_file = pn.widgets.TextInput(name="Training Log Path", placeholder="/path/to/training.log")
             start_button = pn.widgets.Button(name="Start Monitoring", button_type="primary")
             stop_button = pn.widgets.Button(name="Stop Monitoring", button_type="danger")
 

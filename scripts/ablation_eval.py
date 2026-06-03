@@ -276,11 +276,7 @@ def main():
 
         # 4. Interface quality
         iface = compute_interface_metrics(model, eval_physics)
-        w = (
-            f"{iface['transition_width_um']:.1f}"
-            if not np.isnan(iface["transition_width_um"])
-            else "N/A"
-        )
+        w = f"{iface['transition_width_um']:.1f}" if not np.isnan(iface["transition_width_um"]) else "N/A"
         print(
             f"  Interface: φ_range={iface['phi_range']:.4f}, width={w}um, "
             f"|∇φ|_if={iface['if_grad_per_um']:.4f}/um, φ(1-φ)={iface['sharpening_residual']:.5f}, "
@@ -340,9 +336,11 @@ def main():
             continue
         w = f"{r['transition_width_um']:.1f}" if r["transition_width_um"] is not None else "N/A"
         print(
-            f"{name:<18} {r['best_loss']:>8.1f} {r['vol_error_mean_pct']:>7.2f}% {r['aperture_error_pp']:>7.2f}% "
+            f"{name:<18} {r['best_loss']:>8.1f} {r['vol_error_mean_pct']:>7.2f}% "
+            f"{r['aperture_error_pp']:>7.2f}% "
             f"{r['dynamic_rmse_on']:>9.4f} {r['dynamic_rmse_total']:>9.4f} "
-            f"{r['interface_quality']:>10} {w:>8} {r['sharpening_residual']:>9.5f} {r['physically_valid']:>8}"
+            f"{r['interface_quality']:>10} {w:>8} "
+            f"{r['sharpening_residual']:>9.5f} {r['physically_valid']:>8}"
         )
 
     out_path = "/home/scnu/Gitee/EFD3D/scripts/ablation_results.json"

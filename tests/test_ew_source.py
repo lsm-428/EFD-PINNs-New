@@ -64,9 +64,7 @@ def test_ew_source_magnitude():
     )
 
     # 断言: z_decay 在 z=0 处为 1，在 z=h_ink 处衰减到 1/e
-    assert abs(z_decay[0].item() - 1.0) < 0.01, (
-        f"z_decay at z=0 should be ~1.0, got {z_decay[0].item():.4f}"
-    )
+    assert abs(z_decay[0].item() - 1.0) < 0.01, f"z_decay at z=0 should be ~1.0, got {z_decay[0].item():.4f}"
     assert abs(z_decay[-1].item() - 1.0 / torch.e) < 0.05, (
         f"z_decay at z=h_ink should be ~1/e, got {z_decay[-1].item():.4f}"
     )
@@ -138,6 +136,5 @@ def test_capacitance_components():
     # Teflon 虽然是疏水层但电容串联后 C 应小于单独 SU-8
     C_su8_only = eps0 * eps_su8 / d_su8
     assert C_su8_only > C_open, (
-        f"C_open ({C_open:.4e}) should be less than C_su8_only ({C_su8_only:.4e}) "
-        "(series adds impedance)"
+        f"C_open ({C_open:.4e}) should be less than C_su8_only ({C_su8_only:.4e}) (series adds impedance)"
     )

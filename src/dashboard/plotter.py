@@ -172,9 +172,7 @@ class FlowFieldPlotter:
         ax.set_title("Dynamic Response (0V -> 30V -> 0V)")
         ax.legend()
 
-    def create_dashboard_figure(
-        self, data: dict[str, np.ndarray], show_electric_field: bool = False
-    ):
+    def create_dashboard_figure(self, data: dict[str, np.ndarray], show_electric_field: bool = False):
         """
         Create a combined figure for dashboard view.
         Returns matplotlib Figure object.
@@ -276,9 +274,7 @@ class FlowFieldPlotter:
 
         # Create structured grid
         grid = pv.StructuredGrid(X, Y, Z)
-        grid["phi"] = phi.flatten(
-            order="F"
-        )  # F-order to match VTK's internal x-fastest memory layout
+        grid["phi"] = phi.flatten(order="F")  # F-order to match VTK's internal x-fastest memory layout
 
         # 2. Setup Plotter
         pl = pv.Plotter(off_screen=True)

@@ -39,9 +39,7 @@ def compare_configs():
             v45_val = physics_v45.get(param, "N/A")
             v46_val = physics_v46.get(param, "N/A")
             if v45_val != v46_val:
-                ratio = (
-                    v46_val / v45_val if isinstance(v45_val, (int, float)) and v45_val != 0 else 0
-                )
+                ratio = v46_val / v45_val if isinstance(v45_val, (int, float)) and v45_val != 0 else 0
                 print(f"  {param}: {v45_val} → {v46_val} ({ratio:.1f}×)")
             else:
                 print(f"  {param}: {v45_val} (未变)")

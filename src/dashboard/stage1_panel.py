@@ -255,9 +255,7 @@ def create_stage1_plots(results: dict[str, Any], plot_type: str = "dynamic") -> 
         )
 
         # Steady state aperture ratio
-        aperture_list = [
-            compute_steady_state(results["model"], V)["aperture_ratio"] * 100 for V in voltages
-        ]
+        aperture_list = [compute_steady_state(results["model"], V)["aperture_ratio"] * 100 for V in voltages]
         fig.add_trace(
             go.Scatter(
                 x=voltages,
@@ -402,9 +400,7 @@ def render_stage1_tab():
         if st.button("🔄 计算动态响应", key="compute_dynamic"):
             with st.spinner("正在计算动态响应..."):
                 # 计算动态响应
-                dynamic_results = compute_dynamic_response(
-                    model, V_from, V_to, duration / 1000.0, int(num_points)
-                )
+                dynamic_results = compute_dynamic_response(model, V_from, V_to, duration / 1000.0, int(num_points))
 
                 # 显示稳态结果
                 st.markdown("#### 稳态结果")

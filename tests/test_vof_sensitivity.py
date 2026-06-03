@@ -219,9 +219,7 @@ class TestCompressionSensitivity:
             compression_factors.append(factor.mean().item())
 
         # 验证: phi=0.5时压缩因子最大，phi=0或1时为0
-        assert max(compression_factors) == compression_factors[2], (
-            "Maximum compression should be at phi=0.5"
-        )
+        assert max(compression_factors) == compression_factors[2], "Maximum compression should be at phi=0.5"
         assert compression_factors[0] == 0.0, "Compression at phi=0 should be 0"
         assert compression_factors[4] == 0.0, "Compression at phi=1 should be 0"
         assert compression_factors[2] > compression_factors[1], "Compression at phi=0.5 > phi=0.25"

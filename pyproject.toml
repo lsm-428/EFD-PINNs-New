@@ -76,7 +76,7 @@ testing = [
 # Ruff 配置 — Lint + Format
 # ============================================================================
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py312"
 src = ["src"]
 exclude = [
@@ -223,7 +223,7 @@ exclude_lines = [
 
 # ============================================================================
 [tool.black]
-line-length = 100
+line-length = 120
 target-version = ["py312"]
 
 [build-system]

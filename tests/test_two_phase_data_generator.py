@@ -204,9 +204,7 @@ class TestVoltageDownProcess:
                 for j in range(n_samples):
                     x = i * Lx / (n_samples - 1)
                     y = j * Ly / (n_samples - 1)
-                    phi = data_generator.target_phi_3d(
-                        x, y, h_ink / 2, t, 0, V_prev=V_prev, t_step=t_step
-                    )
+                    phi = data_generator.target_phi_3d(x, y, h_ink / 2, t, 0, V_prev=V_prev, t_step=t_step)
                     phi_samples.append(phi)
 
             # 开口率 = 透明区域比例
@@ -229,14 +227,10 @@ class TestVoltageDownProcess:
         t = 0.025  # 降压后10ms
 
         # 中心
-        phi_center = data_generator.target_phi_3d(
-            Lx / 2, Ly / 2, h_ink / 2, t, 0, V_prev=V_prev, t_step=t_step
-        )
+        phi_center = data_generator.target_phi_3d(Lx / 2, Ly / 2, h_ink / 2, t, 0, V_prev=V_prev, t_step=t_step)
 
         # 边缘
-        phi_edge = data_generator.target_phi_3d(
-            Lx * 0.1, Ly * 0.1, h_ink / 2, t, 0, V_prev=V_prev, t_step=t_step
-        )
+        phi_edge = data_generator.target_phi_3d(Lx * 0.1, Ly * 0.1, h_ink / 2, t, 0, V_prev=V_prev, t_step=t_step)
 
         # 边缘应该比中心更多油墨（油墨从边缘向中心铺展）
         assert phi_edge > phi_center, "降压后边缘应比中心有更多油墨"

@@ -226,9 +226,7 @@ class TestConfigToModelConsistency(unittest.TestCase):
             )
 
             # 验证维度一致性
-            self.assertEqual(
-                model.input_dim, input_dim, f"Config {config_path}: input_dim mismatch"
-            )
+            self.assertEqual(model.input_dim, input_dim, f"Config {config_path}: input_dim mismatch")
             self.assertEqual(
                 model.output_dim,
                 output_dim,

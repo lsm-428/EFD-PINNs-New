@@ -59,9 +59,7 @@ class PhysicsBasedSampler:
 
         # 阈值电压参数 — 优先从 Stage1 读取
         if stage1_predictor is not None:
-            self.V_T_base = stage1_predictor.params.get(
-                "V_T_base", stage1_predictor.params.get("V_threshold", 5.0)
-            )
+            self.V_T_base = stage1_predictor.params.get("V_T_base", stage1_predictor.params.get("V_threshold", 5.0))
         else:
             self.V_T_base = config.get("threshold_voltage_base", 5.0)
         self.V_T_sensitivity = config.get("threshold_voltage_sensitivity", 2e6)
@@ -113,9 +111,7 @@ class PhysicsBasedSampler:
         V_T = self.V_T_base + (oil_thickness - 3.0e-6) * self.V_T_sensitivity
         return max(0.1, V_T)
 
-    def sample_voltage_physics_based(
-        self, n_samples: int, oil_thickness: float = 3e-6
-    ) -> np.ndarray:
+    def sample_voltage_physics_based(self, n_samples: int, oil_thickness: float = 3e-6) -> np.ndarray:
         """
         基于物理机制的电压采样
 
@@ -187,9 +183,7 @@ class PhysicsBasedSampler:
         beta_samples = np.random.beta(2.0, 0.3, n_samples)
         return v_min + beta_samples * (v_max - v_min)
 
-    def sample_time_adaptive(
-        self, n_samples: int, voltage: float, voltage_prev: float = 0.0
-    ) -> np.ndarray:
+    def sample_time_adaptive(self, n_samples: int, voltage: float, voltage_prev: float = 0.0) -> np.ndarray:
         """
         自适应时间采样
 
@@ -235,9 +229,7 @@ class PhysicsBasedSampler:
 
         return np.array(times[:n_samples])
 
-    def _sample_critical_physics_times(
-        self, n_samples: int, voltage: float, voltage_prev: float
-    ) -> np.ndarray:
+    def _sample_critical_physics_times(self, n_samples: int, voltage: float, voltage_prev: float) -> np.ndarray:
         """
         在关键物理阶段时间点采样
         """
@@ -316,9 +308,7 @@ class PhysicsBasedSampler:
             theta_ss = self._stage1_predictor.young_lippmann(voltage)
             if time > 1e-6:
                 theta_start = self._stage1_predictor.young_lippmann(0.0)
-                theta_t = self._stage1_predictor.dynamic_response(
-                    time, theta_start, theta_ss, V_to=voltage
-                )
+                theta_t = self._stage1_predictor.dynamic_response(time, theta_start, theta_ss, V_to=voltage)
             else:
                 theta_t = theta_ss
             return float(self._stage1_aperture.contact_angle_to_aperture_ratio(theta_t))
@@ -339,9 +329,7 @@ class PhysicsBasedSampler:
         eta_max = min(eta_max_ref, V_eff / 18.0)
         return eta_max * (1.0 - np.exp(-time / tau))
 
-    def _sample_z_interface(
-        self, n_samples: int, eta: float, voltage: float, time: float
-    ) -> np.ndarray:
+    def _sample_z_interface(self, n_samples: int, eta: float, voltage: float, time: float) -> np.ndarray:
         """
         在界面附近采样Z坐标
         """
@@ -462,9 +450,7 @@ if __name__ == "__main__":
     logger.info(f"  最小值: {voltages.min():.2f}V")
     logger.info(f"  最大值: {voltages.max():.2f}V")
     logger.info(f"  平均值: {voltages.mean():.2f}V")
-    logger.info(
-        f"  阈值附近比例: {np.sum((voltages >= 4.5) & (voltages <= 6.5)) / len(voltages) * 100:.1f}%"
-    )
+    logger.info(f"  阈值附近比例: {np.sum((voltages >= 4.5) & (voltages <= 6.5)) / len(voltages) * 100:.1f}%")
 
     # 测试时间采样
     times_up = sampler.sample_time_adaptive(100, 10.0, 0.0)  # 升压

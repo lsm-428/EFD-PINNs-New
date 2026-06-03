@@ -46,9 +46,7 @@ class ScriptTestHelper:
         if not self.script_path.is_absolute():
             self.script_path = Path(os.getcwd()) / self.script_path
 
-    def run_script(
-        self, args: list[str], capture_output: bool = True
-    ) -> subprocess.CompletedProcess:
+    def run_script(self, args: list[str], capture_output: bool = True) -> subprocess.CompletedProcess:
         """
         Run script with given arguments
 
@@ -60,9 +58,7 @@ class ScriptTestHelper:
             CompletedProcess object
         """
         cmd = [sys.executable, str(self.script_path), *args]
-        return subprocess.run(
-            cmd, capture_output=capture_output, text=True, cwd=os.getcwd(), check=False
-        )
+        return subprocess.run(cmd, capture_output=capture_output, text=True, cwd=os.getcwd(), check=False)
 
     def create_temp_config(self, config_dict: dict[str, Any]) -> str:
         """
@@ -190,17 +186,13 @@ class CLITestCase:
     def assert_exit_success(self, result: subprocess.CompletedProcess):
         """Assert script exited with success (return code 0)"""
         assert result.returncode == 0, (
-            f"Script failed with return code {result.returncode}\n"
-            f"STDOUT: {result.stdout}\n"
-            f"STDERR: {result.stderr}"
+            f"Script failed with return code {result.returncode}\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
         )
 
     def assert_exit_failure(self, result: subprocess.CompletedProcess):
         """Assert script exited with failure (non-zero return code)"""
         assert result.returncode != 0, (
-            f"Script succeeded when it should have failed\n"
-            f"STDOUT: {result.stdout}\n"
-            f"STDERR: {result.stderr}"
+            f"Script succeeded when it should have failed\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
         )
 
     def assert_output_contains(self, result: subprocess.CompletedProcess, text: str):
@@ -268,9 +260,7 @@ class FunctionTestCase:
 
         sig = inspect.signature(func)
         actual_params = list(sig.parameters.keys())
-        assert actual_params == expected_params, (
-            f"Expected parameters {expected_params}, got {actual_params}"
-        )
+        assert actual_params == expected_params, f"Expected parameters {expected_params}, got {actual_params}"
 
     def assert_return_type(self, func: Callable, *args, expected_type: type):
         """
@@ -282,9 +272,7 @@ class FunctionTestCase:
             expected_type: Expected return type
         """
         result = func(*args)
-        assert isinstance(result, expected_type), (
-            f"Expected return type {expected_type}, got {type(result)}"
-        )
+        assert isinstance(result, expected_type), f"Expected return type {expected_type}, got {type(result)}"
         return result
 
     def assert_raises(self, func: Callable, *args, exception: type):
@@ -308,9 +296,7 @@ class FunctionTestCase:
             expected_shape: Expected shape tuple
         """
         if hasattr(result, "shape"):
-            assert result.shape == expected_shape, (
-                f"Expected shape {expected_shape}, got {result.shape}"
-            )
+            assert result.shape == expected_shape, f"Expected shape {expected_shape}, got {result.shape}"
         else:
             msg = "Result has no shape attribute"
             raise TypeError(msg)
@@ -410,9 +396,7 @@ class IntegrationTestCase:
         """
         with open(log_path) as f:
             content = f.read()
-        assert expected_text in content, (
-            f"Expected text '{expected_text}' not found in log {log_path}"
-        )
+        assert expected_text in content, f"Expected text '{expected_text}' not found in log {log_path}"
 
 
 @pytest.fixture

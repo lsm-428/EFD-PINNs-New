@@ -144,10 +144,7 @@ class ModelManager:
         # Load model
         try:
             # Use device resolution compatible with dashboard
-            if device == "auto":
-                actual_device = "cuda" if torch.cuda.is_available() else "cpu"
-            else:
-                actual_device = device
+            actual_device = ("cuda" if torch.cuda.is_available() else "cpu") if device == "auto" else device
 
             engine = PINNInferenceEngine(path, device=actual_device)
             self._cache[path] = engine

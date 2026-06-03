@@ -98,10 +98,7 @@ class LossStabilizer:
 
     def compute_loss(self, pred, target, physics_loss=None, physics_weight=0.0):
         base_loss = self.safe_mse_loss(pred, target)
-        if physics_loss is not None:
-            total_loss = base_loss + physics_weight * physics_loss
-        else:
-            total_loss = base_loss
+        total_loss = base_loss + physics_weight * physics_loss if physics_loss is not None else base_loss
         self.loss_history.append(total_loss.item())
         if len(self.loss_history) > self.history_size:
             self.loss_history.pop(0)
@@ -148,8 +145,7 @@ class EnhancedDataAugmenter:
 
         if self.enable_scaling:
             scale = (
-                torch.rand(1, device=x.device) * (self.scaling_range[1] - self.scaling_range[0])
-                + self.scaling_range[0]
+                torch.rand(1, device=x.device) * (self.scaling_range[1] - self.scaling_range[0]) + self.scaling_range[0]
             )
             x = x * scale
 

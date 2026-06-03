@@ -243,9 +243,7 @@ class HTMLReport:
         # Normalize
         total = [sum(frac_array[i][j] for i in range(len(frac_array))) for j in range(min_len)]
         total = [max(t, 1e-10) for t in total]
-        frac_array = [
-            [frac_array[i][j] / total[j] for j in range(min_len)] for i in range(len(frac_array))
-        ]
+        frac_array = [[frac_array[i][j] / total[j] for j in range(min_len)] for i in range(len(frac_array))]
 
         fig = go.Figure()
 
@@ -391,9 +389,7 @@ class HTMLReport:
         </div>
         """
 
-        self.sections.append(
-            {"title": "Training Summary", "content": summary_html, "collapsible": False}
-        )
+        self.sections.append({"title": "Training Summary", "content": summary_html, "collapsible": False})
 
     def generate(self, output_path: str) -> str:
         """

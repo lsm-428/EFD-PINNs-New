@@ -475,9 +475,7 @@ class InterfaceTracker:
         # 表面张力系数
         self.sigma = config.get("surface_tension", FLUID_PROPERTIES["oil"]["surface_tension"])
 
-    def advect(
-        self, phi: np.ndarray, u: np.ndarray, v: np.ndarray, w: np.ndarray, dt: float
-    ) -> np.ndarray:
+    def advect(self, phi: np.ndarray, u: np.ndarray, v: np.ndarray, w: np.ndarray, dt: float) -> np.ndarray:
         """
         界面平流（VOF 方程求解）
 
@@ -501,10 +499,7 @@ class InterfaceTracker:
         for i in range(1, nx - 1):
             for j in range(ny):
                 for k in range(nz):
-                    if u[i, j, k] > 0:
-                        flux_x = u[i, j, k] * phi[i - 1, j, k]
-                    else:
-                        flux_x = u[i, j, k] * phi[i, j, k]
+                    flux_x = u[i, j, k] * phi[i - 1, j, k] if u[i, j, k] > 0 else u[i, j, k] * phi[i, j, k]
 
                     if u[i + 1, j, k] > 0:
                         flux_x_p = u[i + 1, j, k] * phi[i, j, k]
@@ -517,10 +512,7 @@ class InterfaceTracker:
         for i in range(nx):
             for j in range(1, ny - 1):
                 for k in range(nz):
-                    if v[i, j, k] > 0:
-                        flux_y = v[i, j, k] * phi[i, j - 1, k]
-                    else:
-                        flux_y = v[i, j, k] * phi[i, j, k]
+                    flux_y = v[i, j, k] * phi[i, j - 1, k] if v[i, j, k] > 0 else v[i, j, k] * phi[i, j, k]
 
                     if v[i, j + 1, k] > 0:
                         flux_y_p = v[i, j + 1, k] * phi[i, j, k]
@@ -533,10 +525,7 @@ class InterfaceTracker:
         for i in range(nx):
             for j in range(ny):
                 for k in range(1, nz - 1):
-                    if w[i, j, k] > 0:
-                        flux_z = w[i, j, k] * phi[i, j, k - 1]
-                    else:
-                        flux_z = w[i, j, k] * phi[i, j, k]
+                    flux_z = w[i, j, k] * phi[i, j, k - 1] if w[i, j, k] > 0 else w[i, j, k] * phi[i, j, k]
 
                     if w[i, j, k + 1] > 0:
                         flux_z_p = w[i, j, k + 1] * phi[i, j, k]
@@ -548,9 +537,7 @@ class InterfaceTracker:
         # 限制 phi 在 [0, 1] 范围内
         return np.clip(phi_new, 0.0, 1.0)
 
-    def compute_interface_normal(
-        self, phi: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def compute_interface_normal(self, phi: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         计算界面法向量
 
@@ -621,9 +608,7 @@ class InterfaceTracker:
 
         return kappa
 
-    def compute_surface_tension_force(
-        self, phi: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def compute_surface_tension_force(self, phi: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         计算表面张力体积力（CSF 模型）
 
@@ -821,9 +806,7 @@ class ContactLineHandler:
             t_step = self.t_step
 
         # 使用 HybridPredictor 获取动态接触角
-        return self.predictor.predict(
-            voltage=voltage, time=time, V_initial=V_initial, t_step=t_step
-        )
+        return self.predictor.predict(voltage=voltage, time=time, V_initial=V_initial, t_step=t_step)
 
     def get_equilibrium_contact_angle(self, voltage: float) -> float:
         """
@@ -937,9 +920,7 @@ class ContactLineHandler:
 
         return False
 
-    def get_contact_line_velocity(
-        self, phi: np.ndarray, phi_prev: np.ndarray, mesh: Mesh, dt: float
-    ) -> float:
+    def get_contact_line_velocity(self, phi: np.ndarray, phi_prev: np.ndarray, mesh: Mesh, dt: float) -> float:
         """
         计算接触线速度
 
@@ -1238,15 +1219,9 @@ class FlowSolver:
                     dwdy = (self.w[i, j + 1, k] - self.w[i, j - 1, k]) / (2 * dy)
                     dwdz = (self.w[i, j, k + 1] - self.w[i, j, k - 1]) / (2 * dz)
 
-                    conv_u = (
-                        self.u[i, j, k] * dudx + self.v[i, j, k] * dudy + self.w[i, j, k] * dudz
-                    )
-                    conv_v = (
-                        self.u[i, j, k] * dvdx + self.v[i, j, k] * dvdy + self.w[i, j, k] * dvdz
-                    )
-                    conv_w = (
-                        self.u[i, j, k] * dwdx + self.v[i, j, k] * dwdy + self.w[i, j, k] * dwdz
-                    )
+                    conv_u = self.u[i, j, k] * dudx + self.v[i, j, k] * dudy + self.w[i, j, k] * dudz
+                    conv_v = self.u[i, j, k] * dvdx + self.v[i, j, k] * dvdy + self.w[i, j, k] * dvdz
+                    conv_w = self.u[i, j, k] * dwdx + self.v[i, j, k] * dwdy + self.w[i, j, k] * dwdz
 
                     # 粘性项（拉普拉斯）
                     lap_u = (
@@ -1345,9 +1320,7 @@ class FlowSolver:
             "phi": self.phi.copy(),
         }
 
-    def solve(
-        self, t_end: float, dt: float | None = None, save_interval: int = 10
-    ) -> SimulationResult:
+    def solve(self, t_end: float, dt: float | None = None, save_interval: int = 10) -> SimulationResult:
         """
         求解到指定时间
 
@@ -1439,9 +1412,7 @@ class FlowSolver:
 
         # 相对误差
         oil_error = abs(current_mass_oil - self.initial_mass_oil) / (self.initial_mass_oil + 1e-10)
-        water_error = abs(current_mass_water - self.initial_mass_water) / (
-            self.initial_mass_water + 1e-10
-        )
+        water_error = abs(current_mass_water - self.initial_mass_water) / (self.initial_mass_water + 1e-10)
         total_error = (oil_error + water_error) / 2
 
         return {
@@ -1815,11 +1786,7 @@ class PINNSolver:
             physics_loss = self.compute_physics_loss(x_phys_batch)["total"]
             bc_loss = self.compute_bc_loss(x_bc)
 
-            total_loss = (
-                self.lambda_data * data_loss
-                + self.lambda_physics * physics_loss
-                + self.lambda_bc * bc_loss
-            )
+            total_loss = self.lambda_data * data_loss + self.lambda_physics * physics_loss + self.lambda_bc * bc_loss
 
             # 反向传播
             self.optimizer.zero_grad()
@@ -1997,9 +1964,7 @@ class FlowFieldSimulator:
     def _initialize_mesh(self):
         """初始化网格"""
         if self.mesh is None:
-            self.mesh = self.mesh_generator.generate_structured_mesh(
-                nx=self.nx, ny=self.ny, nz=self.nz
-            )
+            self.mesh = self.mesh_generator.generate_structured_mesh(nx=self.nx, ny=self.ny, nz=self.nz)
 
     def _initialize_cfd_solver(self):
         """初始化 CFD 求解器"""
@@ -2053,9 +2018,7 @@ class FlowFieldSimulator:
 
         return result
 
-    def _simulate_cfd(
-        self, voltage: float, duration: float, V_initial: float, t_step: float
-    ) -> SimulationResult:
+    def _simulate_cfd(self, voltage: float, duration: float, V_initial: float, t_step: float) -> SimulationResult:
         """使用 CFD 求解器模拟"""
         self._initialize_cfd_solver()
 
@@ -2079,9 +2042,7 @@ class FlowFieldSimulator:
 
         return result
 
-    def _simulate_pinn(
-        self, voltage: float, duration: float, V_initial: float, t_step: float
-    ) -> SimulationResult:
+    def _simulate_pinn(self, voltage: float, duration: float, V_initial: float, t_step: float) -> SimulationResult:
         """使用 PINN 求解器模拟"""
         self._initialize_pinn_solver()
         self._initialize_mesh()
@@ -2124,9 +2085,7 @@ class FlowFieldSimulator:
             method="pinn",
         )
 
-    def _simulate_hybrid(
-        self, voltage: float, duration: float, V_initial: float, t_step: float
-    ) -> SimulationResult:
+    def _simulate_hybrid(self, voltage: float, duration: float, V_initial: float, t_step: float) -> SimulationResult:
         """使用混合方法模拟（CFD + PINN）"""
         # 简化实现：使用 EnhancedApertureModel 的结果
         n_times = 100
@@ -2314,12 +2273,8 @@ class FlowFieldSimulator:
         """导出为 JSON 格式（仅摘要）"""
         summary = {
             "t": result.t.tolist(),
-            "aperture_ratio": (
-                result.aperture_ratio.tolist() if result.aperture_ratio is not None else []
-            ),
-            "contact_angle": (
-                result.contact_angle.tolist() if result.contact_angle is not None else []
-            ),
+            "aperture_ratio": (result.aperture_ratio.tolist() if result.aperture_ratio is not None else []),
+            "contact_angle": (result.contact_angle.tolist() if result.contact_angle is not None else []),
             "computation_time": result.computation_time,
             "method": result.method,
             "config": result.config,
@@ -2363,9 +2318,7 @@ def create_initial_conditions(mesh: Mesh, ink_thickness: float = 3e-6) -> dict[s
     return {"phi": phi, "u": u, "v": v, "w": w, "p": p}
 
 
-def compute_aperture_ratio_from_phi(
-    phi: np.ndarray, mesh: Mesh, z_threshold: float | None = None
-) -> float:
+def compute_aperture_ratio_from_phi(phi: np.ndarray, mesh: Mesh, z_threshold: float | None = None) -> float:
     """
     从体积分数场计算开口率
 

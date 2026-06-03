@@ -29,9 +29,7 @@ class PINNInferenceEngine:
 
     def __init__(self, checkpoint_path: str, device: str = "auto"):
         self.device = torch.device(
-            "cuda"
-            if (device == "auto" and torch.cuda.is_available()) or device == "cuda"
-            else "cpu"
+            "cuda" if (device == "auto" and torch.cuda.is_available()) or device == "cuda" else "cpu"
         )
         self.checkpoint_path = Path(checkpoint_path)
         self.model = None
@@ -105,9 +103,7 @@ class PINNInferenceEngine:
                         self.config["model"]["hidden_phi"] = [64, 64, 64, 32]
                     else:
                         # Generic fallback if not standard, though we can't guess depth easily
-                        logger.warning(
-                            f"Unknown hidden size {h1}, trying to set first layer but depth might be wrong."
-                        )
+                        logger.warning(f"Unknown hidden size {h1}, trying to set first layer but depth might be wrong.")
                         self.config["model"]["hidden_phi"] = [h1, h1, 64, 32]
 
             is_lstm = any("lstm_encoder" in k for k in state_dict)
@@ -229,9 +225,7 @@ class PINNInferenceEngine:
             "X": X,
             "Y": Y,
             "Z": Z,
-            "vel_mag": np.sqrt(
-                outputs[:, 0] ** 2 + outputs[:, 1] ** 2 + outputs[:, 2] ** 2
-            ).reshape(res, res),
+            "vel_mag": np.sqrt(outputs[:, 0] ** 2 + outputs[:, 1] ** 2 + outputs[:, 2] ** 2).reshape(res, res),
         }
 
     def predict_field(
@@ -311,9 +305,7 @@ class PINNInferenceEngine:
 
             if LSTMHybridPINN is not None and isinstance(self.model, LSTMHybridPINN):
                 spatial_coords = np.stack([batch_x, batch_y, batch_z], axis=1)
-                spatial_tensor = torch.tensor(
-                    spatial_coords, dtype=torch.float32, device=self.device
-                )
+                spatial_tensor = torch.tensor(spatial_coords, dtype=torch.float32, device=self.device)
 
                 t_vals = np.full((len(batch_x), 1), t)
                 t_tensor = torch.tensor(t_vals, dtype=torch.float32, device=self.device)
@@ -639,9 +631,7 @@ class PINNInferenceEngine:
         z = np.linspace(0, self.Lz, res // 2)
         _X, _Y, _Z = np.meshgrid(x, y, z, indexing="ij")
 
-        vol_data = self.predict_3d_volume(
-            t, voltage_from, voltage_to, resolution_xy=res, resolution_z=res // 2
-        )
+        vol_data = self.predict_3d_volume(t, voltage_from, voltage_to, resolution_xy=res, resolution_z=res // 2)
         phi = vol_data["phi"]
 
         dx = self.Lx / (res - 1)
@@ -674,18 +664,14 @@ class PINNInferenceEngine:
             return {}
 
         # Convert to tensor with gradient
-        spatial_tensor = torch.tensor(
-            inputs_np, dtype=torch.float32, device=self.device, requires_grad=True
-        )
+        spatial_tensor = torch.tensor(inputs_np, dtype=torch.float32, device=self.device, requires_grad=True)
 
         n_points = len(spatial_tensor)
 
         # Prepare other inputs
         if LSTMHybridPINN is not None and isinstance(self.model, LSTMHybridPINN):
             t_vals = np.full((n_points, 1), t)
-            t_tensor = torch.tensor(
-                t_vals, dtype=torch.float32, device=self.device, requires_grad=True
-            )
+            t_tensor = torch.tensor(t_vals, dtype=torch.float32, device=self.device, requires_grad=True)
 
             V_from_norm = voltage_from / self.V_max_train
             V_to_norm = voltage_to / self.V_max_train
@@ -708,9 +694,7 @@ class PINNInferenceEngine:
                 ],
                 axis=1,
             )
-            inputs_tensor = torch.tensor(
-                inputs, dtype=torch.float32, device=self.device, requires_grad=True
-            )
+            inputs_tensor = torch.tensor(inputs, dtype=torch.float32, device=self.device, requires_grad=True)
             outputs = self.model(inputs_tensor)
             spatial_tensor = inputs_tensor  # For grad calculation reference
 

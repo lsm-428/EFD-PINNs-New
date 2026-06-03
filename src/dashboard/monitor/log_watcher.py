@@ -103,9 +103,7 @@ class LogWatcher:
         self.log_filename = log_filename
         self.state_dir = Path(state_dir).resolve() if state_dir else self.log_dir
         self.parser = LogParser(state_dir=str(self.state_dir))
-        self.handler = LogWatcherHandler(
-            callback=callback, parser=self.parser, log_filename=log_filename
-        )
+        self.handler = LogWatcherHandler(callback=callback, parser=self.parser, log_filename=log_filename)
         self.observer = Observer()
         self.is_running = False
         self._history = deque(maxlen=1000)

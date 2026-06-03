@@ -32,9 +32,7 @@ class TestParameterConsistency:
 
         # 验证关键参数
         assert abs(config.theta0 - 120.0) < 1e-6, f"theta0 应为 120.0, 实际为 {config.theta0}"
-        assert abs(config.epsilon_r - 12.0) < 1e-6, (
-            f"epsilon_r 应为 12.0, 实际为 {config.epsilon_r}"
-        )
+        assert abs(config.epsilon_r - 12.0) < 1e-6, f"epsilon_r 应为 12.0, 实际为 {config.epsilon_r}"
         assert abs(config.sigma - 0.02505) < 1e-6, f"sigma 应为 0.02505, 实际为 {config.sigma}"
         assert abs(config.tau - 0.0119) < 1e-6, f"tau 应为 0.0119, 实际为 {config.tau}"
         assert abs(config.zeta - 1.0) < 1e-6, f"zeta 应为 1.0, 实际为 {config.zeta}"

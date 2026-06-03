@@ -75,9 +75,7 @@ if not model_files:
     st.error("No model checkpoints found in `outputs/`. Please run training first.")
     st.stop()
 
-model_options = {
-    f"{m.parent.name}/{m.name} ({time.ctime(m.stat().st_mtime)})": str(m) for m in model_files
-}
+model_options = {f"{m.parent.name}/{m.name} ({time.ctime(m.stat().st_mtime)})": str(m) for m in model_files}
 selected_model_key = st.sidebar.selectbox("Select Checkpoint", options=list(model_options.keys()))
 model_path = model_options[selected_model_key]
 
@@ -120,9 +118,7 @@ if isinstance(engine, tuple):  # Error case
 with st.sidebar.expander("ℹ️ Model Architecture Info", expanded=False):
     st.markdown(f"**Loaded Path:** `{Path(model_path).name}`")
     st.markdown(f"**Training V_max:** `{engine.V_max_train} V`")
-    st.markdown(
-        f"**Domain:** {engine.Lx * 1e6:.0f} x {engine.Ly * 1e6:.0f} x {engine.Lz * 1e6:.0f} μm"
-    )
+    st.markdown(f"**Domain:** {engine.Lx * 1e6:.0f} x {engine.Ly * 1e6:.0f} x {engine.Lz * 1e6:.0f} μm")
     if hasattr(engine.model, "config"):
         st.json(engine.model.config)
 
@@ -202,9 +198,7 @@ with tabs[0]:
                 st.caption(f"Quasi-static: V_inst = {v_inst:.1f}V")
 
         st.markdown("#### Slice Config")
-        plane = st.selectbox(
-            "Cut Plane", ["xy (Top View)", "xz (Side View)", "yz (Front View)"]
-        ).split()[0]
+        plane = st.selectbox("Cut Plane", ["xy (Top View)", "xz (Side View)", "yz (Front View)"]).split()[0]
 
         # Dynamic Slider for Slice Position
         if plane == "xy":
@@ -268,9 +262,7 @@ with tabs[0]:
 # ==============================================================================
 with tabs[1]:
     st.markdown("### 3D Ink Interface Reconstruction")
-    st.caption(
-        "Visualizes the iso-surface of the phase field (φ=0.5) representing the ink-air interface."
-    )
+    st.caption("Visualizes the iso-surface of the phase field (φ=0.5) representing the ink-air interface.")
 
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -348,9 +340,7 @@ with tabs[2]:
         if wf_type == "Step Function":
             step_v = st.number_input("Step Amplitude (V)", -v_limit, v_limit, 30.0)
             delay = st.number_input("Delay (ms)", 0.0, duration, 0.1)
-            func = lambda t: (
-                (0.0, step_v, t - delay / 1000.0) if t > delay / 1000.0 else (0.0, 0.0, 0.0)
-            )
+            func = lambda t: ((0.0, step_v, t - delay / 1000.0) if t > delay / 1000.0 else (0.0, 0.0, 0.0))
             preview_y = lambda t_arr: np.where(t_arr > delay / 1000.0, step_v, 0.0)
 
         elif wf_type == "Square Pulse":
@@ -369,9 +359,7 @@ with tabs[2]:
                 return (0.0, 0.0, 0.0)
 
             func = pulse_func
-            preview_y = lambda t_arr: np.where(
-                (t_arr * 1000 >= start) & (t_arr * 1000 <= start + width), amp, 0.0
-            )
+            preview_y = lambda t_arr: np.where((t_arr * 1000 >= start) & (t_arr * 1000 <= start + width), amp, 0.0)
 
         elif wf_type == "Sine Wave":
             freq = st.number_input("Frequency (Hz)", 10, 1000, 100)
@@ -442,9 +430,7 @@ with tabs[2]:
 # ==============================================================================
 with tabs[3]:
     st.markdown("### 🩺 Physics Constraints Verification")
-    st.markdown(
-        "Check if the model predictions satisfy physical laws (Mass Conservation & Navier-Stokes)."
-    )
+    st.markdown("Check if the model predictions satisfy physical laws (Mass Conservation & Navier-Stokes).")
 
     d1, d2 = st.columns(2)
     with d1:

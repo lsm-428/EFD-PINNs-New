@@ -67,9 +67,7 @@ def run_single_benchmark(
     return results
 
 
-def run_throughput_test(
-    model: torch.nn.Module, max_batch: int = 10000, device: str = "cuda"
-) -> dict[str, Any]:
+def run_throughput_test(model: torch.nn.Module, max_batch: int = 10000, device: str = "cuda") -> dict[str, Any]:
     """Run throughput test across different batch sizes.
 
     Args:
@@ -252,17 +250,13 @@ def render_benchmark_tab(engine: Optional["PINNInferenceEngine"]) -> None:
 
             # Run single benchmark
             with st.spinner(f"Running latency benchmark on {device.upper()}..."):
-                benchmark_results = run_single_benchmark(
-                    model_to_device, batch_sizes=batch_sizes, device=device
-                )
+                benchmark_results = run_single_benchmark(model_to_device, batch_sizes=batch_sizes, device=device)
                 st.session_state.benchmark_results = benchmark_results
 
             # Run throughput test
             max_batch = max(batch_sizes) if batch_sizes else 4096
             with st.spinner("Running throughput test..."):
-                throughput_results = run_throughput_test(
-                    model_to_device, max_batch=max_batch, device=device
-                )
+                throughput_results = run_throughput_test(model_to_device, max_batch=max_batch, device=device)
                 st.session_state.throughput_results = throughput_results
 
             st.success("✅ Benchmark completed!")

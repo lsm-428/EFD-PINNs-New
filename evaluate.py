@@ -219,9 +219,7 @@ class PINNEvaluator:
         ax1 = fig.add_subplot(gs[0, 0])
         f_xy = self.get_fields(model, 30.0, 0.02, 30.0, plane="xy")
         X, Y = f_xy["grid"]
-        im1 = ax1.contourf(
-            X * 1e6, Y * 1e6, f_xy["phi"], levels=20, cmap=self.ewd_cmap, vmin=0, vmax=1
-        )
+        im1 = ax1.contourf(X * 1e6, Y * 1e6, f_xy["phi"], levels=20, cmap=self.ewd_cmap, vmin=0, vmax=1)
         ax1.contour(X * 1e6, Y * 1e6, f_xy["phi"], levels=[0.5], colors="k", linewidths=2)
 
         # 优化速度矢量显示：根据最大速度自动缩放
@@ -249,9 +247,7 @@ class PINNEvaluator:
         ax2 = fig.add_subplot(gs[0, 1])
         f_xz = self.get_fields(model, 30.0, 0.02, 30.0, plane="xz")
         X, Z = f_xz["grid"]
-        im2 = ax2.contourf(
-            X * 1e6, Z * 1e6, f_xz["phi"], levels=20, cmap=self.ewd_cmap, vmin=0, vmax=1
-        )
+        im2 = ax2.contourf(X * 1e6, Z * 1e6, f_xz["phi"], levels=20, cmap=self.ewd_cmap, vmin=0, vmax=1)
         ax2.contour(X * 1e6, Z * 1e6, f_xz["phi"], levels=[0.5], colors="k", linewidths=2)
 
         u, w = f_xz["u"], f_xz["w"]
@@ -381,10 +377,7 @@ class PINNEvaluator:
 
                 eta0 = self.compute_aperture(model, V_to, t, V_from)
                 # Color coding: Green for ON, Orange for OFF, Gray for Static
-                if V_from == 0 and V_to == 0:
-                    color = "gray"
-                else:
-                    color = "green" if "ON" in row_label else "orange"
+                color = "gray" if V_from == 0 and V_to == 0 else "green" if "ON" in row_label else "orange"
 
                 # Explicitly label as t_since
                 ax.set_title(
@@ -522,10 +515,9 @@ class PINNEvaluator:
                     alpha=0.3,
                 )
 
-        ax.set_title(
-            f"3D Interface (φ=0.5) Evolution\nVoltage: {V_from}V → {V_to}V, Time: {t_since * 1000:.1f}ms",
-            fontsize=14,
-        )
+        time_ms = t_since * 1000
+        title = f"3D Interface (φ=0.5) Evolution\nVoltage: {V_from}V → {V_to}V, Time: {time_ms:.1f}ms"
+        ax.set_title(title, fontsize=14)
         ax.set_xlabel("x (μm)")
         ax.set_ylabel("y (μm)")
         ax.set_zlabel("z (μm)")
@@ -1062,9 +1054,7 @@ class PINNEvaluator:
 
         # --- Panel 2: Wall-top phi vs Voltage ---
         ax2 = axes[1]
-        ax2.plot(
-            voltages, wall_phi_top, "rs-", linewidth=2, markersize=6, label="phi at wall top (z=Lz)"
-        )
+        ax2.plot(voltages, wall_phi_top, "rs-", linewidth=2, markersize=6, label="phi at wall top (z=Lz)")
         ax2.plot(
             voltages,
             wall_phi_mid,
@@ -1074,9 +1064,7 @@ class PINNEvaluator:
             label="phi at wall mid (z=Lz/2)",
         )
         ax2.axhline(0.1, color="orange", linestyle="--", alpha=0.7, label="Warning: phi>0.1")
-        ax2.axhline(
-            0.3, color="red", linestyle="--", alpha=0.7, label="Critical: phi>0.3 (climbing!)"
-        )
+        ax2.axhline(0.3, color="red", linestyle="--", alpha=0.7, label="Critical: phi>0.3 (climbing!)")
         ax2.set_xlabel("Voltage (V)")
         ax2.set_ylabel("phi at wall edge")
         ax2.set_title("Wall-Edge Phase vs Voltage")
@@ -1142,7 +1130,10 @@ class PINNEvaluator:
         V_step: float = 1.0,
         t_steady: float = 0.040,
     ):
-        """Find critical voltages: V_open (starts to open), V_full (fully open), V_climb (oil climbs wall).
+        """Find critical voltages:
+        - V_open (starts to open)
+        - V_full (fully open)
+        - V_climb (oil climbs wall)
 
         These are the three key voltages for an EWD pixel:
         - V_open: eta just becomes detectable (eta > 0.02)
@@ -1197,17 +1188,11 @@ class PINNEvaluator:
         ax1.axhline(0.02, color="gray", linestyle=":", alpha=0.5, label="eta=0.02 (open threshold)")
         ax1.axhline(0.80, color="gray", linestyle="--", alpha=0.5, label="eta=0.80 (full open)")
         if V_open is not None:
-            ax1.axvline(
-                V_open, color="green", linestyle="-.", alpha=0.7, label=f"V_open ~ {V_open:.0f}V"
-            )
+            ax1.axvline(V_open, color="green", linestyle="-.", alpha=0.7, label=f"V_open ~ {V_open:.0f}V")
         if V_full is not None:
-            ax1.axvline(
-                V_full, color="blue", linestyle="-.", alpha=0.7, label=f"V_full ~ {V_full:.0f}V"
-            )
+            ax1.axvline(V_full, color="blue", linestyle="-.", alpha=0.7, label=f"V_full ~ {V_full:.0f}V")
         if V_climb is not None:
-            ax1.axvline(
-                V_climb, color="red", linestyle="-.", alpha=0.7, label=f"V_climb ~ {V_climb:.0f}V"
-            )
+            ax1.axvline(V_climb, color="red", linestyle="-.", alpha=0.7, label=f"V_climb ~ {V_climb:.0f}V")
         ax1.set_ylabel("Aperture Ratio eta")
         ax1.set_title("Critical Voltage Analysis")
         ax1.legend(fontsize=8)
@@ -1218,9 +1203,7 @@ class PINNEvaluator:
         ax2.axhline(0.1, color="orange", linestyle="--", alpha=0.7, label="Warning (phi>0.1)")
         ax2.axhline(0.3, color="red", linestyle="--", alpha=0.7, label="Climbing! (phi>0.3)")
         if V_climb is not None:
-            ax2.axvline(
-                V_climb, color="red", linestyle="-.", alpha=0.7, label=f"V_climb ~ {V_climb:.0f}V"
-            )
+            ax2.axvline(V_climb, color="red", linestyle="-.", alpha=0.7, label=f"V_climb ~ {V_climb:.0f}V")
         ax2.set_xlabel("Voltage (V)")
         ax2.set_ylabel("Wall-Top Phase phi")
         ax2.legend(fontsize=8)
@@ -1499,9 +1482,7 @@ def main():
         final_ckpt = os.path.join(args.model_dir, "final_model.pth")
 
         if not os.path.exists(best_ckpt) or not os.path.exists(final_ckpt):
-            print(
-                "Error: Both best_model.pth and final_model.pth are required for statistical test."
-            )
+            print("Error: Both best_model.pth and final_model.pth are required for statistical test.")
             return
 
         print("Loading models for statistical comparison...")

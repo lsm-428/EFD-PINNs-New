@@ -103,15 +103,11 @@ def test_z_decay_profile():
 
     # 单调递减
     for i in range(len(z_decay) - 1):
-        assert z_decay[i] >= z_decay[i + 1], (
-            f"z_decay should be monotonically decreasing, failed at index {i}"
-        )
+        assert z_decay[i] >= z_decay[i + 1], f"z_decay should be monotonically decreasing, failed at index {i}"
 
     # z=0 → 1, z=h_ink → 1/e
     assert abs(z_decay[0].item() - 1.0) < 0.01
     assert abs(z_decay[4].item() - 1.0 / torch.e) < 0.01
 
     # 远场接近 0
-    assert z_decay[-1].item() < 0.05, (
-        f"z_decay at 10μm should be < 0.05, got {z_decay[-1].item():.4f}"
-    )
+    assert z_decay[-1].item() < 0.05, f"z_decay at 10μm should be < 0.05, got {z_decay[-1].item():.4f}"

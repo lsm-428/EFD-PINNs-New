@@ -9,9 +9,7 @@ import os
 
 import pytest
 
-MODEL_BASE_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "outputs", "train"
-)
+MODEL_BASE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "outputs", "train")
 
 
 def test_outputs_directory_exists():
@@ -42,9 +40,7 @@ def test_training_log_exists():
     latest = run_dirs[-1]
     log_path = os.path.join(latest, "training.log")
 
-    assert os.path.isfile(log_path), (
-        f"Latest training run {os.path.basename(latest)} missing training.log"
-    )
+    assert os.path.isfile(log_path), f"Latest training run {os.path.basename(latest)} missing training.log"
 
 
 def test_config_consistency():
@@ -111,6 +107,4 @@ def test_training_config_structure():
     assert isinstance(cfg["physics"], dict), "'physics' should be a dict"
 
     # EW 权重应存在
-    assert "electrowetting_weight" in cfg["physics"], (
-        "Missing electrowetting_weight in physics config"
-    )
+    assert "electrowetting_weight" in cfg["physics"], "Missing electrowetting_weight in physics config"

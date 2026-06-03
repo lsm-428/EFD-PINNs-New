@@ -30,15 +30,9 @@ def test_time_sampling():
     t_late = np.linspace(4 * tau, 0.05, n_times // 3)  # 20-50ms
     time_samples = np.concatenate([t_early, t_mid, t_late])
 
-    print(
-        f"   早期 (0-10ms): {len(t_early)} 点, 范围 [{t_early[0] * 1000:.1f}, {t_early[-1] * 1000:.1f}] ms"
-    )
-    print(
-        f"   中期 (10-20ms): {len(t_mid)} 点, 范围 [{t_mid[0] * 1000:.1f}, {t_mid[-1] * 1000:.1f}] ms"
-    )
-    print(
-        f"   后期 (20-50ms): {len(t_late)} 点, 范围 [{t_late[0] * 1000:.1f}, {t_late[-1] * 1000:.1f}] ms"
-    )
+    print(f"   早期 (0-10ms): {len(t_early)} 点, 范围 [{t_early[0] * 1000:.1f}, {t_early[-1] * 1000:.1f}] ms")
+    print(f"   中期 (10-20ms): {len(t_mid)} 点, 范围 [{t_mid[0] * 1000:.1f}, {t_mid[-1] * 1000:.1f}] ms")
+    print(f"   后期 (20-50ms): {len(t_late)} 点, 范围 [{t_late[0] * 1000:.1f}, {t_late[-1] * 1000:.1f}] ms")
     print(f"   总计: {len(time_samples)} 点")
 
     # 检查问题区间 (10-20ms) 是否有足够的采样
@@ -68,15 +62,9 @@ def test_eta_constraints():
     ]  # 10个中期点
     t_late = [0.025, 0.030, 0.040, 0.050]  # 4个后期点
 
-    print(
-        f"   早期约束点: {len(t_early)} 个, 范围 [{t_early[0] * 1000:.0f}, {t_early[-1] * 1000:.0f}] ms"
-    )
-    print(
-        f"   中期约束点: {len(t_mid)} 个, 范围 [{t_mid[0] * 1000:.0f}, {t_mid[-1] * 1000:.0f}] ms"
-    )
-    print(
-        f"   后期约束点: {len(t_late)} 个, 范围 [{t_late[0] * 1000:.0f}, {t_late[-1] * 1000:.0f}] ms"
-    )
+    print(f"   早期约束点: {len(t_early)} 个, 范围 [{t_early[0] * 1000:.0f}, {t_early[-1] * 1000:.0f}] ms")
+    print(f"   中期约束点: {len(t_mid)} 个, 范围 [{t_mid[0] * 1000:.0f}, {t_mid[-1] * 1000:.0f}] ms")
+    print(f"   后期约束点: {len(t_late)} 个, 范围 [{t_late[0] * 1000:.0f}, {t_late[-1] * 1000:.0f}] ms")
 
     # 检查中期约束点是否覆盖问题区间
     mid_coverage = all(10 <= t * 1000 <= 20 for t in t_mid)

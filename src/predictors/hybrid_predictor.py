@@ -119,9 +119,7 @@ class HybridPredictor:
         logger.info(
             f"   ε_SU8={self.params['epsilon_r']}, ε_Teflon={self.params['epsilon_h']}, γ={self.params['gamma']} N/m"
         )
-        logger.info(
-            f"   θ₀={self.params['theta0']}°, τ={self.params['tau'] * 1000:.1f}ms, ζ={self.params['zeta']}"
-        )
+        logger.info(f"   θ₀={self.params['theta0']}°, τ={self.params['tau'] * 1000:.1f}ms, ζ={self.params['zeta']}")
         logger.info(
             f"   V_threshold={self.params.get('V_threshold', 5.0)}V, τ_recovery_factor={self.params.get('tau_recovery_factor', 0.4)}"
         )
@@ -171,12 +169,8 @@ class HybridPredictor:
                 # 动力学参数
                 "tau": dynamics.get("tau", self.params["tau"]),
                 "tau_onset": dynamics.get("tau_onset", self.params.get("tau_onset", 0.0075)),
-                "tau_saturation": dynamics.get(
-                    "tau_saturation", self.params.get("tau_saturation", 0.003)
-                ),
-                "tau_recovery_factor": dynamics.get(
-                    "tau_recovery_factor", self.params.get("tau_recovery_factor", 0.4)
-                ),
+                "tau_saturation": dynamics.get("tau_saturation", self.params.get("tau_saturation", 0.003)),
+                "tau_recovery_factor": dynamics.get("tau_recovery_factor", self.params.get("tau_recovery_factor", 0.4)),
                 "zeta": dynamics.get("zeta", self.params["zeta"]),
                 "dynamic_order": dynamics.get("dynamic_order", self.params.get("dynamic_order", 2)),
             }
@@ -210,12 +204,8 @@ class HybridPredictor:
                 "d": materials.get("dielectric_thickness", self.params["d"]),
                 "tau": dynamics.get("tau", self.params["tau"]),
                 "tau_onset": dynamics.get("tau_onset", self.params.get("tau_onset", 0.0075)),
-                "tau_saturation": dynamics.get(
-                    "tau_saturation", self.params.get("tau_saturation", 0.003)
-                ),
-                "tau_recovery_factor": dynamics.get(
-                    "tau_recovery_factor", self.params.get("tau_recovery_factor", 0.4)
-                ),
+                "tau_saturation": dynamics.get("tau_saturation", self.params.get("tau_saturation", 0.003)),
+                "tau_recovery_factor": dynamics.get("tau_recovery_factor", self.params.get("tau_recovery_factor", 0.4)),
                 "zeta": dynamics.get("zeta", self.params["zeta"]),
                 "dynamic_order": dynamics.get("dynamic_order", self.params.get("dynamic_order", 2)),
             }
@@ -230,9 +220,8 @@ class HybridPredictor:
         state_dict = checkpoint.get("model_state_dict", checkpoint)
         linear_layers = []
         for key, value in sorted(state_dict.items()):
-            if "main_layers" in key and ".weight" in key and "running" not in key:
-                if len(value.shape) == 2:
-                    linear_layers.append(value.shape[0])
+            if "main_layers" in key and ".weight" in key and "running" not in key and len(value.shape) == 2:
+                linear_layers.append(value.shape[0])
         hidden_dims = linear_layers[:-1] if linear_layers else [256, 256, 128, 64]
 
         self.model = OptimizedEWPINN(
@@ -314,9 +303,7 @@ class HybridPredictor:
         cos_theta = np.clip(cos_theta0 + ew_term, -1, 1)
         return np.degrees(np.arccos(cos_theta))
 
-    def dynamic_response(
-        self, t: float, theta_start: float, theta_eq: float, V_to: float | None = None
-    ) -> float:
+    def dynamic_response(self, t: float, theta_start: float, theta_eq: float, V_to: float | None = None) -> float:
         """
         二阶欠阻尼动态响应（电润湿驱动）
 
@@ -380,9 +367,7 @@ class HybridPredictor:
             theta_eq = self.params["theta0"]
 
         # 恢复速度 = 驱动 τ × 0.4（恢复快于驱动）
-        drive_tau = (
-            self._voltage_dependent_tau(V_from) if V_from is not None else self.params["tau"]
-        )
+        drive_tau = self._voltage_dependent_tau(V_from) if V_from is not None else self.params["tau"]
         tau_recovery = drive_tau * self.params.get("tau_recovery_factor", 0.4)
 
         return theta_eq + (theta_start - theta_eq) * np.exp(-t / tau_recovery)
@@ -498,9 +483,7 @@ class HybridPredictor:
 
         return features
 
-    def predict(
-        self, voltage: float, time: float, V_initial: float = 0.0, t_step: float = 0.0
-    ) -> float:
+    def predict(self, voltage: float, time: float, V_initial: float = 0.0, t_step: float = 0.0) -> float:
         """
         混合预测：模型稳态 + 解析动态
 
@@ -737,9 +720,7 @@ class HybridPredictor:
             return model.contact_angle_to_aperture_ratio(theta)
         return np.array([model.contact_angle_to_aperture_ratio(t) for t in theta])
 
-    def get_response_metrics(
-        self, t: np.ndarray, theta: np.ndarray, t_step: float = 0.002
-    ) -> dict[str, float]:
+    def get_response_metrics(self, t: np.ndarray, theta: np.ndarray, t_step: float = 0.002) -> dict[str, float]:
         """
         计算响应指标
 
@@ -768,10 +749,7 @@ class HybridPredictor:
 
         # 超调
         theta_min = np.min(theta[step_idx:])
-        if abs(theta_change) > 0.1:
-            overshoot = max(0, (theta_final - theta_min) / abs(theta_change) * 100)
-        else:
-            overshoot = 0
+        overshoot = max(0, (theta_final - theta_min) / abs(theta_change) * 100) if abs(theta_change) > 0.1 else 0
 
         return {
             "theta_initial": theta_initial,
@@ -820,22 +798,16 @@ def demo():
     logger.info("   升压: 电润湿驱动")
     logger.info("   降压: 表面张力恢复 (油墨平铺回去)")
 
-    voltages, theta_sweep, aperture_sweep = predictor.voltage_sweep_response(
-        V_max=30, v_step=5, t_per_step=0.002
-    )
+    voltages, theta_sweep, aperture_sweep = predictor.voltage_sweep_response(V_max=30, v_step=5, t_per_step=0.002)
 
     n_up = 7  # 0, 5, 10, 15, 20, 25, 30
     logger.info("\n   升压阶段:")
     for i in range(n_up):
-        logger.info(
-            f"      V={voltages[i]:2.0f}V: θ={theta_sweep[i]:.1f}°, η={aperture_sweep[i]:.1%}"
-        )
+        logger.info(f"      V={voltages[i]:2.0f}V: θ={theta_sweep[i]:.1f}°, η={aperture_sweep[i]:.1%}")
 
     logger.info("   降压阶段:")
     for i in range(n_up, len(voltages)):
-        logger.info(
-            f"      V={voltages[i]:2.0f}V: θ={theta_sweep[i]:.1f}°, η={aperture_sweep[i]:.1%}"
-        )
+        logger.info(f"      V={voltages[i]:2.0f}V: θ={theta_sweep[i]:.1f}°, η={aperture_sweep[i]:.1%}")
 
     # 3. 方波响应
     logger.info("\n📈 方波响应 (0V → 30V → 0V, 0-100ms):")

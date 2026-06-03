@@ -53,9 +53,7 @@ def verify_weights():
 
             # 检查ns_weight
             print(f"\n全局ns_weight: {config['physics'].get('ns_weight', 'N/A')}")
-            print(
-                f"全局surface_tension_weight: {config['physics'].get('surface_tension_weight', 'N/A')}"
-            )
+            print(f"全局surface_tension_weight: {config['physics'].get('surface_tension_weight', 'N/A')}")
 
             # 计算复合权重
             print("\n复合权重计算:")

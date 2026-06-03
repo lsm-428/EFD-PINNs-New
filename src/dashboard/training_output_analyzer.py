@@ -332,14 +332,10 @@ class TrainingConfigParser:
             return {
                 "metadata": TrainingConfigParser._extract_metadata(raw_config),
                 "model_architecture": TrainingConfigParser._extract_model_architecture(raw_config),
-                "training_parameters": TrainingConfigParser._extract_training_parameters(
-                    raw_config
-                ),
+                "training_parameters": TrainingConfigParser._extract_training_parameters(raw_config),
                 "physics_weights": TrainingConfigParser._extract_physics_weights(raw_config),
                 "data_config": TrainingConfigParser._extract_data_config(raw_config),
-                "dynamic_weight_config": TrainingConfigParser._extract_dynamic_weight_config(
-                    raw_config
-                ),
+                "dynamic_weight_config": TrainingConfigParser._extract_dynamic_weight_config(raw_config),
             }
 
         except Exception as e:
@@ -1259,9 +1255,7 @@ class TrainingOutputAnalyzer:
 
         return fig
 
-    def _create_loss_components_chart(
-        self, df: pd.DataFrame, smooth_window: int = 10
-    ) -> "go.Figure":
+    def _create_loss_components_chart(self, df: pd.DataFrame, smooth_window: int = 10) -> "go.Figure":
         """创建损失组件分解图表
 
         Args:
@@ -1664,9 +1658,7 @@ class TrainingOutputAnalyzer:
         numeric_columns = ["平均值", "标准差", "最小值", "最大值", "最终值"]
         for col in numeric_columns:
             if col in display_df.columns:
-                display_df[col] = display_df[col].apply(
-                    lambda x: f"{x:.4e}" if pd.notna(x) else "N/A"
-                )
+                display_df[col] = display_df[col].apply(lambda x: f"{x:.4e}" if pd.notna(x) else "N/A")
 
         # 显示表格
         st.dataframe(
@@ -1808,9 +1800,7 @@ class TrainingOutputAnalyzer:
         for group_key, config in group_configs.items():
             images = grouped_images.get(group_key, [])
             if images:
-                with st.expander(
-                    f"{config['title']} ({len(images)} 张)", expanded=config["expanded"]
-                ):
+                with st.expander(f"{config['title']} ({len(images)} 张)", expanded=config["expanded"]):
                     st.markdown(f"*{config['description']}*")
                     self._render_image_grid(images)
 
@@ -1986,9 +1976,7 @@ class TrainingOutputAnalyzer:
         selected_model_type = model_options[selected_model_label]
 
         # 显示模型信息
-        selected_model_info = next(
-            (m for m in available_models if m["type"] == selected_model_type), None
-        )
+        selected_model_info = next((m for m in available_models if m["type"] == selected_model_type), None)
         if selected_model_info:
             size_mb = selected_model_info["size"] / (1024 * 1024)
             st.caption(f"模型大小: {size_mb:.2f} MB | 路径: `{selected_model_info['path']}`")
@@ -1996,9 +1984,7 @@ class TrainingOutputAnalyzer:
         st.markdown("---")
 
         # 创建子标签页
-        tab_single, tab_trajectory, tab_slice = st.tabs(
-            ["📍 单点推理", "📈 轨迹预测", "🔲 切片可视化"]
-        )
+        tab_single, tab_trajectory, tab_slice = st.tabs(["📍 单点推理", "📈 轨迹预测", "🔲 切片可视化"])
 
         # ============ 子标签页 1: 单点推理 ============
         with tab_single:
@@ -2115,9 +2101,7 @@ class TrainingOutputAnalyzer:
 
         # 预测按钮
         st.markdown("---")
-        predict_button = st.button(
-            "🔮 预测", type="primary", use_container_width=True, key="sp_predict_btn"
-        )
+        predict_button = st.button("🔮 预测", type="primary", use_container_width=True, key="sp_predict_btn")
 
         if predict_button:
             if selected_model_info is None:
@@ -2240,9 +2224,7 @@ class TrainingOutputAnalyzer:
                 t_array=t_array,
             )
 
-    def _run_trajectory_prediction(
-        self, checkpoint_path: str, point: tuple, voltage: float, t_array: np.ndarray
-    ):
+    def _run_trajectory_prediction(self, checkpoint_path: str, point: tuple, voltage: float, t_array: np.ndarray):
         """执行轨迹预测并显示结果"""
         import numpy as np
         import plotly.graph_objects as go
@@ -2906,9 +2888,7 @@ class TrainingOutputAnalyzer:
             if check_mass_btn:
                 try:
                     with st.spinner("正在计算体积积分..."):
-                        volume = engine.check_mass_conservation(
-                            t=t_since, voltage_from=V_from, voltage_to=V_to
-                        )
+                        volume = engine.check_mass_conservation(t=t_since, voltage_from=V_from, voltage_to=V_to)
 
                     # 计算预期体积（基于初始条件）
                     from src.config import PHYSICS

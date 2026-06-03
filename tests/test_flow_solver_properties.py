@@ -41,9 +41,7 @@ voltage_strategy = st.floats(min_value=0.0, max_value=40.0, allow_nan=False, all
 time_strategy = st.floats(min_value=0.0, max_value=0.1, allow_nan=False, allow_infinity=False)
 
 # 体积分数策略（0-1 范围）
-volume_fraction_strategy = st.floats(
-    min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False
-)
+volume_fraction_strategy = st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False)
 
 
 # ============================================================
@@ -101,9 +99,7 @@ class TestMeshGeneratorProperties:
         mesh = generator.generate_structured_mesh(nx=nx, ny=ny, nz=nz)
 
         expected_total = nx * ny * nz
-        assert mesh.total_cells == expected_total, (
-            f"Expected total_cells={expected_total}, got {mesh.total_cells}"
-        )
+        assert mesh.total_cells == expected_total, f"Expected total_cells={expected_total}, got {mesh.total_cells}"
 
     @given(nx=mesh_size_strategy, ny=mesh_size_strategy, nz=mesh_size_strategy)
     @settings(max_examples=100, deadline=None)
@@ -347,9 +343,7 @@ class TestContactLineHandlerProperties:
 
         # 验证一致性（1° 容差）
         diff = abs(theta_handler - theta_predictor)
-        assert diff <= 1.0, (
-            f"Contact angle mismatch: handler={theta_handler}, predictor={theta_predictor}"
-        )
+        assert diff <= 1.0, f"Contact angle mismatch: handler={theta_handler}, predictor={theta_predictor}"
 
     @given(voltage=voltage_strategy)
     @settings(max_examples=100, deadline=None)
@@ -464,9 +458,7 @@ class TestMassConservationProperties:
 
         mass_error = solver.compute_mass_conservation_error()
 
-        assert mass_error["total_error"] == 0.0, (
-            f"Initial mass error should be 0, got {mass_error['total_error']}"
-        )
+        assert mass_error["total_error"] == 0.0, f"Initial mass error should be 0, got {mass_error['total_error']}"
 
     @given(
         nx=st.integers(min_value=8, max_value=12),
@@ -779,9 +771,7 @@ class TestValidationProperties:
         validation = simulator.validate_against_experiment(exp_data)
 
         # 由于差异很大，应该标记错误
-        assert validation["error_flag"], (
-            f"Error flag should be True for high error, got {validation['error_flag']}"
-        )
+        assert validation["error_flag"], f"Error flag should be True for high error, got {validation['error_flag']}"
 
     def test_validation_returns_required_fields(self):
         """

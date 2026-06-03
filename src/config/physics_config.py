@@ -276,9 +276,7 @@ class PhysicsConfig:
             d_hydrophobic=materials.get("hydrophobic_thickness", cls.d_hydrophobic),
             # V_T 参数（V_threshold 是 property，从 V_T_base + h_ink 计算）
             V_T_base=materials.get("V_T_base", dynamics.get("V_T_base", cls.V_T_base)),
-            V_T_sensitivity=materials.get(
-                "V_T_sensitivity", dynamics.get("V_T_sensitivity", cls.V_T_sensitivity)
-            ),
+            V_T_sensitivity=materials.get("V_T_sensitivity", dynamics.get("V_T_sensitivity", cls.V_T_sensitivity)),
             # 动力学参数
             tau=dynamics.get("tau", cls.tau),
             tau_onset=dynamics.get("tau_onset", cls.tau_onset),

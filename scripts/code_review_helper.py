@@ -38,15 +38,13 @@ def _is_public(name: str) -> bool:
 
 def _has_docstring(node: ast.AST) -> bool:
     """检查 AST 节点是否有 docstring。"""
-    if (
+    return bool(
         isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Module))
         and node.body
         and isinstance(node.body[0], ast.Expr)
         and isinstance(node.body[0].value, ast.Constant)
         and isinstance(node.body[0].value.value, str)
-    ):
-        return True
-    return False
+    )
 
 
 def count_functions_without_docstrings(path: Path) -> dict:
@@ -88,9 +86,8 @@ def count_print_statements(path: Path) -> list:
         return [f"PARSE_ERROR in {path}"]
 
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Name) and node.func.id == "print":
-                results.append(f"  print() at L{node.lineno}: {path.name}")
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "print":
+            results.append(f"  print() at L{node.lineno}: {path.name}")
     return results
 
 
@@ -116,9 +113,8 @@ def count_test_assertions(path: Path) -> dict:
                     result["assert_count"] += 1
             elif isinstance(node.func, ast.Name) and node.func.id.startswith("assert"):
                 result["assert_count"] += 1
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if node.name.startswith("test_"):
-                result["test_functions"] += 1
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_"):
+            result["test_functions"] += 1
     return result
 
 
@@ -193,9 +189,7 @@ def run_tests() -> dict:
     cmd = ["uv", "run", "pytest", "-x", "-q", "--tb=short", str(TESTS_DIR)]
     env = os.environ.copy()
     env["PYTHONPATH"] = str(PROJECT_ROOT)
-    result = subprocess.run(
-        cmd, capture_output=True, text=True, cwd=PROJECT_ROOT, env=env, check=False
-    )
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=PROJECT_ROOT, env=env, check=False)
     return {
         "returncode": result.returncode,
         "stdout": result.stdout,
@@ -210,9 +204,7 @@ def generate_report(changed_only: bool = False, diff_target: str = "HEAD~1") -> 
         包含所有质量指标的字典
     """
     report: dict[str, Any] = {
-        "timestamp": subprocess.run(
-            ["date", "-Iseconds"], capture_output=True, text=True, check=False
-        ).stdout.strip(),
+        "timestamp": subprocess.run(["date", "-Iseconds"], capture_output=True, text=True, check=False).stdout.strip(),
         "sections": [],
     }
 
@@ -242,9 +234,7 @@ def generate_report(changed_only: bool = False, diff_target: str = "HEAD~1") -> 
         if stats["functions"]:
             doc_details.append(f"{f.relative_to(PROJECT_ROOT)}: {len(stats['functions'])} missing")
 
-    coverage = (
-        100 if total_public == 0 else round(100 * (total_public - total_missing) / total_public, 1)
-    )
+    coverage = 100 if total_public == 0 else round(100 * (total_public - total_missing) / total_public, 1)
     report["sections"].append(
         {
             "title": "Docstring Coverage",
@@ -326,9 +316,7 @@ def print_report(report: dict) -> None:
 
     fail_count = 0
     for section in report["sections"]:
-        status_icon = {"PASS": "[PASS]", "WARN": "[WARN]", "FAIL": "[FAIL]"}.get(
-            section["status"], "[????]"
-        )
+        status_icon = {"PASS": "[PASS]", "WARN": "[WARN]", "FAIL": "[FAIL]"}.get(section["status"], "[????]")
         if section["status"] == "FAIL":
             fail_count += 1
         print(f"\n{status_icon} {section['title']}: {section['detail']}")

@@ -27,9 +27,7 @@ class TestDynamicPhysicsWeightScheduler:
 
     def test_initialization(self):
         """测试初始化"""
-        scheduler = DynamicPhysicsWeightScheduler(
-            initial_weight=0.1, min_weight=0.01, max_weight=5.0
-        )
+        scheduler = DynamicPhysicsWeightScheduler(initial_weight=0.1, min_weight=0.01, max_weight=5.0)
         assert scheduler.current_weight == 0.1
         assert scheduler.min_weight == 0.01
         assert scheduler.max_weight == 5.0
@@ -115,9 +113,7 @@ class TestDynamicPhysicsWeightScheduler:
         scheduler = DynamicPhysicsWeightScheduler(adjustment_strategy="combined")
 
         # 组合策略应该结合 stage, adaptive, performance
-        new_weight = scheduler._compute_new_weight(
-            data_loss=1.5, physics_loss=1.0, val_loss=1.0, epoch=100, stage=2
-        )
+        new_weight = scheduler._compute_new_weight(data_loss=1.5, physics_loss=1.0, val_loss=1.0, epoch=100, stage=2)
 
         # 权重应该在合理范围内
         assert scheduler.min_weight <= new_weight <= scheduler.max_weight
@@ -135,9 +131,7 @@ class TestDynamicPhysicsWeightScheduler:
 
     def test_weight_bounds(self):
         """测试权重边界限制"""
-        scheduler = DynamicPhysicsWeightScheduler(
-            min_weight=0.01, max_weight=5.0, adjustment_interval=1
-        )
+        scheduler = DynamicPhysicsWeightScheduler(min_weight=0.01, max_weight=5.0, adjustment_interval=1)
 
         # 测试极端情况
         scheduler.update(data_loss=1e-10, physics_loss=1e10, val_loss=None)
@@ -221,9 +215,7 @@ class TestPhysicsWeightIntegration:
         physics_loss = torch.tensor(1.0)
         data_loss = torch.tensor(2.0)
 
-        result = integration.apply_dynamic_weight(
-            base_physics_loss=physics_loss, data_loss=data_loss
-        )
+        result = integration.apply_dynamic_weight(base_physics_loss=physics_loss, data_loss=data_loss)
 
         expected = physics_loss * 2.0
         assert torch.allclose(result, expected)
@@ -236,9 +228,7 @@ class TestPhysicsWeightIntegration:
         physics_loss = torch.tensor(1.0)
         data_loss = torch.tensor(2.0)
 
-        result = integration.apply_dynamic_weight(
-            base_physics_loss=physics_loss, data_loss=data_loss
-        )
+        result = integration.apply_dynamic_weight(base_physics_loss=physics_loss, data_loss=data_loss)
 
         expected = physics_loss + 2.0
         assert torch.allclose(result, expected)
@@ -259,9 +249,7 @@ class TestPhysicsWeightIntegration:
         physics_loss = 1.0  # float
         data_loss = 2.0
 
-        result = integration.apply_dynamic_weight(
-            base_physics_loss=physics_loss, data_loss=data_loss
-        )
+        result = integration.apply_dynamic_weight(base_physics_loss=physics_loss, data_loss=data_loss)
 
         assert isinstance(result, torch.Tensor)
 
@@ -276,9 +264,7 @@ class TestPhysicsWeightIntegration:
         physics_loss = torch.tensor(1.0, device=device)
         data_loss = torch.tensor(2.0, device=device)
 
-        result = integration.apply_dynamic_weight(
-            base_physics_loss=physics_loss, data_loss=data_loss
-        )
+        result = integration.apply_dynamic_weight(base_physics_loss=physics_loss, data_loss=data_loss)
 
         assert result.device == physics_loss.device
 

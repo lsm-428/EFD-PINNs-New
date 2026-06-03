@@ -168,9 +168,7 @@ class TestVOFTransportEquation:
 
             vof_residual = physics_constraints._compute_vof_residual(x_phys, predictions)
 
-            assert torch.isfinite(vof_residual).all(), (
-                f"VOF residual contains NaN/Inf at iteration {_}"
-            )
+            assert torch.isfinite(vof_residual).all(), f"VOF residual contains NaN/Inf at iteration {_}"
 
     def test_volume_conservation_initial_state(self, physics_constraints):
         """
@@ -257,19 +255,14 @@ class TestVOFTransportEquation:
             dim=1,
         )
 
-        residuals_normal = physics_constraints.compute_volume_conservation_residual(
-            x_phys, predictions_normal
-        )
-        residuals_violated = physics_constraints.compute_volume_conservation_residual(
-            x_phys, predictions_violated
-        )
+        residuals_normal = physics_constraints.compute_volume_conservation_residual(x_phys, predictions_normal)
+        residuals_violated = physics_constraints.compute_volume_conservation_residual(x_phys, predictions_violated)
 
         normal_loss = residuals_normal["volume_conservation"].abs().mean()
         violated_loss = residuals_violated["volume_conservation"].abs().mean()
 
         assert violated_loss > normal_loss, (
-            f"Volume violation should increase loss: "
-            f"normal={normal_loss:.6f}, violated={violated_loss:.6f}"
+            f"Volume violation should increase loss: normal={normal_loss:.6f}, violated={violated_loss:.6f}"
         )
 
     def test_interface_sharpening_theory(self):

@@ -284,9 +284,7 @@ def generate_html_report(records: dict[str, list[Any]], out_dir: str) -> None:
             continue
         status = "Good" if v < 0.5 else ("Medium" if v < 2.0 else "High")
         status_class = "good" if v < 0.5 else ("warning" if v < 2.0 else "bad")
-        html_content += (
-            f"<tr><td>{k}</td><td>{v:.4f}</td><td class='{status_class}'>{status}</td></tr>\n"
-        )
+        html_content += f"<tr><td>{k}</td><td>{v:.4f}</td><td class='{status_class}'>{status}</td></tr>\n"
 
     html_content += f"""</table>
         <div class="footer">
