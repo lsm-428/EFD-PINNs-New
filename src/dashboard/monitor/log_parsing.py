@@ -42,9 +42,7 @@ TAG_MAP = {
     "VOF": "vof",
 }
 
-PATTERN_MAIN = re.compile(
-    r"Epoch\s+(\d+)\s+(?:\[S(\d)\]\s+)?\|\s+Loss:\s+([0-9.eE+\-]+)(.*)"
-)
+PATTERN_MAIN = re.compile(r"Epoch\s+(\d+)\s+(?:\[S(\d)\]\s+)?\|\s+Loss:\s+([0-9.eE+\-]+)(.*)")
 PATTERN_LR = re.compile(r"LR:\s*([0-9.eE+\-]+)")
 
 
@@ -103,9 +101,7 @@ def find_log_path(model_dir: str | None = None) -> tuple[str, str]:
         if os.path.exists(log_path):
             return log_path, d
 
-    raise FileNotFoundError(
-        "No training.log found in outputs/train/pinn_* or outputs_pinn_*"
-    )
+    raise FileNotFoundError("No training.log found in outputs/train/pinn_* or outputs_pinn_*")
 
 
 # =============================================================================

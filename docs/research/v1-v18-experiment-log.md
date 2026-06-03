@@ -682,7 +682,7 @@ electrowetting: 0.5
 
 ### 9.1 审计方法论
 
-三轮递进审计: 
+三轮递进审计:
 - 第一轮: 电润湿电容与表面张力参数逐项核查
 - 第二轮: 约束完整性检查 + 死代码识别
 - 第三轮: 第一性原理验证 (尺度分析/适定性/变分一致性/守恒律)
@@ -713,7 +713,7 @@ electrowetting: 0.5
 
 ### 9.4 NS方程物理修正
 
-**两相应力张量** (`constraints.py` L300-336): 
+**两相应力张量** (`constraints.py` L300-336):
 - 修复前: `μ∇²u` (恒定粘度近似)
 - 修复后: `∇·[μ(∇u+∇uᵀ)]` (含∇μ项, Δμ/μ≈7%→界面贡献~40%)
 
@@ -856,7 +856,7 @@ EWD 物理: 降低有效界面张力 σ_eff = σ - ½C_ew·V²（近似），使
 
 **文件**: `src/config/physics_config.py`, `config/device_calibrated_physics.json`, `src/physics/constraints.py`
 
-**发现**: 
+**发现**:
 1. 代码注释称 "Re ≈ 0.15" 但实际 Re = ρUL/μ ≈ 1-5（高电压快速响应时更高），对流项不应无条件忽略
 2. `use_convection` 硬编码在 `_get_default_materials_params()` 内，无法从配置文件控制
 
@@ -885,7 +885,7 @@ EWD 物理: 降低有效界面张力 σ_eff = σ - ½C_ew·V²（近似），使
 
 **文件**: `src/physics/constraints.py`, `config/v4.5-standard.json`
 
-**AC mobility**: 
+**AC mobility**:
 - 修复前: `M_ac = 1e-8 m³·s/kg` → τ_reaction = ε²/(M·σ) ≈ 20000s（极弱，AC 方程几乎无相分离驱动力）
 - 修复后: `M_ac = 1e-7 m³·s/kg` → τ_reaction ≈ 2000s（10x 提升，温和正则化，仍远弱于数据损失）
 
@@ -1467,7 +1467,7 @@ z↑  wall_height=3.5μm
  |  ┬──────────────┬── 围堰顶面 (原生SU-8, 亲极性液体)
  |  │  ╲  极性液体 ╱│   油墨沿亲油侧壁爬升形成弯月面
  |  │   ╲  φ=0   ╱ │   但不过墙顶 (墙高3.5μm > 油膜3μm)
- |  │    ╲      ╱  │   
+ |  │    ╲      ╱  │
 3μm ─ ─ ─ ─╲────╱─ ─ ─ 界面水平, 平坦
  |  │ 油墨   ╲  ╱  │   底面亲油(θ_oil=60°) → 油墨均匀铺展
  |  │ φ=1    ╲╱   │   z=0 全油墨覆盖, 开口率=0
@@ -1618,7 +1618,7 @@ phi_learned = torch.sigmoid(sigmoid_T * phi_raw)  # 锐化 sigmoid
 if self.use_hard_constraints:
     # 1. 顶面 BC: φ(z=Lz)=0
     phi = phi_learned * (1.0 - z_norm)
-    
+
     # 2. IC: φ(t=0)=φ_IC(z), blend 到 t>0
     phi_ic = 0.5 * (1.0 + torch.tanh((h_ink - z_phys) / delta_ic))
     phi = phi_ic + t_norm * (phi - phi_ic)

@@ -96,9 +96,7 @@ class TestVOF3D:
         # Verify it's a closed surface (for a sphere)
         assert contours.n_cells > 10, "Isosurface should have multiple cells"
 
-        print(
-            f"  [OK] Isosurface: {contours.n_points} points, {contours.n_cells} cells"
-        )
+        print(f"  [OK] Isosurface: {contours.n_points} points, {contours.n_cells} cells")
 
     def test_volume_integration_sphere(self, sample_phi_grid):
         """
@@ -124,15 +122,11 @@ class TestVOF3D:
         # Calculate relative error
         relative_error = abs(computed_volume - expected_volume) / expected_volume
 
-        print(
-            f"  Volume: computed={computed_volume:.6f}, expected={expected_volume:.6f}"
-        )
+        print(f"  Volume: computed={computed_volume:.6f}, expected={expected_volume:.6f}")
         print(f"  Relative error: {relative_error:.2%}")
 
         # Allow 10% error due to discretization
-        assert (
-            relative_error < 0.10
-        ), f"Volume error should be < 10%: got {relative_error:.2%}"
+        assert relative_error < 0.10, f"Volume error should be < 10%: got {relative_error:.2%}"
 
     def test_interface_area_sphere(self, vof_grid):
         """
@@ -157,9 +151,7 @@ class TestVOF3D:
         print(f"  Relative error: {relative_error:.2%}")
 
         # Allow 15% error due to discretization and contour approximation
-        assert (
-            relative_error < 0.15
-        ), f"Area error should be < 15%: got {relative_error:.2%}"
+        assert relative_error < 0.15, f"Area error should be < 15%: got {relative_error:.2%}"
 
     def test_volume_integration_ellipsoid(self, ellipsoid_phi_grid):
         """
@@ -184,14 +176,10 @@ class TestVOF3D:
 
         relative_error = abs(computed_volume - expected_volume) / expected_volume
 
-        print(
-            f"  Volume: computed={computed_volume:.6f}, expected={expected_volume:.6f}"
-        )
+        print(f"  Volume: computed={computed_volume:.6f}, expected={expected_volume:.6f}")
         print(f"  Relative error: {relative_error:.2%}")
 
-        assert (
-            relative_error < 0.10
-        ), f"Volume error should be < 10%: got {relative_error:.2%}"
+        assert relative_error < 0.10, f"Volume error should be < 10%: got {relative_error:.2%}"
 
     def test_contour_properties(self, vof_grid):
         """Test contour mesh properties."""
@@ -206,15 +194,9 @@ class TestVOF3D:
         )
 
         # Sphere with r=0.3 centered at 0.5 should have bounds [0.2, 0.8]
-        assert (
-            bounds[0] > 0.15 and bounds[1] < 0.85
-        ), "Contour bounds should encompass the sphere"
-        assert (
-            bounds[2] > 0.15 and bounds[3] < 0.85
-        ), "Contour bounds should encompass the sphere"
-        assert (
-            bounds[4] > 0.15 and bounds[5] < 0.85
-        ), "Contour bounds should encompass the sphere"
+        assert bounds[0] > 0.15 and bounds[1] < 0.85, "Contour bounds should encompass the sphere"
+        assert bounds[2] > 0.15 and bounds[3] < 0.85, "Contour bounds should encompass the sphere"
+        assert bounds[4] > 0.15 and bounds[5] < 0.85, "Contour bounds should encompass the sphere"
 
         # Check if it's a manifold
         assert contours.is_all_triangles, "Contour should be triangulated"
@@ -239,12 +221,8 @@ def generate_3d_visualization(output_dir="outputs/analysis"):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="3D VOF Interface Tests and Visualization"
-    )
-    parser.add_argument(
-        "--visualize", action="store_true", help="Generate visualization"
-    )
+    parser = argparse.ArgumentParser(description="3D VOF Interface Tests and Visualization")
+    parser.add_argument("--visualize", action="store_true", help="Generate visualization")
     parser.add_argument(
         "--output",
         type=str,

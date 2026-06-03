@@ -54,9 +54,7 @@ class DynamicPhysicsWeightScheduler:
         # 兼容错误传入的字典/结构体
         try:
             if isinstance(initial_weight, dict):
-                iw = initial_weight.get(
-                    "initial_weight", initial_weight.get("value", 0.1)
-                )
+                iw = initial_weight.get("initial_weight", initial_weight.get("value", 0.1))
                 self.initial_weight = float(iw)
             else:
                 self.initial_weight = float(initial_weight)
@@ -137,9 +135,7 @@ class DynamicPhysicsWeightScheduler:
 
         # 检查是否需要调整权重
         if self.step_count - self.last_adjustment_step >= self.adjustment_interval:
-            new_weight = self._compute_new_weight(
-                data_loss, physics_loss, val_loss, epoch, stage
-            )
+            new_weight = self._compute_new_weight(data_loss, physics_loss, val_loss, epoch, stage)
 
             # 应用平滑处理
             smoothed_weight = (
@@ -148,9 +144,7 @@ class DynamicPhysicsWeightScheduler:
             )
 
             # 确保权重在合理范围内
-            smoothed_weight = max(
-                self.min_weight, min(self.max_weight, smoothed_weight)
-            )
+            smoothed_weight = max(self.min_weight, min(self.max_weight, smoothed_weight))
 
             # 记录权重变化
             weight_change = abs(smoothed_weight - self.current_weight)
@@ -192,9 +186,7 @@ class DynamicPhysicsWeightScheduler:
         if self.adjustment_strategy == "combined":
             # 组合多种策略
             stage_weight = (
-                self._stage_based_adjustment(stage)
-                if stage is not None
-                else self.current_weight
+                self._stage_based_adjustment(stage) if stage is not None else self.current_weight
             )
             adaptive_weight = self._adaptive_adjustment(data_loss, physics_loss)
             performance_weight = (

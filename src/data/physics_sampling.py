@@ -47,17 +47,21 @@ class PhysicsBasedSampler:
         self._stage1_aperture = stage1_aperture_model
 
         # 电压分区配置
-        self.voltage_weights = config.get("voltage_weights", {
-            "no_response": 0.10,    # 无响应区
-            "onset": 0.50,          # 起始响应区
-            "linear": 0.30,         # 线性响应区
-            "saturation": 0.10      # 饱和区
-        })
+        self.voltage_weights = config.get(
+            "voltage_weights",
+            {
+                "no_response": 0.10,  # 无响应区
+                "onset": 0.50,  # 起始响应区
+                "linear": 0.30,  # 线性响应区
+                "saturation": 0.10,  # 饱和区
+            },
+        )
 
         # 阈值电压参数 — 优先从 Stage1 读取
         if stage1_predictor is not None:
-            self.V_T_base = stage1_predictor.params.get("V_T_base",
-                              stage1_predictor.params.get("V_threshold", 5.0))
+            self.V_T_base = stage1_predictor.params.get(
+                "V_T_base", stage1_predictor.params.get("V_threshold", 5.0)
+            )
         else:
             self.V_T_base = config.get("threshold_voltage_base", 5.0)
         self.V_T_sensitivity = config.get("threshold_voltage_sensitivity", 2e6)
@@ -70,20 +74,23 @@ class PhysicsBasedSampler:
         else:
             default_tau_onset, default_tau_linear, default_tau_sat = 0.0075, 0.005, 0.003
 
-        self.time_config = config.get("time_sampling", {
-            "critical_points_density": 0.6,
-            "adaptive_tau": True,
-            "tau_onset": default_tau_onset,
-            "tau_linear": default_tau_linear,
-            "tau_saturation": default_tau_sat
-        })
+        self.time_config = config.get(
+            "time_sampling",
+            {
+                "critical_points_density": 0.6,
+                "adaptive_tau": True,
+                "tau_onset": default_tau_onset,
+                "tau_linear": default_tau_linear,
+                "tau_saturation": default_tau_sat,
+            },
+        )
 
         # 物理阶段时间点
         self.physical_stages = {
-            "electric_field": (0.0, 0.001),      # 电场建立: 0-1ms
-            "marangoni": (0.001, 0.003),         # Marangoni效应: 1-3ms
+            "electric_field": (0.0, 0.001),  # 电场建立: 0-1ms
+            "marangoni": (0.001, 0.003),  # Marangoni效应: 1-3ms
             "film_instability": (0.003, 0.010),  # 薄膜失稳: 3-10ms
-            "local_rupture": (0.010, 0.020)      # 局部破裂: 10-20ms
+            "local_rupture": (0.010, 0.020),  # 局部破裂: 10-20ms
         }
 
         logger.info("物理采样器初始化完成")
@@ -106,8 +113,9 @@ class PhysicsBasedSampler:
         V_T = self.V_T_base + (oil_thickness - 3.0e-6) * self.V_T_sensitivity
         return max(0.1, V_T)
 
-    def sample_voltage_physics_based(self, n_samples: int,
-                                   oil_thickness: float = 3e-6) -> np.ndarray:
+    def sample_voltage_physics_based(
+        self, n_samples: int, oil_thickness: float = 3e-6
+    ) -> np.ndarray:
         """
         基于物理机制的电压采样
 
@@ -126,7 +134,7 @@ class PhysicsBasedSampler:
             "no_response": (0.0, V_T),
             "onset": (V_T, 2 * V_T),
             "linear": (2 * V_T, 4 * V_T),
-            "saturation": (4 * V_T, 30.0)
+            "saturation": (4 * V_T, 30.0),
         }
 
         # 根据权重分配采样数量
@@ -162,8 +170,7 @@ class PhysicsBasedSampler:
 
         return np.array(voltages[:n_samples])
 
-    def _sample_onset_region(self, v_min: float, v_max: float,
-                           n_samples: int) -> np.ndarray:
+    def _sample_onset_region(self, v_min: float, v_max: float, n_samples: int) -> np.ndarray:
         """
         在起始响应区采样（阈值附近加密）
         """
@@ -173,8 +180,7 @@ class PhysicsBasedSampler:
         v_samples = v_min + beta_samples * (v_max - v_min)
         return v_samples
 
-    def _sample_saturation_region(self, v_min: float, v_max: float,
-                                n_samples: int) -> np.ndarray:
+    def _sample_saturation_region(self, v_min: float, v_max: float, n_samples: int) -> np.ndarray:
         """
         在饱和区采样（边界附近加密）
         """
@@ -183,8 +189,9 @@ class PhysicsBasedSampler:
         v_samples = v_min + beta_samples * (v_max - v_min)
         return v_samples
 
-    def sample_time_adaptive(self, n_samples: int, voltage: float,
-                           voltage_prev: float = 0.0) -> np.ndarray:
+    def sample_time_adaptive(
+        self, n_samples: int, voltage: float, voltage_prev: float = 0.0
+    ) -> np.ndarray:
         """
         自适应时间采样
 
@@ -220,8 +227,7 @@ class PhysicsBasedSampler:
 
         # 1. 关键物理阶段时间点采样
         if n_critical > 0:
-            critical_times = self._sample_critical_physics_times(n_critical,
-                                                              voltage, voltage_prev)
+            critical_times = self._sample_critical_physics_times(n_critical, voltage, voltage_prev)
             times.extend(critical_times)
 
         # 2. 连续时间采样
@@ -231,8 +237,9 @@ class PhysicsBasedSampler:
 
         return np.array(times[:n_samples])
 
-    def _sample_critical_physics_times(self, n_samples: int,
-                                     voltage: float, voltage_prev: float) -> np.ndarray:
+    def _sample_critical_physics_times(
+        self, n_samples: int, voltage: float, voltage_prev: float
+    ) -> np.ndarray:
         """
         在关键物理阶段时间点采样
         """
@@ -276,8 +283,9 @@ class PhysicsBasedSampler:
 
         return times
 
-    def sample_spatial_physics_based(self, n_samples: int,
-                                   voltage: float, time: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def sample_spatial_physics_based(
+        self, n_samples: int, voltage: float, time: float
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         基于物理机制的空间采样
 
@@ -313,7 +321,8 @@ class PhysicsBasedSampler:
             if time > 1e-6:
                 theta_start = self._stage1_predictor.young_lippmann(0.0)
                 theta_t = self._stage1_predictor.dynamic_response(
-                    time, theta_start, theta_ss, V_to=voltage)
+                    time, theta_start, theta_ss, V_to=voltage
+                )
             else:
                 theta_t = theta_ss
             return float(self._stage1_aperture.contact_angle_to_aperture_ratio(theta_t))
@@ -327,14 +336,16 @@ class PhysicsBasedSampler:
         tau = self.time_config.get("tau_linear", 0.005)
         try:
             from src.config import PHYSICS
+
             eta_max_ref = PHYSICS["eta_max"]
         except ImportError:
             eta_max_ref = 0.85
         eta_max = min(eta_max_ref, V_eff / 18.0)
         return eta_max * (1.0 - np.exp(-time / tau))
 
-    def _sample_z_interface(self, n_samples: int, eta: float,
-                          voltage: float, time: float) -> np.ndarray:
+    def _sample_z_interface(
+        self, n_samples: int, eta: float, voltage: float, time: float
+    ) -> np.ndarray:
         """
         在界面附近采样Z坐标
         """
@@ -373,7 +384,7 @@ class PhysicsBasedSampler:
         t_factor = min(1.0, time / 0.02)
 
         base_width = 0.5e-6  # 基础界面宽度
-        max_width = 2e-6     # 最大界面宽度
+        max_width = 2e-6  # 最大界面宽度
 
         width = base_width + (max_width - base_width) * V_factor * t_factor
         return width
@@ -393,8 +404,8 @@ def create_physics_sampling_dataset(config: dict, n_total: int = 100000) -> dict
     sampler = PhysicsBasedSampler(config)
 
     # 数据分配
-    n_interface = int(n_total * 0.6)   # 60% 界面数据
-    n_initial = int(n_total * 0.2)     # 20% 初始条件
+    n_interface = int(n_total * 0.6)  # 60% 界面数据
+    n_initial = int(n_total * 0.2)  # 20% 初始条件
     n_boundary = n_total - n_interface - n_initial  # 剩余为边界条件
 
     logger.info(f"数据集分配: 界面={n_interface}, 初始={n_initial}, 边界={n_boundary}")
@@ -406,7 +417,7 @@ def create_physics_sampling_dataset(config: dict, n_total: int = 100000) -> dict
         "initial_points": [],
         "initial_targets": [],
         "boundary_points": [],
-        "boundary_targets": []
+        "boundary_targets": [],
     }
 
     # 1. 界面数据
@@ -432,7 +443,9 @@ def create_physics_sampling_dataset(config: dict, n_total: int = 100000) -> dict
     for key in dataset:
         dataset[key] = np.array(dataset[key])
 
-    logger.info(f"数据集生成完成，总样本数: {len(dataset['interface_points']) + len(dataset['initial_points']) + len(dataset['boundary_points'])}")
+    logger.info(
+        f"数据集生成完成，总样本数: {len(dataset['interface_points']) + len(dataset['initial_points']) + len(dataset['boundary_points'])}"
+    )
 
     return dataset
 
@@ -440,17 +453,9 @@ def create_physics_sampling_dataset(config: dict, n_total: int = 100000) -> dict
 if __name__ == "__main__":
     # 测试采样器
     test_config = {
-        "voltage_weights": {
-            "no_response": 0.15,
-            "onset": 0.35,
-            "linear": 0.35,
-            "saturation": 0.15
-        },
+        "voltage_weights": {"no_response": 0.15, "onset": 0.35, "linear": 0.35, "saturation": 0.15},
         "threshold_voltage_base": 5.0,
-        "time_sampling": {
-            "critical_points_density": 0.6,
-            "adaptive_tau": True
-        }
+        "time_sampling": {"critical_points_density": 0.6, "adaptive_tau": True},
     }
 
     # 创建采样器
@@ -462,7 +467,9 @@ if __name__ == "__main__":
     logger.info(f"  最小值: {voltages.min():.2f}V")
     logger.info(f"  最大值: {voltages.max():.2f}V")
     logger.info(f"  平均值: {voltages.mean():.2f}V")
-    logger.info(f"  阈值附近比例: {np.sum((voltages >= 4.5) & (voltages <= 6.5)) / len(voltages) * 100:.1f}%")
+    logger.info(
+        f"  阈值附近比例: {np.sum((voltages >= 4.5) & (voltages <= 6.5)) / len(voltages) * 100:.1f}%"
+    )
 
     # 测试时间采样
     times_up = sampler.sample_time_adaptive(100, 10.0, 0.0)  # 升压

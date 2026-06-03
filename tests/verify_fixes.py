@@ -11,12 +11,12 @@ import pytest
 def test_fix2_ac_dimensional():
     """Fix 2: AC 方程量纲验证"""
     sigma = 0.02505  # N/m
-    eps = 5e-6       # m
-    M_ac = 1e-11     # m^3*s/kg
+    eps = 5e-6  # m
+    M_ac = 1e-11  # m^3*s/kg
 
     D_eff = M_ac * sigma / eps  # m^2/s
-    mob = D_eff / eps           # m/s
-    tau = eps / mob             # s
+    mob = D_eff / eps  # m/s
+    tau = eps / mob  # s
 
     # D_eff 应为正
     assert D_eff > 0, f"D_eff should be positive, got {D_eff:.4e}"
@@ -24,8 +24,9 @@ def test_fix2_ac_dimensional():
 
     # tau 应在 ms 量级（界面迁移时间 1-50ms）
     tau_ms = tau * 1000
-    assert 0.1 < tau_ms < 100, \
-        f"Interface migration time tau = {tau_ms:.1f}ms out of range [0.1, 100]"
+    assert (
+        0.1 < tau_ms < 100
+    ), f"Interface migration time tau = {tau_ms:.1f}ms out of range [0.1, 100]"
 
 
 def test_fix1_ew_indicator_zdecay():
@@ -33,11 +34,11 @@ def test_fix1_ew_indicator_zdecay():
     h_ink = 3e-6
 
     test_points = {
-        0: 1.0,       # z=0 → decay=1
+        0: 1.0,  # z=0 → decay=1
         500e-9: math.exp(-500e-9 / h_ink),
-        1e-6: math.exp(-1e-6 / h_ink),   # z=1μm
-        3e-6: math.exp(-1),              # z=h_ink → 1/e
-        20e-6: math.exp(-20e-6 / h_ink), # far field
+        1e-6: math.exp(-1e-6 / h_ink),  # z=1μm
+        3e-6: math.exp(-1),  # z=h_ink → 1/e
+        20e-6: math.exp(-20e-6 / h_ink),  # far field
     }
 
     z_decays = {z: val for z, val in test_points.items() if isinstance(z, (int, float))}
@@ -45,18 +46,18 @@ def test_fix1_ew_indicator_zdecay():
 
     # 单调递减
     for i in range(len(z_list) - 1):
-        assert z_decays[z_list[i]] >= z_decays[z_list[i + 1]], \
-            f"z_decay not monotonic at z={z_list[i]:.1e}"
+        assert (
+            z_decays[z_list[i]] >= z_decays[z_list[i + 1]]
+        ), f"z_decay not monotonic at z={z_list[i]:.1e}"
 
     # z=0 → 1.0
     assert abs(z_decays[0] - 1.0) < 0.01
 
     # z=h_ink → 1/e
-    assert abs(z_decays[3e-6] - 1.0/math.e) < 0.01
+    assert abs(z_decays[3e-6] - 1.0 / math.e) < 0.01
 
     # 远场 << 1
-    assert z_decays[20e-6] < 0.01, \
-        f"Far-field z_decay should be << 1, got {z_decays[20e-6]:.4f}"
+    assert z_decays[20e-6] < 0.01, f"Far-field z_decay should be << 1, got {z_decays[20e-6]:.4f}"
 
 
 def test_fix3_ns_ew_zdecay():
@@ -75,7 +76,7 @@ def test_fix3_ns_ew_zdecay():
     assert abs(decays[0] - 1.0) < 0.01
 
     # z=d_eff → 1/e
-    assert abs(decays[3] - 1.0/math.e) < 0.03
+    assert abs(decays[3] - 1.0 / math.e) < 0.03
 
     # 远场 close to 0
     assert decays[-1] < 0.01, f"Far-field decay should be < 0.01, got {decays[-1]:.4f}"
@@ -84,8 +85,7 @@ def test_fix3_ns_ew_zdecay():
 def test_fix4_ew_weight_enabled():
     """Fix 4: EW 权重验证 — electrowetting_weight > 0"""
     config_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "config", "v4.6-optimized.json"
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "v4.6-optimized.json"
     )
 
     if not os.path.exists(config_path):

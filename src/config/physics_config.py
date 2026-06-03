@@ -104,15 +104,15 @@ PHYSICS: dict[str, Any] = {
     "V_threshold": 5.0,  # 阈值电压 (V) = V_T_base + (h_ink-3μm)×sensitivity，计算值
     # ========== Allen-Cahn 相场参数 ==========
     "ac_interface_width": 5e-07,  # 界面宽度 (m) = 0.5μm, v7.2 校准值
-    "ac_mobility": 1e-10,        # 迁移率 (m³·s/kg), mob≈0.1m/s, τ~0.05ms
+    "ac_mobility": 1e-10,  # 迁移率 (m³·s/kg), mob≈0.1m/s, τ~0.05ms
     # ========== 开口率参数 ==========
     "eta_max": 0.85,  # 最大开口率
     "ink_initial_fraction": 0.15,  # 初始油墨体积分数
     # ========== 电润湿 EW 力参数 ==========
     "lambda_debye": 50e-9,  # 德拜屏蔽长度 [m] ~50nm，EW 力 z 方向衰减尺度
     # ========== 物理模型开关 ==========
-    "use_convection": False,        # Re≈1-5, 默认关闭对流项
-    "use_unified_wetting": False,   # 统一相场润湿 BC (替代旧版 BW/WW/SW)
+    "use_convection": False,  # Re≈1-5, 默认关闭对流项
+    "use_unified_wetting": False,  # 统一相场润湿 BC (替代旧版 BW/WW/SW)
     # ========== 开口率映射参数（用真实材料参数后需重新标定）==========
     "aperture_k": 3.0,  # 映射陡度（提高以补偿 Δθ 缩小）
     "aperture_theta_scale": 19.0,  # 角度缩放因子（降低使 tanh 更早饱和）
@@ -201,8 +201,8 @@ class PhysicsConfig:
     electrowetting_weight: float = 1.0  # EW 源项权重 (1.0=全强度, 0.02=2%)
 
     # 物理模型开关
-    use_convection: bool = False        # Re≈1-5, 默认关闭对流项
-    use_unified_wetting: bool = False   # 统一相场润湿 BC (替代旧版 BW/WW/SW)
+    use_convection: bool = False  # Re≈1-5, 默认关闭对流项
+    use_unified_wetting: bool = False  # 统一相场润湿 BC (替代旧版 BW/WW/SW)
 
     # 侧壁 Teflon 污染接触角 (°)
     theta_wall_teflon: float = 110.0
@@ -283,17 +283,13 @@ class PhysicsConfig:
             tau=dynamics.get("tau", cls.tau),
             tau_onset=dynamics.get("tau_onset", cls.tau_onset),
             tau_saturation=dynamics.get("tau_saturation", cls.tau_saturation),
-            tau_recovery_factor=dynamics.get(
-                "tau_recovery_factor", cls.tau_recovery_factor
-            ),
+            tau_recovery_factor=dynamics.get("tau_recovery_factor", cls.tau_recovery_factor),
             zeta=dynamics.get("zeta", cls.zeta),
             dynamic_order=dynamics.get("dynamic_order", cls.dynamic_order),
             # 开口率映射
             eta_max=aperture_mapping.get("aperture_max", cls.eta_max),
             aperture_k=aperture_mapping.get("k", cls.aperture_k),
-            aperture_theta_scale=aperture_mapping.get(
-                "theta_scale", cls.aperture_theta_scale
-            ),
+            aperture_theta_scale=aperture_mapping.get("theta_scale", cls.aperture_theta_scale),
             aperture_alpha=aperture_mapping.get("alpha", cls.aperture_alpha),
             use_convection=materials.get("use_convection", cls.use_convection),
             # Allen-Cahn 相场参数 (v7.2 校准)
@@ -418,9 +414,7 @@ class PhysicsConfig:
 _config_cache: dict[str, PhysicsConfig] = {}
 
 
-def get_physics_config(
-    path: str | Path | None = None, use_cache: bool = True
-) -> PhysicsConfig:
+def get_physics_config(path: str | Path | None = None, use_cache: bool = True) -> PhysicsConfig:
     """
     获取物理配置实例
 
@@ -475,11 +469,7 @@ def _init_physics_from_config():
             config = get_physics_config(DEFAULT_CONFIG_PATH)
             # 只更新存在的键，保留 PHYSICS 中的额外键
             for key, value in config.to_dict().items():
-                if (
-                    key in PHYSICS
-                    or key.startswith("density_")
-                    or key.startswith("viscosity_")
-                ):
+                if key in PHYSICS or key.startswith("density_") or key.startswith("viscosity_"):
                     PHYSICS[key] = value
             logger.debug(f"PHYSICS 已从 {DEFAULT_CONFIG_PATH} 初始化")
     except Exception as e:

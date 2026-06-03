@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
 """Compute ablation study metrics: volume error, aperture, interface quality, dynamic response."""
-import os
-import sys
-import re
+
 import json
-import torch
-import numpy as np
+import os
 from pathlib import Path
+import re
+import sys
+
+import numpy as np
+import torch
 
 project_root = str(Path(__file__).resolve().parent.parent)
 sys.path.insert(0, project_root)
 
-from src.models.pinn_two_phase import TwoPhasePINN  # noqa: E402
-from src.models.aperture_model import EnhancedApertureModel  # noqa: E402
-from src.config import PHYSICS  # noqa: E402
+from src.config import PHYSICS
+from src.models.aperture_model import EnhancedApertureModel
+from src.models.pinn_two_phase import TwoPhasePINN
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
@@ -21,12 +23,12 @@ print(f"Using device: {device}")
 ANALYTICAL_CONFIG = "/home/scnu/Gitee/EFD3D/config/v4.5-standard.json"
 
 RUNS = {
-    "Full Model":       "/home/scnu/Gitee/EFD3D/outputs/train/pinn_20260317_235529",
-    "no_continuity":    "/home/scnu/Gitee/EFD3D/outputs/train/pinn_20260319_120821",
-    "no_vof":           "/home/scnu/Gitee/EFD3D/outputs/train/pinn_20260320_040329",
-    "no_interface":     "/home/scnu/Gitee/EFD3D/outputs/train/pinn_20260320_202048",
-    "single_stage":     "/home/scnu/Gitee/EFD3D/outputs/train/pinn_20260321_124610",
-    "smaller_network":  "/home/scnu/Gitee/EFD3D/outputs/train/pinn_20260322_043947",
+    "Full Model": "/home/scnu/Gitee/EFD3D/outputs/train/pinn_20260317_235529",
+    "no_continuity": "/home/scnu/Gitee/EFD3D/outputs/train/pinn_20260319_120821",
+    "no_vof": "/home/scnu/Gitee/EFD3D/outputs/train/pinn_20260320_040329",
+    "no_interface": "/home/scnu/Gitee/EFD3D/outputs/train/pinn_20260320_202048",
+    "single_stage": "/home/scnu/Gitee/EFD3D/outputs/train/pinn_20260321_124610",
+    "smaller_network": "/home/scnu/Gitee/EFD3D/outputs/train/pinn_20260322_043947",
 }
 
 
@@ -50,7 +52,8 @@ def compute_volume_error(model, eval_physics):
     v0 = Lx * Ly * h_ink
     v_domain = Lx * Ly * Lz
     n_vol = 30000
-    torch.manual_seed(42); np.random.seed(42)
+    torch.manual_seed(42)
+    np.random.seed(42)
     x = torch.rand(n_vol, device=device) * Lx
     y = torch.rand(n_vol, device=device) * Ly
     z = torch.rand(n_vol, device=device) * Lz
@@ -70,12 +73,15 @@ def compute_volume_error(model, eval_physics):
         tests.append((25.0, 0.0, float(t)))
     errors = []
     for v_from, v_to, t_since in tests:
-        pts = torch.cat([
-            xyz,
-            torch.full((n_vol, 1), float(v_from), device=device),
-            torch.full((n_vol, 1), float(v_to), device=device),
-            torch.full((n_vol, 1), float(t_since), device=device),
-        ], dim=1)
+        pts = torch.cat(
+            [
+                xyz,
+                torch.full((n_vol, 1), float(v_from), device=device),
+                torch.full((n_vol, 1), float(v_to), device=device),
+                torch.full((n_vol, 1), float(t_since), device=device),
+            ],
+            dim=1,
+        )
         with torch.no_grad():
             phi = model(pts)[:, 4]
             phi = torch.clamp(phi, 0.0, 1.0)
@@ -88,12 +94,18 @@ def compute_volume_error(model, eval_physics):
 def compute_aperture_at(model, eval_physics, V_from, V_to, t_since):
     """Compute aperture ratio at given condition."""
     Lx, Ly = eval_physics["Lx"], eval_physics["Ly"]
-    n = 96; phi0, eps = 0.3, 0.05
-    x = np.linspace(0, Lx, n); y = np.linspace(0, Ly, n)
+    n = 96
+    phi0, eps = 0.3, 0.05
+    x = np.linspace(0, Lx, n)
+    y = np.linspace(0, Ly, n)
     X, Y = np.meshgrid(x, y)
     inputs = np.zeros((n * n, 6), dtype=np.float32)
-    inputs[:, 0] = X.ravel(); inputs[:, 1] = Y.ravel(); inputs[:, 2] = 0.0
-    inputs[:, 3] = V_from; inputs[:, 4] = V_to; inputs[:, 5] = t_since
+    inputs[:, 0] = X.ravel()
+    inputs[:, 1] = Y.ravel()
+    inputs[:, 2] = 0.0
+    inputs[:, 3] = V_from
+    inputs[:, 4] = V_to
+    inputs[:, 5] = t_since
     with torch.no_grad():
         out = model(torch.tensor(inputs, device=device))
         phi = out[:, 4].cpu().numpy().reshape(n, n)
@@ -134,12 +146,18 @@ def compute_interface_metrics(model, eval_physics):
     h_ink = eval_physics["h_ink"]
     z = h_ink / 2
     n = 128
-    x = np.linspace(0, Lx, n); y = np.linspace(0, Ly, n)
-    X, Y = np.meshgrid(x, y); dx, dy = x[1] - x[0], y[1] - y[0]
+    x = np.linspace(0, Lx, n)
+    y = np.linspace(0, Ly, n)
+    X, Y = np.meshgrid(x, y)
+    dx, dy = x[1] - x[0], y[1] - y[0]
 
     inputs = np.zeros((n * n, 6), dtype=np.float32)
-    inputs[:, 0] = X.ravel(); inputs[:, 1] = Y.ravel(); inputs[:, 2] = z
-    inputs[:, 3] = 30.0; inputs[:, 4] = 30.0; inputs[:, 5] = 0.040
+    inputs[:, 0] = X.ravel()
+    inputs[:, 1] = Y.ravel()
+    inputs[:, 2] = z
+    inputs[:, 3] = 30.0
+    inputs[:, 4] = 30.0
+    inputs[:, 5] = 0.040
 
     with torch.no_grad():
         out = model(torch.tensor(inputs, device=device))
@@ -173,20 +191,24 @@ def compute_interface_metrics(model, eval_physics):
         xv = np.clip(cx_c + r * dx_c, 0, Lx)
         yv = np.clip(cy_c + r * dy_c, 0, Ly)
         inp = np.zeros((n_r, 6), dtype=np.float32)
-        inp[:, 0] = xv; inp[:, 1] = yv; inp[:, 2] = z
-        inp[:, 3] = 30.0; inp[:, 4] = 30.0; inp[:, 5] = 0.040
+        inp[:, 0] = xv
+        inp[:, 1] = yv
+        inp[:, 2] = z
+        inp[:, 3] = 30.0
+        inp[:, 4] = 30.0
+        inp[:, 5] = 0.040
         with torch.no_grad():
             phi_r = model(torch.tensor(inp, device=device))[:, 4].cpu().numpy()
         # Corner is oil (φ≈1), center is water (φ≈0) → φ decreases along r
-        oil_region = np.where(phi_r > 0.9)[0]    # oil near corner
+        oil_region = np.where(phi_r > 0.9)[0]  # oil near corner
         water_region = np.where(phi_r < 0.1)[0]  # water near center
         if len(oil_region) > 0 and len(water_region) > 0:
-            oil_end = r[oil_region[-1]]   # last oil point
+            oil_end = r[oil_region[-1]]  # last oil point
             water_start = r[water_region[0]]  # first water point
             if water_start > oil_end:
                 widths.append((water_start - oil_end) * 1e6)
 
-    avg_width = float(np.mean(widths)) if widths else float('nan')
+    avg_width = float(np.mean(widths)) if widths else float("nan")
 
     # Quality classification based on sharpening residual and transition width.
     # φ(1-φ) ≈ 0.25 * (interface_area / total_area); lower = sharper interface.
@@ -211,12 +233,14 @@ def compute_interface_metrics(model, eval_physics):
 
 
 def get_best_loss(log_path):
-    if not os.path.exists(log_path): return None
+    if not os.path.exists(log_path):
+        return None
     with open(log_path) as f:
         for line in f:
             if "训练完成!" in line:
-                m = re.search(r'最佳损失:\s*([\d.e+\-]+)', line)
-                if m: return float(m.group(1))
+                m = re.search(r"最佳损失:\s*([\d.e+\-]+)", line)
+                if m:
+                    return float(m.group(1))
     return None
 
 
@@ -232,7 +256,8 @@ def main():
         print(f"Evaluating: {name}")
         ckpt = os.path.join(run_dir, "best_model.pth")
         if not os.path.exists(ckpt):
-            print("  SKIP: no best_model.pth"); continue
+            print("  SKIP: no best_model.pth")
+            continue
 
         model, eval_physics = load_model(ckpt)
 
@@ -246,17 +271,21 @@ def main():
         print(f"  Aperture 30V: PINN={eta_ss:.4f}, Ref={analytical_ref:.4f}, Err={ap_err:.2f}pp")
 
         # 3. Dynamic response RMSE (key for VOF assessment)
-        rmse_on, rmse_off, rmse_total = compute_dynamic_response_rmse(
-            model, eval_physics, stage1
-        )
+        rmse_on, rmse_off, rmse_total = compute_dynamic_response_rmse(model, eval_physics, stage1)
         print(f"  Dynamic RMSE: ON={rmse_on:.4f}, OFF={rmse_off:.4f}, Total={rmse_total:.4f}")
 
         # 4. Interface quality
         iface = compute_interface_metrics(model, eval_physics)
-        w = f"{iface['transition_width_um']:.1f}" if not np.isnan(iface['transition_width_um']) else "N/A"
-        print(f"  Interface: φ_range={iface['phi_range']:.4f}, width={w}um, "
-              f"|∇φ|_if={iface['if_grad_per_um']:.4f}/um, φ(1-φ)={iface['sharpening_residual']:.5f}, "
-              f"quality={iface['quality']}")
+        w = (
+            f"{iface['transition_width_um']:.1f}"
+            if not np.isnan(iface["transition_width_um"])
+            else "N/A"
+        )
+        print(
+            f"  Interface: φ_range={iface['phi_range']:.4f}, width={w}um, "
+            f"|∇φ|_if={iface['if_grad_per_um']:.4f}/um, φ(1-φ)={iface['sharpening_residual']:.5f}, "
+            f"quality={iface['quality']}"
+        )
 
         best_loss = get_best_loss(os.path.join(run_dir, "training.log"))
         print(f"  Best loss: {best_loss}")
@@ -280,27 +309,41 @@ def main():
             "dynamic_rmse_off": round(rmse_off, 4),
             "dynamic_rmse_total": round(rmse_total, 4),
             "interface_quality": iface["quality"],
-            "transition_width_um": round(iface["transition_width_um"], 1) if not np.isnan(iface["transition_width_um"]) else None,
+            "transition_width_um": round(iface["transition_width_um"], 1)
+            if not np.isnan(iface["transition_width_um"])
+            else None,
             "sharpening_residual": iface["sharpening_residual"],
             "physically_valid": valid,
         }
 
     # Final table
-    print("\n\n" + "="*140)
+    print("\n\n" + "=" * 140)
     print("ABLATION STUDY — COMPLETE RESULTS")
-    print("="*140)
-    hdr = (f"{'Variant':<18} {'Loss':>8} {'Vol.Err':>8} {'Ap.Err%':>8} "
-           f"{'RMSE_ON':>9} {'RMSE_Tot':>9} {'If.Qual':>10} {'W(um)':>8} {'φ(1-φ)':>9} {'Valid':>8}")
+    print("=" * 140)
+    hdr = (
+        f"{'Variant':<18} {'Loss':>8} {'Vol.Err':>8} {'Ap.Err%':>8} "
+        f"{'RMSE_ON':>9} {'RMSE_Tot':>9} {'If.Qual':>10} {'W(um)':>8} {'φ(1-φ)':>9} {'Valid':>8}"
+    )
     print(hdr)
-    print("-"*140)
-    order = ["Full Model", "no_continuity", "no_vof", "no_interface", "single_stage", "smaller_network"]
+    print("-" * 140)
+    order = [
+        "Full Model",
+        "no_continuity",
+        "no_vof",
+        "no_interface",
+        "single_stage",
+        "smaller_network",
+    ]
     for name in order:
         r = results.get(name)
-        if r is None: continue
-        w = f"{r['transition_width_um']:.1f}" if r['transition_width_um'] is not None else "N/A"
-        print(f"{name:<18} {r['best_loss']:>8.1f} {r['vol_error_mean_pct']:>7.2f}% {r['aperture_error_pp']:>7.2f}% "
-              f"{r['dynamic_rmse_on']:>9.4f} {r['dynamic_rmse_total']:>9.4f} "
-              f"{r['interface_quality']:>10} {w:>8} {r['sharpening_residual']:>9.5f} {r['physically_valid']:>8}")
+        if r is None:
+            continue
+        w = f"{r['transition_width_um']:.1f}" if r["transition_width_um"] is not None else "N/A"
+        print(
+            f"{name:<18} {r['best_loss']:>8.1f} {r['vol_error_mean_pct']:>7.2f}% {r['aperture_error_pp']:>7.2f}% "
+            f"{r['dynamic_rmse_on']:>9.4f} {r['dynamic_rmse_total']:>9.4f} "
+            f"{r['interface_quality']:>10} {w:>8} {r['sharpening_residual']:>9.5f} {r['physically_valid']:>8}"
+        )
 
     out_path = "/home/scnu/Gitee/EFD3D/scripts/ablation_results.json"
     with open(out_path, "w") as f:

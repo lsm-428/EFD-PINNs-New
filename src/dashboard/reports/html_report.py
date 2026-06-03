@@ -56,9 +56,7 @@ class HTMLReport:
             content: HTML content
             collapsible: Whether section is collapsible
         """
-        self.sections.append(
-            {"title": title, "content": content, "collapsible": collapsible}
-        )
+        self.sections.append({"title": title, "content": content, "collapsible": collapsible})
 
     def add_metric(self, name: str, value: Any, unit: str = "") -> None:
         """
@@ -80,9 +78,7 @@ class HTMLReport:
         """
         self.metrics.update(metrics)
 
-    def add_loss_curves(
-        self, records: dict[str, list[Any]], log_scale: bool = True
-    ) -> None:
+    def add_loss_curves(self, records: dict[str, list[Any]], log_scale: bool = True) -> None:
         """
         Add loss curves visualization.
 
@@ -150,9 +146,7 @@ class HTMLReport:
         if log_scale:
             fig.update_yaxes(type="log")
 
-        self.charts.append(
-            {"title": "Loss Components", "figure": fig, "type": "loss_curves"}
-        )
+        self.charts.append({"title": "Loss Components", "figure": fig, "type": "loss_curves"})
 
     def add_learning_rate(self, records: dict[str, list[Any]]) -> None:
         """
@@ -205,13 +199,9 @@ class HTMLReport:
                 fig.update_yaxes(title_text="Learning Rate", type="log", row=2, col=1)
 
         fig.update_xaxes(title_text="Epoch", row=2, col=1)
-        fig.update_layout(
-            title="Training Dynamics", template="plotly_white", showlegend=False
-        )
+        fig.update_layout(title="Training Dynamics", template="plotly_white", showlegend=False)
 
-        self.charts.append(
-            {"title": "Learning Rate", "figure": fig, "type": "learning_curve"}
-        )
+        self.charts.append({"title": "Learning Rate", "figure": fig, "type": "learning_curve"})
 
     def add_loss_fraction(self, records: dict[str, list[Any]]) -> None:
         """
@@ -234,9 +224,7 @@ class HTMLReport:
             if name in records:
                 values = records[name]
                 # Filter valid values
-                valid_values = [
-                    v for v in values if v is not None and str(v) != "nan" and v > 0
-                ]
+                valid_values = [v for v in values if v is not None and str(v) != "nan" and v > 0]
                 if valid_values:
                     comp_values.append(valid_values)
                     comp_labels.append(name)
@@ -253,14 +241,10 @@ class HTMLReport:
             frac_array.append(vals)
 
         # Normalize
-        total = [
-            sum(frac_array[i][j] for i in range(len(frac_array)))
-            for j in range(min_len)
-        ]
+        total = [sum(frac_array[i][j] for i in range(len(frac_array))) for j in range(min_len)]
         total = [max(t, 1e-10) for t in total]
         frac_array = [
-            [frac_array[i][j] / total[j] for j in range(min_len)]
-            for i in range(len(frac_array))
+            [frac_array[i][j] / total[j] for j in range(min_len)] for i in range(len(frac_array))
         ]
 
         fig = go.Figure()
@@ -300,9 +284,7 @@ class HTMLReport:
             legend=dict(traceorder="normal"),
         )
 
-        self.charts.append(
-            {"title": "Loss Fraction", "figure": fig, "type": "loss_fraction"}
-        )
+        self.charts.append({"title": "Loss Fraction", "figure": fig, "type": "loss_fraction"})
 
     def add_metrics_table(self) -> None:
         """
@@ -480,7 +462,7 @@ class HTMLReport:
                     {
                 "".join(
                     f"<tr><td>{n}</td><td>{v}</td><td>{u}</td></tr>"
-                    for n, v, u in zip(names, values, units)
+                    for n, v, u in zip(names, values, units, strict=False)
                 )
             }
                 </tbody>

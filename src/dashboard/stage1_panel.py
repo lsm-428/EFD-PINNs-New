@@ -32,9 +32,7 @@ def get_stage1_model() -> EnhancedApertureModel:
     return EnhancedApertureModel()
 
 
-def compute_steady_state(
-    model: EnhancedApertureModel, voltage: float
-) -> dict[str, float]:
+def compute_steady_state(model: EnhancedApertureModel, voltage: float) -> dict[str, float]:
     """
     Compute steady state contact angle and aperture ratio.
 
@@ -115,9 +113,7 @@ def compute_dynamic_response(
     }
 
 
-def create_stage1_plots(
-    results: dict[str, Any], plot_type: str = "dynamic"
-) -> go.Figure:
+def create_stage1_plots(results: dict[str, Any], plot_type: str = "dynamic") -> go.Figure:
     """
     Create Plotly figure for Stage 1 results.
 
@@ -169,9 +165,7 @@ def create_stage1_plots(
         fig.update_yaxes(title_text="Contact Angle (°)", row=1, col=1)
         fig.update_yaxes(title_text="Aperture Ratio (%)", row=2, col=1)
 
-        fig.update_layout(
-            height=600, title_text="Stage 1 Dynamic Response", showlegend=True
-        )
+        fig.update_layout(height=600, title_text="Stage 1 Dynamic Response", showlegend=True)
 
     elif plot_type == "steady":
         # Steady state plot
@@ -247,9 +241,7 @@ def create_stage1_plots(
 
         # Steady state contact angle
         voltages = np.linspace(0, 30, 31)
-        theta_list = [
-            compute_steady_state(results["model"], V)["theta"] for V in voltages
-        ]
+        theta_list = [compute_steady_state(results["model"], V)["theta"] for V in voltages]
         fig.add_trace(
             go.Scatter(
                 x=voltages,
@@ -264,8 +256,7 @@ def create_stage1_plots(
 
         # Steady state aperture ratio
         aperture_list = [
-            compute_steady_state(results["model"], V)["aperture_ratio"] * 100
-            for V in voltages
+            compute_steady_state(results["model"], V)["aperture_ratio"] * 100 for V in voltages
         ]
         fig.add_trace(
             go.Scatter(
@@ -324,9 +315,7 @@ def create_stage1_plots(
         )
 
     else:
-        raise ValueError(
-            f"Unknown plot_type: {plot_type}. Must be 'dynamic', 'steady', or 'both'."
-        )
+        raise ValueError(f"Unknown plot_type: {plot_type}. Must be 'dynamic', 'steady', or 'both'.")
 
     return fig
 
@@ -527,9 +516,7 @@ def render_young_lippmann_theory():
     )
 
     # 使用 LaTeX 渲染方程
-    st.latex(
-        r"\cos\theta(V) = \cos\theta_0 + \frac{\varepsilon_r \varepsilon_0}{2\gamma d} V^2"
-    )
+    st.latex(r"\cos\theta(V) = \cos\theta_0 + \frac{\varepsilon_r \varepsilon_0}{2\gamma d} V^2")
 
     st.markdown(
         """

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 import os
 import sys
-import torch
-import numpy as np
-import matplotlib.pyplot as plt
+
 import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
 
 matplotlib.use("Agg")  # Non-interactive backend
 import argparse
@@ -16,9 +17,10 @@ project_root = str(Path(__file__).resolve().parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from matplotlib.gridspec import GridSpec
+from typing import Any
+
 from matplotlib.colors import LinearSegmentedColormap
-from typing import Dict, List, Optional, Tuple, Any
+from matplotlib.gridspec import GridSpec
 
 # =============================================================================
 # IEEE Publication Standard Configuration (Added 2026-02-05)
@@ -44,12 +46,12 @@ plt.rcParams.update(
 PANEL_LABELS = ["(a)", "(b)", "(c)", "(d)", "(e)", "(f)"]
 
 # 导入模型和物理参数
-from src.models.pinn_two_phase import TwoPhasePINN, DEFAULT_CONFIG
-from src.models.aperture_model import EnhancedApertureModel
+from skimage import measure
+
 from src.config import CONFIG_PATH, PHYSICS
 from src.config.paths import OUTPUT_DIR
-
-from skimage import measure
+from src.models.aperture_model import EnhancedApertureModel
+from src.models.pinn_two_phase import DEFAULT_CONFIG, TwoPhasePINN
 
 
 class PINNEvaluator:
@@ -71,16 +73,12 @@ class PINNEvaluator:
         # Professional EWD Colormap: LightCyan (Polar Liquid, phi=0) -> Magenta (Ink, phi=1)
         self.ewd_cmap = LinearSegmentedColormap.from_list("EWD", ["#E0FFFF", "#FF00FF"])
 
-    def load_model(
-        self, checkpoint_path: str
-    ) -> Tuple[Optional[TwoPhasePINN], Dict[str, Any]]:
+    def load_model(self, checkpoint_path: str) -> tuple[TwoPhasePINN | None, dict[str, Any]]:
         """Load a trained model and its configuration."""
         try:
             # SECURITY FIX: Use weights_only=True to prevent arbitrary code execution
             # See: CERT VU#252619, PyTorch Security Advisory GHSA-53q9-r3pm-6pq6
-            checkpoint = torch.load(
-                checkpoint_path, map_location=self.device, weights_only=True
-            )
+            checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
             config = checkpoint.get("config", DEFAULT_CONFIG)
 
             # 更新全局物理参数，确保评估与训练一致
@@ -100,14 +98,8 @@ class PINNEvaluator:
             model = TwoPhasePINN(config).to(self.device)
             model.load_state_dict(checkpoint["model_state_dict"])
             model.eval()
-            eval_cfg = (
-                config.get("eval", {})
-                if isinstance(config.get("eval", {}), dict)
-                else {}
-            )
-            self.aperture_phi0 = float(
-                eval_cfg.get("aperture_phi0", self.aperture_phi0)
-            )
+            eval_cfg = config.get("eval", {}) if isinstance(config.get("eval", {}), dict) else {}
+            self.aperture_phi0 = float(eval_cfg.get("aperture_phi0", self.aperture_phi0))
             self.aperture_eps = float(eval_cfg.get("aperture_eps", self.aperture_eps))
             self.aperture_res = int(eval_cfg.get("aperture_res", self.aperture_res))
             return model, config
@@ -120,11 +112,11 @@ class PINNEvaluator:
         model: TwoPhasePINN,
         V_to: float,
         t_since: float,
-        V_from: Optional[float] = None,
+        V_from: float | None = None,
         plane: str = "xy",
-        coord: Optional[float] = None,
-        spatial_res: Optional[int] = None,
-    ) -> Dict[str, np.ndarray]:
+        coord: float | None = None,
+        spatial_res: int | None = None,
+    ) -> dict[str, np.ndarray]:
         """Extract physical fields (phi, u, v, w, p) from the model."""
         if V_from is None:
             V_from = V_to
@@ -193,7 +185,7 @@ class PINNEvaluator:
         model: TwoPhasePINN,
         V_to: float,
         t_since: float,
-        V_from: Optional[float] = None,
+        V_from: float | None = None,
     ) -> float:
         """Calculate aperture ratio (eta) at z = 0 (hydrophobic surface).
 
@@ -218,9 +210,7 @@ class PINNEvaluator:
         m = 0.5 * (1.0 + np.tanh((phi0 - phi) / eps))
         return float(np.mean(m))
 
-    def plot_dashboard(
-        self, model: TwoPhasePINN, output_path: str, model_name: str = "PINN"
-    ):
+    def plot_dashboard(self, model: TwoPhasePINN, output_path: str, model_name: str = "PINN"):
         """Generate a professional 4-panel dashboard for a single model."""
         fig = plt.figure(figsize=(18, 12))
         gs = GridSpec(2, 3, figure=fig)
@@ -232,9 +222,7 @@ class PINNEvaluator:
         im1 = ax1.contourf(
             X * 1e6, Y * 1e6, f_xy["phi"], levels=20, cmap=self.ewd_cmap, vmin=0, vmax=1
         )
-        ax1.contour(
-            X * 1e6, Y * 1e6, f_xy["phi"], levels=[0.5], colors="k", linewidths=2
-        )
+        ax1.contour(X * 1e6, Y * 1e6, f_xy["phi"], levels=[0.5], colors="k", linewidths=2)
 
         # 优化速度矢量显示：根据最大速度自动缩放
         skip = self.spatial_res // 16
@@ -264,9 +252,7 @@ class PINNEvaluator:
         im2 = ax2.contourf(
             X * 1e6, Z * 1e6, f_xz["phi"], levels=20, cmap=self.ewd_cmap, vmin=0, vmax=1
         )
-        ax2.contour(
-            X * 1e6, Z * 1e6, f_xz["phi"], levels=[0.5], colors="k", linewidths=2
-        )
+        ax2.contour(X * 1e6, Z * 1e6, f_xz["phi"], levels=[0.5], colors="k", linewidths=2)
 
         u, w = f_xz["u"], f_xz["w"]
         speed_xz = np.sqrt(u**2 + w**2)
@@ -317,9 +303,7 @@ class PINNEvaluator:
 
         ax3.plot(times * 1000, s1_etas, "k--", label="Analytical Ref", alpha=0.6)
         ax3.plot(times * 1000, pinn_etas, "r-", label="PINN Prediction", linewidth=2)
-        ax3.axhline(
-            self.eta_max, color="gray", linestyle=":", label=f"Limit ({self.eta_max})"
-        )
+        ax3.axhline(self.eta_max, color="gray", linestyle=":", label=f"Limit ({self.eta_max})")
         ax3.set_title("Dynamic Step Response (0V → 30V → 0V)")
         ax3.set_xlabel("Time (ms)")
         ax3.set_ylabel("Aperture Ratio")
@@ -332,9 +316,7 @@ class PINNEvaluator:
         voltages = np.linspace(0, 30, 11)
         t_steady = t_max * 0.8  # 使用 80% 的时间作为稳态判定
         pinn_ss = [self.compute_aperture(model, V, t_steady, V) for V in voltages]
-        s1_ss = [
-            self.stage1_model.theta_eta_from_triad(V, V, t_steady)[1] for V in voltages
-        ]
+        s1_ss = [self.stage1_model.theta_eta_from_triad(V, V, t_steady)[1] for V in voltages]
         ax4.plot(voltages, s1_ss, "k--o", label="Analytical", alpha=0.6)
         ax4.plot(voltages, pinn_ss, "r-s", label="PINN")
         ax4.axhline(self.eta_max, color="gray", linestyle=":")
@@ -345,9 +327,7 @@ class PINNEvaluator:
         ax4.grid(True, alpha=0.3)
         ax4.set_ylim(-0.05, 1.0)
 
-        plt.suptitle(
-            f"Professional PINN Evaluation Dashboard - {model_name}", fontsize=16
-        )
+        plt.suptitle(f"Professional PINN Evaluation Dashboard - {model_name}", fontsize=16)
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         plt.savefig(output_path, dpi=200)
@@ -433,7 +413,7 @@ class PINNEvaluator:
         output_path: str,
         V_to: float,
         t_since: float,
-        V_from: Optional[float] = None,
+        V_from: float | None = None,
     ):
         """Plot 3D interface (phi=0.5 isosurface) using Marching Cubes."""
         if V_from is None:
@@ -585,7 +565,7 @@ class PINNEvaluator:
         # 初始化 Stage1 解析模型 (使用已加载的 self.stage1_model)
         # stage1_model = self.stage1_model
 
-        for (v_start, v_target, label), color in zip(cycles, colors):
+        for (v_start, v_target, label), color in zip(cycles, colors, strict=False):
             etas = []
             analytical_etas = []  # 解析解 (Stage 1)
 
@@ -593,14 +573,13 @@ class PINNEvaluator:
                 # Raw PINN prediction — no post-processing
                 if v_target == 0:  # Static 0V
                     eta = self.compute_aperture(model, 0.0, t, 0.0)
+                elif t <= t_switch:
+                    # ON Phase: 0 -> V_target
+                    eta = self.compute_aperture(model, v_target, t, 0.0)
                 else:
-                    if t <= t_switch:
-                        # ON Phase: 0 -> V_target
-                        eta = self.compute_aperture(model, v_target, t, 0.0)
-                    else:
-                        # OFF Phase: V_target -> 0
-                        t_since_off = t - t_switch
-                        eta = self.compute_aperture(model, 0.0, t_since_off, v_target)
+                    # OFF Phase: V_target -> 0
+                    t_since_off = t - t_switch
+                    eta = self.compute_aperture(model, 0.0, t_since_off, v_target)
 
                 # Clip to physical range [0, 1]
                 eta = max(0.0, min(1.0, eta))
@@ -609,23 +588,16 @@ class PINNEvaluator:
                 # Stage 1 analytical prediction
                 if v_target == 0:
                     _, a_eta = self.stage1_model.theta_eta_from_triad(0, 0, t)
+                elif t <= t_switch:
+                    _, a_eta = self.stage1_model.theta_eta_from_triad(0, v_target, t)
                 else:
-                    if t <= t_switch:
-                        _, a_eta = self.stage1_model.theta_eta_from_triad(
-                            0, v_target, t
-                        )
-                    else:
-                        t_since_off = t - t_switch
-                        _, a_eta = self.stage1_model.theta_eta_from_triad(
-                            v_target, 0, t_since_off
-                        )
+                    t_since_off = t - t_switch
+                    _, a_eta = self.stage1_model.theta_eta_from_triad(v_target, 0, t_since_off)
 
                 analytical_etas.append(a_eta)
 
             # Plot raw PINN prediction (solid)
-            plt.plot(
-                times * 1000, etas, label=f"{label} (PINN)", color=color, linewidth=2
-            )
+            plt.plot(times * 1000, etas, label=f"{label} (PINN)", color=color, linewidth=2)
 
             # Plot Stage 1 analytical (dashed)
             if v_target > 0:
@@ -639,14 +611,10 @@ class PINNEvaluator:
                 )
 
                 # RMSE: raw PINN vs Stage1
-                rmse = np.sqrt(
-                    np.mean((np.array(etas) - np.array(analytical_etas)) ** 2)
-                )
+                rmse = np.sqrt(np.mean((np.array(etas) - np.array(analytical_etas)) ** 2))
                 print(f"Voltage {v_target}V: RMSE = {rmse:.4f}")
 
-        plt.axvline(
-            t_switch * 1000, color="k", linestyle="--", alpha=0.3, label="Switch OFF"
-        )
+        plt.axvline(t_switch * 1000, color="k", linestyle="--", alpha=0.3, label="Switch OFF")
 
         plt.xlabel("Time (ms)", fontsize=12)
         plt.ylabel("Aperture Ratio (η)", fontsize=12)
@@ -671,7 +639,7 @@ class PINNEvaluator:
 
         plt.figure(figsize=(12, 8))
 
-        for V, color in zip(voltages, colors):
+        for V, color in zip(voltages, colors, strict=False):
             etas = []
 
             # Use raw PINN steady-state for target calculation
@@ -728,9 +696,7 @@ class PINNEvaluator:
             # Mark t_off point
             if not np.isnan(t_off_val):
                 abs_time = t_switch + t_off_val
-                plt.scatter(
-                    abs_time * 1000, t_off, color=color, marker="s", s=50, zorder=5
-                )
+                plt.scatter(abs_time * 1000, t_off, color=color, marker="s", s=50, zorder=5)
                 plt.text(
                     abs_time * 1000,
                     t_off + 0.03,
@@ -745,9 +711,7 @@ class PINNEvaluator:
                 f"Voltage {V}V: t_on={t_on_val * 1000 if not np.isnan(t_on_val) else '>25'}ms, t_off={t_off_val * 1000 if not np.isnan(t_off_val) else '>25'}ms"
             )
 
-        plt.axvline(
-            t_switch * 1000, color="k", linestyle="--", alpha=0.3, label="Switch OFF"
-        )
+        plt.axvline(t_switch * 1000, color="k", linestyle="--", alpha=0.3, label="Switch OFF")
 
         plt.xlabel("Time (ms)", fontsize=12)
         plt.ylabel("Aperture Ratio (η)", fontsize=12)
@@ -878,9 +842,7 @@ class PINNEvaluator:
         # Calculate average error for each voltage
         voltages = []
         avg_errors = []
-        for v_key in sorted(
-            voltage_errors.keys(), key=lambda x: int(x.replace("V", ""))
-        ):
+        for v_key in sorted(voltage_errors.keys(), key=lambda x: int(x.replace("V", ""))):
             voltages.append(v_key)
             avg_errors.append(np.mean(voltage_errors[v_key]))
 
@@ -892,7 +854,7 @@ class PINNEvaluator:
         ax.grid(axis="y", alpha=0.3)
 
         # Add value labels on bars
-        for i, (v, err) in enumerate(zip(voltages, avg_errors)):
+        for i, (v, err) in enumerate(zip(voltages, avg_errors, strict=False)):
             ax.text(i, err + 0.5, f"{err:.1f}%", ha="center", fontsize=9)
 
         plt.tight_layout()
@@ -936,14 +898,17 @@ class PINNEvaluator:
         plt.close()
         print(f"✅ Z-profile plot saved: {output_path}")
 
-
     # =============================================================================
     # Feature: Wall-Climb Detection, Steady-State eta(V), Critical Voltage
     # =============================================================================
 
-    def plot_steady_state_eta(self, model: TwoPhasePINN, output_path: str,
-                               voltages: Optional[List[float]] = None,
-                               t_steady: float = 0.040):
+    def plot_steady_state_eta(
+        self,
+        model: TwoPhasePINN,
+        output_path: str,
+        voltages: list[float] | None = None,
+        t_steady: float = 0.040,
+    ):
         """Plot steady-state aperture ratio eta vs voltage.
 
         This is THE key result: at each voltage, what is the final opening?
@@ -963,7 +928,7 @@ class PINNEvaluator:
 
         # Find threshold voltage (eta > 0.05)
         v_threshold = None
-        for V, eta_val in zip(voltages, etas):
+        for V, eta_val in zip(voltages, etas, strict=False):
             if eta_val > 0.05:
                 v_threshold = V
                 break
@@ -971,7 +936,7 @@ class PINNEvaluator:
         # Find saturation voltage (eta > 0.9 * eta_max)
         eta_max_val = etas[-1] if len(etas) > 0 else 0
         v_saturation = None
-        for V, eta_val in zip(voltages, etas):
+        for V, eta_val in zip(voltages, etas, strict=False):
             if eta_val > 0.9 * eta_max_val:
                 v_saturation = V
                 break
@@ -982,15 +947,25 @@ class PINNEvaluator:
 
         # Mark threshold
         if v_threshold is not None:
-            ax.axvline(v_threshold, color="red", linestyle="--", alpha=0.7,
-                       label=f"V_th ~ {v_threshold:.0f}V (eta>0.05)")
+            ax.axvline(
+                v_threshold,
+                color="red",
+                linestyle="--",
+                alpha=0.7,
+                label=f"V_th ~ {v_threshold:.0f}V (eta>0.05)",
+            )
             idx = voltages.index(v_threshold)
             ax.scatter([v_threshold], [etas[idx]], color="red", s=80, zorder=5)
 
         # Mark saturation
         if v_saturation is not None:
-            ax.axvline(v_saturation, color="green", linestyle="--", alpha=0.7,
-                       label=f"V_sat ~ {v_saturation:.0f}V (eta>0.9*eta_max)")
+            ax.axvline(
+                v_saturation,
+                color="green",
+                linestyle="--",
+                alpha=0.7,
+                label=f"V_sat ~ {v_saturation:.0f}V (eta>0.9*eta_max)",
+            )
 
         # Mark wall-climb danger zone
         ax.axhspan(0.85, 1.05, alpha=0.1, color="red", label="Wall-climb risk (eta>0.85)")
@@ -1009,18 +984,26 @@ class PINNEvaluator:
 
         v_th_str = f"{v_threshold}V" if v_threshold else "NOT REACHED"
         v_sat_str = f"{v_saturation}V" if v_saturation else "NOT REACHED"
-        print(f"\nSteady-State eta(V) Results:")
+        print("\nSteady-State eta(V) Results:")
         print(f"   V_threshold (eta>0.05): {v_th_str}")
         print(f"   V_saturation (eta>0.9*eta_max): {v_sat_str}")
         print(f"   eta at 30V: {etas[-1]:.4f}")
         print(f"Steady-state eta(V) plot saved: {output_path}")
 
-        return {"voltages": voltages, "etas": etas.tolist(),
-                "v_threshold": v_threshold, "v_saturation": v_saturation}
+        return {
+            "voltages": voltages,
+            "etas": etas.tolist(),
+            "v_threshold": v_threshold,
+            "v_saturation": v_saturation,
+        }
 
-    def detect_wall_climb(self, model: TwoPhasePINN, output_path: str,
-                           voltages: Optional[List[float]] = None,
-                           t_steady: float = 0.040):
+    def detect_wall_climb(
+        self,
+        model: TwoPhasePINN,
+        output_path: str,
+        voltages: list[float] | None = None,
+        t_steady: float = 0.040,
+    ):
         """Detect wall-climbing: oil film overflowing the pixel wall.
 
         Wall-climb = phi > 0 at the pixel boundary (r -> r_wall, z near Lz).
@@ -1079,19 +1062,30 @@ class PINNEvaluator:
 
         # --- Panel 2: Wall-top phi vs Voltage ---
         ax2 = axes[1]
-        ax2.plot(voltages, wall_phi_top, "rs-", linewidth=2, markersize=6, label="phi at wall top (z=Lz)")
-        ax2.plot(voltages, wall_phi_mid, "b^-", linewidth=2, markersize=6, label="phi at wall mid (z=Lz/2)")
+        ax2.plot(
+            voltages, wall_phi_top, "rs-", linewidth=2, markersize=6, label="phi at wall top (z=Lz)"
+        )
+        ax2.plot(
+            voltages,
+            wall_phi_mid,
+            "b^-",
+            linewidth=2,
+            markersize=6,
+            label="phi at wall mid (z=Lz/2)",
+        )
         ax2.axhline(0.1, color="orange", linestyle="--", alpha=0.7, label="Warning: phi>0.1")
-        ax2.axhline(0.3, color="red", linestyle="--", alpha=0.7, label="Critical: phi>0.3 (climbing!)")
+        ax2.axhline(
+            0.3, color="red", linestyle="--", alpha=0.7, label="Critical: phi>0.3 (climbing!)"
+        )
         ax2.set_xlabel("Voltage (V)")
         ax2.set_ylabel("phi at wall edge")
         ax2.set_title("Wall-Edge Phase vs Voltage")
         ax2.legend(fontsize=8)
         ax2.grid(True, alpha=0.3)
 
-        climb_voltages = [V for V, p in zip(voltages, wall_phi_top) if p > 0.3]
-        warn_voltages = [V for V, p in zip(voltages, wall_phi_top) if p > 0.1]
-        print(f"\nWall-Climb Detection Results:")
+        climb_voltages = [V for V, p in zip(voltages, wall_phi_top, strict=False) if p > 0.3]
+        warn_voltages = [V for V, p in zip(voltages, wall_phi_top, strict=False) if p > 0.1]
+        print("\nWall-Climb Detection Results:")
         print(f"   Wall-top phi>0.1 (warning) at: {warn_voltages}V")
         print(f"   Wall-top phi>0.3 (climbing!) at: {climb_voltages}V")
         if climb_voltages:
@@ -1119,7 +1113,13 @@ class PINNEvaluator:
 
             ax3.plot(x_arr * 1e6, phi_radial, label=f"{V}V", linewidth=2)
 
-        ax3.axhline(self.aperture_phi0, color="k", linestyle=":", alpha=0.4, label=f"phi0={self.aperture_phi0}")
+        ax3.axhline(
+            self.aperture_phi0,
+            color="k",
+            linestyle=":",
+            alpha=0.4,
+            label=f"phi0={self.aperture_phi0}",
+        )
         ax3.set_xlabel("x (um)")
         ax3.set_ylabel("phi at z=0")
         ax3.set_title("Radial Phase Profile at Substrate")
@@ -1134,10 +1134,14 @@ class PINNEvaluator:
 
         return results
 
-    def find_critical_voltage(self, model: TwoPhasePINN, output_path: str,
-                               V_range: Tuple[float, float] = (0, 35),
-                               V_step: float = 1.0,
-                               t_steady: float = 0.040):
+    def find_critical_voltage(
+        self,
+        model: TwoPhasePINN,
+        output_path: str,
+        V_range: tuple[float, float] = (0, 35),
+        V_step: float = 1.0,
+        t_steady: float = 0.040,
+    ):
         """Find critical voltages: V_open (starts to open), V_full (fully open), V_climb (oil climbs wall).
 
         These are the three key voltages for an EWD pixel:
@@ -1152,7 +1156,7 @@ class PINNEvaluator:
         etas = []
         wall_phis = []
 
-        print(f"\nCritical Voltage Scan:")
+        print("\nCritical Voltage Scan:")
         print(f"   Scanning V = {V_range[0]:.0f} -> {V_range[1]:.0f}V, step = {V_step:.0f}V")
 
         for V in voltages:
@@ -1165,7 +1169,7 @@ class PINNEvaluator:
                 phi_wall = float(out[0, 4].cpu().numpy())
             wall_phis.append(phi_wall)
 
-            if V % 5 < V_step + 0.01:
+            if V_step + 0.01 > V % 5:
                 print(f"   V={V:5.1f}V  eta={eta:.4f}  phi_wall={phi_wall:.4f}")
 
         etas = np.array(etas)
@@ -1175,14 +1179,14 @@ class PINNEvaluator:
         V_full = None
         V_climb = None
 
-        for V, eta_val in zip(voltages, etas):
+        for V, eta_val in zip(voltages, etas, strict=False):
             if eta_val > 0.02 and V_open is None:
                 V_open = V
             if eta_val > 0.80 and V_full is None:
                 V_full = V
                 break
 
-        for V, phi_val in zip(voltages, wall_phis):
+        for V, phi_val in zip(voltages, wall_phis, strict=False):
             if phi_val > 0.3 and V_climb is None:
                 V_climb = V
                 break
@@ -1193,11 +1197,17 @@ class PINNEvaluator:
         ax1.axhline(0.02, color="gray", linestyle=":", alpha=0.5, label="eta=0.02 (open threshold)")
         ax1.axhline(0.80, color="gray", linestyle="--", alpha=0.5, label="eta=0.80 (full open)")
         if V_open is not None:
-            ax1.axvline(V_open, color="green", linestyle="-.", alpha=0.7, label=f"V_open ~ {V_open:.0f}V")
+            ax1.axvline(
+                V_open, color="green", linestyle="-.", alpha=0.7, label=f"V_open ~ {V_open:.0f}V"
+            )
         if V_full is not None:
-            ax1.axvline(V_full, color="blue", linestyle="-.", alpha=0.7, label=f"V_full ~ {V_full:.0f}V")
+            ax1.axvline(
+                V_full, color="blue", linestyle="-.", alpha=0.7, label=f"V_full ~ {V_full:.0f}V"
+            )
         if V_climb is not None:
-            ax1.axvline(V_climb, color="red", linestyle="-.", alpha=0.7, label=f"V_climb ~ {V_climb:.0f}V")
+            ax1.axvline(
+                V_climb, color="red", linestyle="-.", alpha=0.7, label=f"V_climb ~ {V_climb:.0f}V"
+            )
         ax1.set_ylabel("Aperture Ratio eta")
         ax1.set_title("Critical Voltage Analysis")
         ax1.legend(fontsize=8)
@@ -1208,7 +1218,9 @@ class PINNEvaluator:
         ax2.axhline(0.1, color="orange", linestyle="--", alpha=0.7, label="Warning (phi>0.1)")
         ax2.axhline(0.3, color="red", linestyle="--", alpha=0.7, label="Climbing! (phi>0.3)")
         if V_climb is not None:
-            ax2.axvline(V_climb, color="red", linestyle="-.", alpha=0.7, label=f"V_climb ~ {V_climb:.0f}V")
+            ax2.axvline(
+                V_climb, color="red", linestyle="-.", alpha=0.7, label=f"V_climb ~ {V_climb:.0f}V"
+            )
         ax2.set_xlabel("Voltage (V)")
         ax2.set_ylabel("Wall-Top Phase phi")
         ax2.legend(fontsize=8)
@@ -1222,16 +1234,20 @@ class PINNEvaluator:
         v_open_str = f"{V_open:.1f}V" if V_open is not None else "NOT REACHED"
         v_full_str = f"{V_full:.1f}V" if V_full is not None else "NOT REACHED"
         v_climb_str = f"{V_climb:.1f}V" if V_climb is not None else "NO CLIMB"
-        print(f"\nCritical Voltage Results:")
+        print("\nCritical Voltage Results:")
         print(f"   V_open  (eta>0.02): {v_open_str}")
         print(f"   V_full  (eta>0.80): {v_full_str}")
         print(f"   V_climb (phi_wall>0.3): {v_climb_str}")
         print(f"Critical voltage plot saved: {output_path}")
 
-        return {"V_open": V_open, "V_full": V_full, "V_climb": V_climb,
-                "voltages": voltages.tolist(), "etas": etas.tolist(),
-                "wall_phis": wall_phis.tolist()}
-
+        return {
+            "V_open": V_open,
+            "V_full": V_full,
+            "V_climb": V_climb,
+            "voltages": voltages.tolist(),
+            "etas": etas.tolist(),
+            "wall_phis": wall_phis.tolist(),
+        }
 
     # =============================================================================
     # Feature: Statistical Significance Test (Best vs Final Model)
@@ -1242,7 +1258,7 @@ class PINNEvaluator:
         model: TwoPhasePINN,
         V_to: float,
         t_since: float,
-        V_from: Optional[float] = None,
+        V_from: float | None = None,
         n_samples: int = 100,
     ) -> np.ndarray:
         """
@@ -1289,8 +1305,8 @@ class PINNEvaluator:
         model1: TwoPhasePINN,
         model2: TwoPhasePINN,
         output_path: str,
-        test_voltages: List[float] = None,
-    ) -> Dict[str, Any]:
+        test_voltages: list[float] = None,
+    ) -> dict[str, Any]:
         """
         Statistical comparison between two models (e.g., best vs final).
 
@@ -1340,9 +1356,7 @@ class PINNEvaluator:
 
             # Cohen's d effect size
             pooled_std = np.sqrt((np.std(eta1) ** 2 + np.std(eta2) ** 2) / 2)
-            cohens_d = (
-                (np.mean(eta1) - np.mean(eta2)) / pooled_std if pooled_std > 0 else 0
-            )
+            cohens_d = (np.mean(eta1) - np.mean(eta2)) / pooled_std if pooled_std > 0 else 0
 
             results["voltages"].append(
                 {
@@ -1376,11 +1390,7 @@ class PINNEvaluator:
 
         t_stat, p_value = scipy_stats.ttest_rel(all_eta1, all_eta2)
         pooled_std = np.sqrt((np.std(all_eta1) ** 2 + np.std(all_eta2) ** 2) / 2)
-        cohens_d = (
-            (np.mean(all_eta1) - np.mean(all_eta2)) / pooled_std
-            if pooled_std > 0
-            else 0
-        )
+        cohens_d = (np.mean(all_eta1) - np.mean(all_eta2)) / pooled_std if pooled_std > 0 else 0
 
         results["summary"] = {
             "overall_t_statistic": float(t_stat),
@@ -1449,9 +1459,7 @@ class PINNEvaluator:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Unified PINN Evaluation & Visualization Tool"
-    )
+    parser = argparse.ArgumentParser(description="Unified PINN Evaluation & Visualization Tool")
     parser.add_argument(
         "model_dir",
         type=str,
@@ -1460,9 +1468,7 @@ def main():
         help="Path to model directory (e.g., outputs_pinn_...)",
     )
     parser.add_argument("--compare", action="store_true", help="Compare last 2 models")
-    parser.add_argument(
-        "--res", type=int, default=64, help="Spatial resolution for plots"
-    )
+    parser.add_argument("--res", type=int, default=64, help="Spatial resolution for plots")
     parser.add_argument(
         "--ckpt",
         type=str,
@@ -1507,9 +1513,7 @@ def main():
 
         if model1 and model2:
             output_path = os.path.join(args.model_dir, "statistical_comparison.png")
-            results = evaluator.compare_models_statistically(
-                model1, model2, output_path
-            )
+            results = evaluator.compare_models_statistically(model1, model2, output_path)
             print(f"\n✅ Statistical test complete. Results saved to {output_path}")
 
     elif args.compare:
@@ -1587,21 +1591,15 @@ def main():
                 evaluator.plot_dashboard(model, out, model_name=model_label)
 
                 # 2. Phi Grid Evolution
-                grid_out = os.path.join(
-                    args.model_dir, f"phi_grid_evolution_{suffix}.png"
-                )
+                grid_out = os.path.join(args.model_dir, f"phi_grid_evolution_{suffix}.png")
                 evaluator.plot_phi_grid(model, grid_out)
 
                 # 3. 3D Interface
-                interface_out = os.path.join(
-                    args.model_dir, f"interface_3d_steady_{suffix}.png"
-                )
+                interface_out = os.path.join(args.model_dir, f"interface_3d_steady_{suffix}.png")
                 evaluator.plot_interface_3d(model, interface_out, 30.0, 0.02, 30.0)
 
                 # 4. Dynamic Response Curves (0-50ms)
-                curves_out = os.path.join(
-                    args.model_dir, f"dynamic_curves_{suffix}.png"
-                )
+                curves_out = os.path.join(args.model_dir, f"dynamic_curves_{suffix}.png")
                 evaluator.plot_dynamic_response_curves(model, curves_out)
 
                 # 5. Response Time Stats
@@ -1609,9 +1607,7 @@ def main():
                 evaluator.calculate_response_times(model, stats_out)
 
                 # 6. Mass Conservation
-                mass_out = os.path.join(
-                    args.model_dir, f"mass_conservation_{suffix}.png"
-                )
+                mass_out = os.path.join(args.model_dir, f"mass_conservation_{suffix}.png")
                 evaluator.plot_mass_conservation(model, mass_out)
 
                 # 7b. Steady-State eta(V) Curve

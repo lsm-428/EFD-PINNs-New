@@ -16,7 +16,7 @@ def verify_weights():
     """验证权重配置"""
 
     # 加载配置文件
-    with open("/home/scnu/Gitee/EFD3D/config/v4.5-standard.json", "r") as f:
+    with open("/home/scnu/Gitee/EFD3D/config/v4.5-standard.json") as f:
         config = json.load(f)
 
     print("=" * 60)

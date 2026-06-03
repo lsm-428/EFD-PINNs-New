@@ -14,14 +14,13 @@
 日期: 2026-06-01
 """
 
-import ast
 import argparse
+import ast
 import json
 import os
+from pathlib import Path
 import subprocess
 import sys
-from collections import defaultdict
-from pathlib import Path
 from typing import Any
 
 # 项目根目录
@@ -139,6 +138,7 @@ def get_changed_files(diff_target: str = "HEAD~1") -> list:
             capture_output=True,
             text=True,
             cwd=PROJECT_ROOT,
+            check=False,
         )
         if result.returncode != 0:
             return []
@@ -161,7 +161,7 @@ def run_ruff_check(fix: bool = False) -> dict:
     if fix:
         cmd.append("--fix")
 
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=PROJECT_ROOT)
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=PROJECT_ROOT, check=False)
     return {
         "returncode": result.returncode,
         "stdout": result.stdout,
@@ -176,7 +176,7 @@ def run_ruff_format_check() -> dict:
         {"returncode": int, "stdout": str, "stderr": str}
     """
     cmd = ["uv", "run", "ruff", "format", "--check", str(SRC_DIR), str(TESTS_DIR)]
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=PROJECT_ROOT)
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=PROJECT_ROOT, check=False)
     return {
         "returncode": result.returncode,
         "stdout": result.stdout,
@@ -193,7 +193,9 @@ def run_tests() -> dict:
     cmd = ["uv", "run", "pytest", "-x", "-q", "--tb=short", str(TESTS_DIR)]
     env = os.environ.copy()
     env["PYTHONPATH"] = str(PROJECT_ROOT)
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=PROJECT_ROOT, env=env)
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, cwd=PROJECT_ROOT, env=env, check=False
+    )
     return {
         "returncode": result.returncode,
         "stdout": result.stdout,
@@ -209,7 +211,7 @@ def generate_report(changed_only: bool = False, diff_target: str = "HEAD~1") -> 
     """
     report: dict[str, Any] = {
         "timestamp": subprocess.run(
-            ["date", "-Iseconds"], capture_output=True, text=True
+            ["date", "-Iseconds"], capture_output=True, text=True, check=False
         ).stdout.strip(),
         "sections": [],
     }
@@ -218,16 +220,16 @@ def generate_report(changed_only: bool = False, diff_target: str = "HEAD~1") -> 
     if changed_only:
         files = [PROJECT_ROOT / f for f in get_changed_files(diff_target)]
         if not files:
-            report["sections"].append({
-                "title": "Changed Files",
-                "status": "WARN",
-                "detail": "No changed Python files detected.",
-            })
+            report["sections"].append(
+                {
+                    "title": "Changed Files",
+                    "status": "WARN",
+                    "detail": "No changed Python files detected.",
+                }
+            )
             return report
     else:
-        files = sorted(
-            list(SRC_DIR.rglob("*.py")) + list(TESTS_DIR.rglob("*.py"))
-        )
+        files = sorted(list(SRC_DIR.rglob("*.py")) + list(TESTS_DIR.rglob("*.py")))
 
     # 1. Docstring 覆盖率
     total_public = 0
@@ -240,25 +242,31 @@ def generate_report(changed_only: bool = False, diff_target: str = "HEAD~1") -> 
         if stats["functions"]:
             doc_details.append(f"{f.relative_to(PROJECT_ROOT)}: {len(stats['functions'])} missing")
 
-    coverage = 100 if total_public == 0 else round(100 * (total_public - total_missing) / total_public, 1)
-    report["sections"].append({
-        "title": "Docstring Coverage",
-        "status": "PASS" if coverage >= 80 else "WARN" if coverage >= 50 else "FAIL",
-        "detail": f"{total_public - total_missing}/{total_public} ({coverage}%)",
-        "files": doc_details[:20],  # top 20
-    })
+    coverage = (
+        100 if total_public == 0 else round(100 * (total_public - total_missing) / total_public, 1)
+    )
+    report["sections"].append(
+        {
+            "title": "Docstring Coverage",
+            "status": "PASS" if coverage >= 80 else "WARN" if coverage >= 50 else "FAIL",
+            "detail": f"{total_public - total_missing}/{total_public} ({coverage}%)",
+            "files": doc_details[:20],  # top 20
+        }
+    )
 
     # 2. Print 语句检测
     print_found = []
     for f in files:
         print_found.extend(count_print_statements(f))
 
-    report["sections"].append({
-        "title": "Print Statements",
-        "status": "PASS" if len(print_found) == 0 else "FAIL",
-        "detail": f"Found {len(print_found)} remaining print() calls",
-        "instances": print_found,
-    })
+    report["sections"].append(
+        {
+            "title": "Print Statements",
+            "status": "PASS" if len(print_found) == 0 else "FAIL",
+            "detail": f"Found {len(print_found)} remaining print() calls",
+            "instances": print_found,
+        }
+    )
 
     # 3. 测试断言统计
     total_asserts = 0
@@ -271,12 +279,14 @@ def generate_report(changed_only: bool = False, diff_target: str = "HEAD~1") -> 
         if stats["test_functions"] > 0 and stats["assert_count"] == 0:
             empty_tests.append(f.name)
 
-    report["sections"].append({
-        "title": "Test Coverage",
-        "status": "PASS" if empty_tests == [] else "FAIL",
-        "detail": f"{total_asserts} asserts across {total_test_fns} test functions",
-        "empty_tests": empty_tests,
-    })
+    report["sections"].append(
+        {
+            "title": "Test Coverage",
+            "status": "PASS" if empty_tests == [] else "FAIL",
+            "detail": f"{total_asserts} asserts across {total_test_fns} test functions",
+            "empty_tests": empty_tests,
+        }
+    )
 
     # 4. 大文件 (>1000行)
     large_files = []
@@ -285,20 +295,24 @@ def generate_report(changed_only: bool = False, diff_target: str = "HEAD~1") -> 
         if lines > 1000:
             large_files.append(f"{f.relative_to(PROJECT_ROOT)} ({lines} lines)")
 
-    report["sections"].append({
-        "title": "Large Files (>1000 lines)",
-        "status": "PASS" if len(large_files) <= 3 else "WARN",
-        "detail": f"{len(large_files)} files exceed 1000 lines",
-        "files": large_files,
-    })
+    report["sections"].append(
+        {
+            "title": "Large Files (>1000 lines)",
+            "status": "PASS" if len(large_files) <= 3 else "WARN",
+            "detail": f"{len(large_files)} files exceed 1000 lines",
+            "files": large_files,
+        }
+    )
 
     # 5. Ruff 检查
     ruff = run_ruff_check(fix=False)
-    report["sections"].append({
-        "title": "Ruff Lint",
-        "status": "PASS" if ruff["returncode"] == 0 else "FAIL",
-        "detail": "No issues found" if ruff["returncode"] == 0 else ruff["stdout"][:500],
-    })
+    report["sections"].append(
+        {
+            "title": "Ruff Lint",
+            "status": "PASS" if ruff["returncode"] == 0 else "FAIL",
+            "detail": "No issues found" if ruff["returncode"] == 0 else ruff["stdout"][:500],
+        }
+    )
 
     return report
 
@@ -321,7 +335,7 @@ def print_report(report: dict) -> None:
 
         # 打印详情
         for key in ["files", "instances", "empty_tests"]:
-            if key in section and section[key]:
+            if section.get(key):
                 for item in section[key][:15]:
                     print(f"      {item}")
                 if len(section[key]) > 15:

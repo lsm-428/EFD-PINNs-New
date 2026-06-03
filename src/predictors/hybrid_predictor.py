@@ -166,15 +166,11 @@ class HybridPredictor:
                 "sigma": materials.get("sigma", self.params.get("sigma", 0.02505)),
                 "d": materials.get("dielectric_thickness", self.params["d"]),
                 # Teflon 疏水层参数
-                "epsilon_h": materials.get(
-                    "epsilon_hydrophobic", self.params["epsilon_h"]
-                ),
+                "epsilon_h": materials.get("epsilon_hydrophobic", self.params["epsilon_h"]),
                 "d_h": materials.get("hydrophobic_thickness", self.params["d_h"]),
                 # 动力学参数
                 "tau": dynamics.get("tau", self.params["tau"]),
-                "tau_onset": dynamics.get(
-                    "tau_onset", self.params.get("tau_onset", 0.0075)
-                ),
+                "tau_onset": dynamics.get("tau_onset", self.params.get("tau_onset", 0.0075)),
                 "tau_saturation": dynamics.get(
                     "tau_saturation", self.params.get("tau_saturation", 0.003)
                 ),
@@ -182,9 +178,7 @@ class HybridPredictor:
                     "tau_recovery_factor", self.params.get("tau_recovery_factor", 0.4)
                 ),
                 "zeta": dynamics.get("zeta", self.params["zeta"]),
-                "dynamic_order": dynamics.get(
-                    "dynamic_order", self.params.get("dynamic_order", 2)
-                ),
+                "dynamic_order": dynamics.get("dynamic_order", self.params.get("dynamic_order", 2)),
             }
         )
 
@@ -215,9 +209,7 @@ class HybridPredictor:
                 "sigma": materials.get("sigma", self.params.get("sigma", 0.02505)),
                 "d": materials.get("dielectric_thickness", self.params["d"]),
                 "tau": dynamics.get("tau", self.params["tau"]),
-                "tau_onset": dynamics.get(
-                    "tau_onset", self.params.get("tau_onset", 0.0075)
-                ),
+                "tau_onset": dynamics.get("tau_onset", self.params.get("tau_onset", 0.0075)),
                 "tau_saturation": dynamics.get(
                     "tau_saturation", self.params.get("tau_saturation", 0.003)
                 ),
@@ -225,9 +217,7 @@ class HybridPredictor:
                     "tau_recovery_factor", self.params.get("tau_recovery_factor", 0.4)
                 ),
                 "zeta": dynamics.get("zeta", self.params["zeta"]),
-                "dynamic_order": dynamics.get(
-                    "dynamic_order", self.params.get("dynamic_order", 2)
-                ),
+                "dynamic_order": dynamics.get("dynamic_order", self.params.get("dynamic_order", 2)),
             }
         )
 
@@ -269,10 +259,7 @@ class HybridPredictor:
             self.input_normalizer = DataNormalizer(method="standard")
             self.input_normalizer.load_state_dict(checkpoint["normalizer"])
 
-        if (
-            "output_normalizer" in checkpoint
-            and checkpoint["output_normalizer"] is not None
-        ):
+        if "output_normalizer" in checkpoint and checkpoint["output_normalizer"] is not None:
             self.output_normalizer = DataNormalizer(method="standard")
             self.output_normalizer.load_state_dict(checkpoint["output_normalizer"])
 
@@ -390,9 +377,7 @@ class HybridPredictor:
 
         # 恢复速度 = 驱动 τ × 0.4（恢复快于驱动）
         drive_tau = (
-            self._voltage_dependent_tau(V_from)
-            if V_from is not None
-            else self.params["tau"]
+            self._voltage_dependent_tau(V_from) if V_from is not None else self.params["tau"]
         )
         tau_recovery = drive_tau * self.params.get("tau_recovery_factor", 0.4)
 
@@ -423,9 +408,7 @@ class HybridPredictor:
 
         # 应用输入归一化
         if self.input_normalizer is not None:
-            features = self.input_normalizer.transform(
-                features.reshape(1, -1)
-            ).flatten()
+            features = self.input_normalizer.transform(features.reshape(1, -1)).flatten()
 
         # 模型推理
         with torch.no_grad():
@@ -541,9 +524,7 @@ class HybridPredictor:
         if voltage >= V_initial:
             # 升压：电润湿驱动，接触角渐变（二阶欠阻尼）
             t_since = time - t_step
-            return self.dynamic_response(
-                t_since, theta_start, theta_eq, V_to=voltage
-            )
+            return self.dynamic_response(t_since, theta_start, theta_eq, V_to=voltage)
         # 降压：接触角瞬间恢复到目标值
         # Young-Lippmann 是瞬态方程，电场消失 → 接触角立即回到本征值
         return theta_eq
@@ -580,9 +561,7 @@ class HybridPredictor:
                 theta[i] = theta_start
             else:
                 t_since = ti - t_step
-                theta[i] = self.dynamic_response(
-                    t_since, theta_start, theta_end, V_to=V_end
-                )
+                theta[i] = self.dynamic_response(t_since, theta_start, theta_end, V_to=V_end)
 
         return t, theta
 
@@ -641,9 +620,7 @@ class HybridPredictor:
             elif ti < t_fall:
                 # 升压阶段：电润湿驱动（水推油走）
                 t_since = ti - t_rise
-                theta[i] = self.dynamic_response(
-                    t_since, theta_low, theta_high, V_to=V_high
-                )
+                theta[i] = self.dynamic_response(t_since, theta_low, theta_high, V_to=V_high)
                 # 开口率随接触角变化
                 eta[i] = self._theta_to_aperture(np.array([theta[i]]))[0]
                 eta_at_fall = eta[i]  # 记录最后的开口率
@@ -743,17 +720,13 @@ class HybridPredictor:
                 from src.config import CONFIG_PATH
                 from src.models.aperture_model import EnhancedApertureModel
 
-                self._aperture_model = EnhancedApertureModel(
-                    config_path=str(CONFIG_PATH)
-                )
+                self._aperture_model = EnhancedApertureModel(config_path=str(CONFIG_PATH))
             except ImportError:
                 # 回退到简化映射
                 theta_0 = self.params["theta0"]
                 theta_min = self.params.get("theta_min", 60.0)
                 eta_max = self.params.get("eta_max", 0.85)
-                return np.clip(
-                    (theta_0 - theta) / (theta_0 - theta_min) * eta_max, 0, eta_max
-                )
+                return np.clip((theta_0 - theta) / (theta_0 - theta_min) * eta_max, 0, eta_max)
 
         model = self._aperture_model
         if np.isscalar(theta):
@@ -785,11 +758,7 @@ class HybridPredictor:
         if abs(theta_change) > 0.1:
             theta_90 = theta_initial - 0.9 * theta_change
             t_90_idx = np.where(theta[step_idx:] <= theta_90)[0]
-            t_90 = (
-                (t[step_idx + t_90_idx[0]] - t_step) * 1000
-                if len(t_90_idx) > 0
-                else np.nan
-            )
+            t_90 = (t[step_idx + t_90_idx[0]] - t_step) * 1000 if len(t_90_idx) > 0 else np.nan
         else:
             t_90 = np.nan
 
@@ -820,9 +789,7 @@ def demo():
     logger.info("=" * 60)
 
     # 创建预测器 (使用解析公式，从配置文件读取参数)
-    predictor = HybridPredictor(
-        config_path=str(CONFIG_PATH), use_model_for_steady_state=False
-    )
+    predictor = HybridPredictor(config_path=str(CONFIG_PATH), use_model_for_steady_state=False)
 
     # 显示动力学参数
     logger.info("\n动力学参数:")

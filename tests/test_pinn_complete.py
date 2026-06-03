@@ -91,9 +91,7 @@ def predict_phi(model, device, x, y, z, V_from, V_to, t_since) -> np.ndarray:
     return phi
 
 
-def compute_aperture(
-    model, device, V_from, V_to, t_since, n=50
-) -> tuple[float, np.ndarray]:
+def compute_aperture(model, device, V_from, V_to, t_since, n=50) -> tuple[float, np.ndarray]:
     """计算开口率"""
     Lx, Ly, h_ink = PHYSICS["Lx"], PHYSICS["Ly"], PHYSICS["h_ink"]
 
@@ -193,10 +191,7 @@ class PhysicsValidator:
         violations = []
         for V in [15, 20, 25, 30]:
             times = [0.002, 0.005, 0.008, 0.012, 0.015]
-            etas = [
-                compute_aperture(self.model, self.device, 0, V, t, n=30)[0]
-                for t in times
-            ]
+            etas = [compute_aperture(self.model, self.device, 0, V, t, n=30)[0] for t in times]
 
             for i in range(len(etas) - 1):
                 if etas[i + 1] < etas[i] - 0.02:  # 允许小波动
@@ -223,10 +218,7 @@ class PhysicsValidator:
         violations = []
         t = 0.015
         voltages = [5, 10, 15, 20, 25, 30]
-        etas = [
-            compute_aperture(self.model, self.device, 0, V, t, n=30)[0]
-            for V in voltages
-        ]
+        etas = [compute_aperture(self.model, self.device, 0, V, t, n=30)[0] for V in voltages]
 
         for i in range(len(etas) - 1):
             if etas[i + 1] < etas[i] - 0.02:
@@ -292,9 +284,7 @@ class PhysicsValidator:
             phi_target = np.zeros((n, n))
             for i in range(n):
                 for j in range(n):
-                    phi_target[i, j] = data_gen.target_phi_3d(
-                        x[j], y[i], z, t, V_to, V_prev=V_from
-                    )
+                    phi_target[i, j] = data_gen.target_phi_3d(x[j], y[i], z, t, V_to, V_prev=V_from)
 
             # 计算误差
             mae = np.mean(np.abs(phi_pinn - phi_target))
@@ -308,9 +298,7 @@ class PhysicsValidator:
         avg_mse = np.mean(all_mse)
 
         passed = avg_mae < 0.15
-        print(
-            f"  {'✅' if passed else '⚠️'} 平均 MAE: {avg_mae:.4f}, MSE: {avg_mse:.6f}"
-        )
+        print(f"  {'✅' if passed else '⚠️'} 平均 MAE: {avg_mae:.4f}, MSE: {avg_mse:.6f}")
         for d in details:
             print(f"      {d['case']}: MAE={d['mae']:.4f}, MSE={d['mse']:.6f}")
 
@@ -395,9 +383,7 @@ class AnalyticalComparator:
             eta_pinn, _ = compute_aperture(self.model, self.device, 0, V, t, n=40)
             eta_anal = self._analytical_aperture(V, t)
             error = abs(eta_pinn - eta_anal)
-            errors.append(
-                {"V": V, "pinn": eta_pinn, "analytical": eta_anal, "error": error}
-            )
+            errors.append({"V": V, "pinn": eta_pinn, "analytical": eta_anal, "error": error})
 
         mae = np.mean([e["error"] for e in errors])
         passed = mae < 0.15
@@ -418,9 +404,7 @@ class AnalyticalComparator:
             eta_pinn, _ = compute_aperture(self.model, self.device, 0, V, t, n=40)
             eta_anal = self._analytical_aperture(V, t)
             error = abs(eta_pinn - eta_anal)
-            errors.append(
-                {"t": t, "pinn": eta_pinn, "analytical": eta_anal, "error": error}
-            )
+            errors.append({"t": t, "pinn": eta_pinn, "analytical": eta_anal, "error": error})
 
         mae = np.mean([e["error"] for e in errors])
         passed = mae < 0.15
@@ -450,9 +434,7 @@ class AnalyticalComparator:
         final_low = etas[-1] < 0.1
 
         passed = decreasing and final_low
-        print(
-            f"  {'✅' if passed else '⚠️'} 降压恢复: η 从 {etas[0]:.3f} 降到 {etas[-1]:.3f}"
-        )
+        print(f"  {'✅' if passed else '⚠️'} 降压恢复: η 从 {etas[0]:.3f} 降到 {etas[-1]:.3f}")
 
         self.results["recovery"] = {"passed": passed, "etas": etas, "times": times}
         return self.results["recovery"]
@@ -645,9 +627,7 @@ class RobustnessValidator:
 
         errors = []
         for x, y, name in boundary_points:
-            phi = predict_phi(
-                self.model, self.device, [x], [y], [h_ink / 2], 0, 30, 0.015
-            )
+            phi = predict_phi(self.model, self.device, [x], [y], [h_ink / 2], 0, 30, 0.015)
 
             if not (0 <= phi[0] <= 1):
                 errors.append({"point": name, "phi": phi[0]})
@@ -680,9 +660,7 @@ class RobustnessValidator:
             in_range = (eta_low - 0.05) <= eta <= (eta_high + 0.05)
 
             if not in_range:
-                errors.append(
-                    {"V": V, "eta": eta, "eta_low": eta_low, "eta_high": eta_high}
-                )
+                errors.append({"V": V, "eta": eta, "eta_low": eta_low, "eta_high": eta_high})
 
         passed = len(errors) <= 1  # 允许1个异常
         print(f"  {'✅' if passed else '⚠️'} 中间电压插值: {5 - len(errors)}/5 通过")
@@ -828,10 +806,7 @@ def generate_report(model, device, output_dir: str, results: dict):
 
     if "robustness" in results:
         categories = list(results["robustness"].keys())
-        values = [
-            1 if results["robustness"][c].get("passed", False) else 0
-            for c in categories
-        ]
+        values = [1 if results["robustness"][c].get("passed", False) else 0 for c in categories]
 
         angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
         values += values[:1]
@@ -945,12 +920,8 @@ def run_complete_test(model_dir: str) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(description="PINN 模型完整测试套件")
-    parser.add_argument(
-        "model_dir", nargs="?", default=None, help="模型目录（默认自动查找最新）"
-    )
-    parser.add_argument(
-        "--all", action="store_true", help="测试所有 outputs_pinn_* 目录"
-    )
+    parser.add_argument("model_dir", nargs="?", default=None, help="模型目录（默认自动查找最新）")
+    parser.add_argument("--all", action="store_true", help="测试所有 outputs_pinn_* 目录")
 
     args = parser.parse_args()
 
@@ -1008,9 +979,9 @@ if __name__ == "__main__":
 # ============================================================================
 
 
-
 class _MockModel:
     """模拟 PINN 模型，返回合理的伪输出"""
+
     def __init__(self, mode="flat"):
         self.mode = mode
 
@@ -1059,8 +1030,7 @@ def test_physics_validator_mock():
     for category, tests in results.items():
         assert isinstance(tests, dict), f"{category} should be dict"
         for test_name, test_result in tests.items():
-            assert test_result is not None, \
-                f"{category}.{test_name} result should not be None"
+            assert test_result is not None, f"{category}.{test_name} result should not be None"
 
 
 def test_analytical_comparator_mock():
@@ -1113,9 +1083,14 @@ def test_phi_bounds():
     Lx = PHYSICS["Lx"]
 
     phi = predict_phi(
-        mock, torch.device("cpu"),
-        np.array([Lx / 2]), np.array([Lx / 2]),
-        np.array([1e-6]), 0, 30, 0.015
+        mock,
+        torch.device("cpu"),
+        np.array([Lx / 2]),
+        np.array([Lx / 2]),
+        np.array([1e-6]),
+        0,
+        30,
+        0.015,
     )
 
     assert phi.shape == (1,)

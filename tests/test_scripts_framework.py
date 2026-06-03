@@ -61,7 +61,7 @@ class ScriptTestHelper:
         """
         cmd = [sys.executable, str(self.script_path)] + args
         result = subprocess.run(
-            cmd, capture_output=capture_output, text=True, cwd=os.getcwd()
+            cmd, capture_output=capture_output, text=True, cwd=os.getcwd(), check=False
         )
         return result
 
@@ -381,9 +381,7 @@ class IntegrationTestCase:
         """
         for dir_name in expected_dirs:
             dir_path = os.path.join(base_path, dir_name)
-            assert os.path.isdir(
-                dir_path
-            ), f"Expected directory {dir_path} does not exist"
+            assert os.path.isdir(dir_path), f"Expected directory {dir_path} does not exist"
 
     def assert_output_files(self, expected_files: list[str]):
         """
@@ -393,9 +391,7 @@ class IntegrationTestCase:
             expected_files: List of expected file paths
         """
         for filepath in expected_files:
-            assert os.path.exists(
-                filepath
-            ), f"Expected output file {filepath} does not exist"
+            assert os.path.exists(filepath), f"Expected output file {filepath} does not exist"
 
     def assert_plot_saved(self, filepath: str):
         """
@@ -484,9 +480,7 @@ class ScriptsTestConfig:
 class PerformanceTestCase:
     """Base class for performance testing"""
 
-    def measure_execution_time(
-        self, func: Callable, *args, **kwargs
-    ) -> tuple[float, Any]:
+    def measure_execution_time(self, func: Callable, *args, **kwargs) -> tuple[float, Any]:
         """
         Measure function execution time
 
@@ -505,9 +499,7 @@ class PerformanceTestCase:
         end_time = time.time()
         return end_time - start_time, result
 
-    def assert_execution_time_under(
-        self, func: Callable, max_seconds: float, *args, **kwargs
-    ):
+    def assert_execution_time_under(self, func: Callable, max_seconds: float, *args, **kwargs):
         """
         Assert function completes within time limit
 
@@ -518,9 +510,7 @@ class PerformanceTestCase:
             **kwargs: Keyword arguments
         """
         elapsed, _ = self.measure_execution_time(func, *args, **kwargs)
-        assert (
-            elapsed < max_seconds
-        ), f"Function took {elapsed:.2f}s, expected < {max_seconds}s"
+        assert elapsed < max_seconds, f"Function took {elapsed:.2f}s, expected < {max_seconds}s"
 
 
 # ============================================================================

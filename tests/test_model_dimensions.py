@@ -26,9 +26,7 @@ try:
 except ImportError:
     # 如果导入失败，定义一个简单的模型类用于测试
     class OptimizedEWPINN(nn.Module):
-        def __init__(
-            self, input_dim, hidden_dims, output_dim, activation="relu", config=None
-        ):
+        def __init__(self, input_dim, hidden_dims, output_dim, activation="relu", config=None):
             super().__init__()
             self.input_dim = input_dim
             self.output_dim = output_dim
@@ -57,9 +55,7 @@ class TestModelDimensionConsistency(unittest.TestCase):
         layer_width=st.integers(min_value=8, max_value=128),
     )
     @settings(max_examples=50, deadline=None)
-    def test_input_dimension_consistency(
-        self, input_dim, output_dim, num_layers, layer_width
-    ):
+    def test_input_dimension_consistency(self, input_dim, output_dim, num_layers, layer_width):
         """
         Property 1: 模型输入维度一致性
         *For any* valid configuration file, when the model is created,
@@ -97,9 +93,7 @@ class TestModelDimensionConsistency(unittest.TestCase):
         layer_width=st.integers(min_value=8, max_value=128),
     )
     @settings(max_examples=50, deadline=None)
-    def test_output_dimension_consistency(
-        self, input_dim, output_dim, num_layers, layer_width
-    ):
+    def test_output_dimension_consistency(self, input_dim, output_dim, num_layers, layer_width):
         """
         Property 2: 模型输出维度一致性
         *For any* valid configuration file, when the model is created,
@@ -133,9 +127,7 @@ class TestModelDimensionConsistency(unittest.TestCase):
     @given(
         input_dim=st.integers(min_value=1, max_value=100),
         output_dim=st.integers(min_value=1, max_value=50),
-        batch_size=st.integers(
-            min_value=2, max_value=32
-        ),  # BatchNorm 需要 batch_size > 1
+        batch_size=st.integers(min_value=2, max_value=32),  # BatchNorm 需要 batch_size > 1
     )
     @settings(max_examples=30, deadline=None)
     def test_forward_pass_dimensions(self, input_dim, output_dim, batch_size):
@@ -221,13 +213,9 @@ class TestConfigToModelConsistency(unittest.TestCase):
             output_dim = model_config.get("output_dim", 1)
             hidden_dims = model_config.get(
                 "hidden_dims",
-                model_config.get(
-                    "hidden_layers", model_config.get("隐藏层维度", [64, 64])
-                ),
+                model_config.get("hidden_layers", model_config.get("隐藏层维度", [64, 64])),
             )
-            activation = model_config.get(
-                "activation", model_config.get("激活函数", "relu")
-            )
+            activation = model_config.get("activation", model_config.get("激活函数", "relu"))
 
             # 创建模型
             model = OptimizedEWPINN(
@@ -252,9 +240,7 @@ class TestConfigToModelConsistency(unittest.TestCase):
             with torch.no_grad():
                 y = model(x)
 
-            self.assertEqual(
-                y.shape[1], output_dim, f"Config {config_path}: output shape mismatch"
-            )
+            self.assertEqual(y.shape[1], output_dim, f"Config {config_path}: output shape mismatch")
 
 
 if __name__ == "__main__":

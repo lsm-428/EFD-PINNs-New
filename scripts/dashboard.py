@@ -1,21 +1,22 @@
-import streamlit as st
-import numpy as np
-import matplotlib.pyplot as plt
+from pathlib import Path
 import sys
 import time
-from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+import streamlit as st
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.dashboard.inference import PINNInferenceEngine
-from src.dashboard.plotter import FlowFieldPlotter
-from src.dashboard.training_output_analyzer import TrainingOutputAnalyzer
 from src.dashboard.benchmark_panel import render_benchmark_tab
 from src.dashboard.compare_panel import render_compare_tab
+from src.dashboard.inference import PINNInferenceEngine
+from src.dashboard.plotter import FlowFieldPlotter
 from src.dashboard.stage1_panel import render_stage1_tab
+from src.dashboard.training_output_analyzer import TrainingOutputAnalyzer
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -75,12 +76,9 @@ if not model_files:
     st.stop()
 
 model_options = {
-    f"{m.parent.name}/{m.name} ({time.ctime(m.stat().st_mtime)})": str(m)
-    for m in model_files
+    f"{m.parent.name}/{m.name} ({time.ctime(m.stat().st_mtime)})": str(m) for m in model_files
 }
-selected_model_key = st.sidebar.selectbox(
-    "Select Checkpoint", options=list(model_options.keys())
-)
+selected_model_key = st.sidebar.selectbox("Select Checkpoint", options=list(model_options.keys()))
 model_path = model_options[selected_model_key]
 
 # 2. Compute Device
@@ -159,9 +157,7 @@ with tabs[0]:
         st.markdown("#### Driving Signal")
 
         # Mode Selection
-        drive_mode = st.radio(
-            "Drive Mode", ["Step Response", "Custom Waveform"], index=0
-        )
+        drive_mode = st.radio("Drive Mode", ["Step Response", "Custom Waveform"], index=0)
 
         v_limit = float(engine.V_max_train)
 
@@ -174,20 +170,12 @@ with tabs[0]:
             e_v_from, e_v_to, e_t = v_from, v_to, t_ms / 1000.0
 
         else:  # Custom Waveform
-            wf_type_2d = st.selectbox(
-                "Waveform", ["Square Pulse", "Sine Wave"], key="wf_2d"
-            )
+            wf_type_2d = st.selectbox("Waveform", ["Square Pulse", "Sine Wave"], key="wf_2d")
 
             if wf_type_2d == "Square Pulse":
-                amp = st.number_input(
-                    "Amplitude (V)", -v_limit, v_limit, 30.0, key="amp_2d"
-                )
-                width = st.number_input(
-                    "Pulse Width (ms)", 0.1, 100.0, 10.0, key="wd_2d"
-                )
-                t_ms = st.slider(
-                    "Global Time (ms)", 0.0, width * 3, width / 2, step=0.1
-                )
+                amp = st.number_input("Amplitude (V)", -v_limit, v_limit, 30.0, key="amp_2d")
+                width = st.number_input("Pulse Width (ms)", 0.1, 100.0, 10.0, key="wd_2d")
+                t_ms = st.slider("Global Time (ms)", 0.0, width * 3, width / 2, step=0.1)
 
                 # Logic to map Global Time -> Local Step
                 # If t < width: Step 0->Amp, local_t = t
@@ -203,12 +191,8 @@ with tabs[0]:
 
             elif wf_type_2d == "Sine Wave":
                 freq = st.number_input("Freq (Hz)", 1, 200, 10, key="fr_2d")
-                amp = st.number_input(
-                    "Amplitude (V)", 0.0, v_limit, 30.0, key="sin_amp_2d"
-                )
-                t_ms = st.slider(
-                    "Global Time (ms)", 0.0, 1000.0 / freq * 2, 0.0, step=0.1
-                )
+                amp = st.number_input("Amplitude (V)", 0.0, v_limit, 30.0, key="sin_amp_2d")
+                t_ms = st.slider("Global Time (ms)", 0.0, 1000.0 / freq * 2, 0.0, step=0.1)
 
                 # Quasi-static approx
                 # V_inst = amp * sin(2*pi*f*t)
@@ -270,9 +254,7 @@ with tabs[0]:
                 )  # Approx
 
                 # Plotting
-                fig = plotter.create_dashboard_figure(
-                    data, show_electric_field=show_pot
-                )
+                fig = plotter.create_dashboard_figure(data, show_electric_field=show_pot)
                 st.pyplot(fig)
 
                 # Export Data
@@ -332,9 +314,7 @@ with tabs[1]:
                 voltage_from=v3_f,
                 voltage_to=v3_t,
                 resolution_xy=res_3d,
-                resolution_z=int(
-                    res_3d * (engine.Lz / engine.Lx)
-                ),  # Scale Z res proportionally
+                resolution_z=int(res_3d * (engine.Lz / engine.Lx)),  # Scale Z res proportionally
             )
 
             fig_3d = plotter.create_3d_isosurface_figure(vol_data, isovalue=iso_val)
@@ -369,9 +349,7 @@ with tabs[2]:
             step_v = st.number_input("Step Amplitude (V)", -v_limit, v_limit, 30.0)
             delay = st.number_input("Delay (ms)", 0.0, duration, 0.1)
             func = lambda t: (
-                (0.0, step_v, t - delay / 1000.0)
-                if t > delay / 1000.0
-                else (0.0, 0.0, 0.0)
+                (0.0, step_v, t - delay / 1000.0) if t > delay / 1000.0 else (0.0, 0.0, 0.0)
             )
             preview_y = lambda t_arr: np.where(t_arr > delay / 1000.0, step_v, 0.0)
 
@@ -385,11 +363,10 @@ with tabs[2]:
                 if start <= t_s <= start + width:
                     # In pulse: Transition from 0 to Amp
                     return (0.0, amp, t - start / 1000.0)
-                elif t_s > start + width:
+                if t_s > start + width:
                     # After pulse: Transition from Amp to 0
                     return (amp, 0.0, t - (start + width) / 1000.0)
-                else:
-                    return (0.0, 0.0, 0.0)
+                return (0.0, 0.0, 0.0)
 
             func = pulse_func
             preview_y = lambda t_arr: np.where(
@@ -400,9 +377,7 @@ with tabs[2]:
             freq = st.number_input("Frequency (Hz)", 10, 1000, 100)
             amp = st.number_input("Amplitude (V)", 0.0, v_limit, 30.0)
             offset = st.number_input("DC Offset (V)", -v_limit, v_limit, 0.0)
-            st.info(
-                "Uses quasi-static approximation (Instantaneous Voltage -> Equilibrium)"
-            )
+            st.info("Uses quasi-static approximation (Instantaneous Voltage -> Equilibrium)")
             func = lambda t: (
                 0.0,
                 offset + amp * np.sin(2 * np.pi * freq * t),
@@ -411,9 +386,7 @@ with tabs[2]:
             preview_y = lambda t_arr: offset + amp * np.sin(2 * np.pi * freq * t_arr)
 
         else:  # Ramp or Custom
-            st.warning(
-                "Custom expressions not yet fully implemented, using linear ramp default."
-            )
+            st.warning("Custom expressions not yet fully implemented, using linear ramp default.")
             slope = st.number_input("Slope (V/ms)", 0.0, 100.0, 10.0)
             func = lambda t: (0.0, min(v_limit, slope * t * 1000), t)
             preview_y = lambda t_arr: np.minimum(v_limit, slope * t_arr * 1000)
@@ -456,9 +429,7 @@ with tabs[2]:
                 ax2 = ax1.twinx()
                 color = "tab:blue"
                 ax2.set_ylabel("Aperture Ratio (η)", color=color)
-                ax2.plot(
-                    traj_data["t"] * 1000, traj_data["eta"], color=color, linewidth=2.5
-                )
+                ax2.plot(traj_data["t"] * 1000, traj_data["eta"], color=color, linewidth=2.5)
                 ax2.tick_params(axis="y", labelcolor=color)
                 ax2.set_ylim(-0.1, 1.1)
 
@@ -493,9 +464,7 @@ with tabs[3]:
 
     with d2:
         st.markdown("#### PDE Residuals (Loss Landscape)")
-        st.write(
-            "Visualizes where the model struggles to satisfy Navier-Stokes equations."
-        )
+        st.write("Visualizes where the model struggles to satisfy Navier-Stokes equations.")
 
         if st.button("Compute Residual Map"):
             with st.spinner("Evaluating derivatives..."):
@@ -534,9 +503,7 @@ with tabs[3]:
                     fig_res.colorbar(im2, ax=axes[1])
 
                 st.pyplot(fig_res)
-                st.caption(
-                    "Red/Blue indicates high error in satisfying physics equations."
-                )
+                st.caption("Red/Blue indicates high error in satisfying physics equations.")
 
 # ==============================================================================
 # TAB 5: Training Output Analyzer (训练输出分析)

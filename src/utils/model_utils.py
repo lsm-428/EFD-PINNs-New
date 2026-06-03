@@ -39,17 +39,13 @@ def extract_predictions(raw_output) -> torch.Tensor:
             raise ValueError("'main_predictions' 存在但不是 torch.Tensor")
 
         # 其次尝试 'prediction' 键（兼容旧名）
-        if "prediction" in raw_output and isinstance(
-            raw_output["prediction"], torch.Tensor
-        ):
+        if "prediction" in raw_output and isinstance(raw_output["prediction"], torch.Tensor):
             return raw_output["prediction"]
 
         # 再尝试任何第一个张量类型的值
         for k, v in raw_output.items():
             if isinstance(v, torch.Tensor):
-                logger.warning(
-                    f"未找到 'main_predictions'，使用字典中第一个张量键: {k}"
-                )
+                logger.warning(f"未找到 'main_predictions'，使用字典中第一个张量键: {k}")
                 return v
 
     raise ValueError(f"无法从模型输出中提取预测张量，类型={type(raw_output)}")

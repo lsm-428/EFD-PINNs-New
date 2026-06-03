@@ -13,9 +13,7 @@ import pandas as pd
 import streamlit as st
 
 
-def export_dataframe_to_csv(
-    df: pd.DataFrame, filename: str, output_dir: str = "exports"
-) -> str:
+def export_dataframe_to_csv(df: pd.DataFrame, filename: str, output_dir: str = "exports") -> str:
     """导出 DataFrame 为 CSV 文件
 
     Args:

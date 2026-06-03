@@ -122,9 +122,7 @@ class PINNInferenceEngine:
             try:
                 self.model.load_state_dict(state_dict, strict=False)
             except Exception as load_err:
-                logger.warning(
-                    f"Direct load failed: {load_err}. Attempting flexible load..."
-                )
+                logger.warning(f"Direct load failed: {load_err}. Attempting flexible load...")
                 raise load_err
 
             self.model.eval()
@@ -182,9 +180,7 @@ class PINNInferenceEngine:
         if LSTMHybridPINN is not None and isinstance(self.model, LSTMHybridPINN):
             # 1. Spatial coords (N, 3)
             spatial_coords = np.stack([flat_x, flat_y, flat_z], axis=1)
-            spatial_tensor = torch.tensor(
-                spatial_coords, dtype=torch.float32, device=self.device
-            )
+            spatial_tensor = torch.tensor(spatial_coords, dtype=torch.float32, device=self.device)
 
             # 2. Time t (N, 1)
             t_vals = np.full((n_points, 1), time)
@@ -197,9 +193,7 @@ class PINNInferenceEngine:
 
             seq_step = np.array([V_from_norm, V_to_norm, t_since_norm])
             voltage_seq = np.tile(seq_step, (n_points, 1, 1))  # (N, 1, 3)
-            seq_tensor = torch.tensor(
-                voltage_seq, dtype=torch.float32, device=self.device
-            )
+            seq_tensor = torch.tensor(voltage_seq, dtype=torch.float32, device=self.device)
 
             with torch.no_grad():
                 outputs = self.model(spatial_tensor, t_tensor, seq_tensor).cpu().numpy()
@@ -218,9 +212,7 @@ class PINNInferenceEngine:
                 axis=1,
             )
 
-            inputs_tensor = torch.tensor(
-                inputs, dtype=torch.float32, device=self.device
-            )
+            inputs_tensor = torch.tensor(inputs, dtype=torch.float32, device=self.device)
 
             with torch.no_grad():
                 outputs = self.model(inputs_tensor).cpu().numpy()
@@ -330,9 +322,7 @@ class PINNInferenceEngine:
 
                 seq_step = np.array([V_from_norm, V_to_norm, t_since_norm])
                 voltage_seq = np.tile(seq_step, (len(batch_x), 1, 1))
-                seq_tensor = torch.tensor(
-                    voltage_seq, dtype=torch.float32, device=self.device
-                )
+                seq_tensor = torch.tensor(voltage_seq, dtype=torch.float32, device=self.device)
 
                 with torch.no_grad():
                     out = self.model(spatial_tensor, t_tensor, seq_tensor).cpu().numpy()
@@ -348,9 +338,7 @@ class PINNInferenceEngine:
                     ],
                     axis=1,
                 )
-                inputs_tensor = torch.tensor(
-                    inputs, dtype=torch.float32, device=self.device
-                )
+                inputs_tensor = torch.tensor(inputs, dtype=torch.float32, device=self.device)
                 with torch.no_grad():
                     out = self.model(inputs_tensor).cpu().numpy()
 
@@ -374,9 +362,7 @@ class PINNInferenceEngine:
 
         if LSTMHybridPINN is not None and isinstance(self.model, LSTMHybridPINN):
             spatial_coords = np.tile(np.array([x, y, z]), (n_t, 1))
-            spatial_tensor = torch.tensor(
-                spatial_coords, dtype=torch.float32, device=self.device
-            )
+            spatial_tensor = torch.tensor(spatial_coords, dtype=torch.float32, device=self.device)
 
             t_vals = t_array.reshape(-1, 1)
             t_tensor = torch.tensor(t_vals, dtype=torch.float32, device=self.device)
@@ -386,9 +372,7 @@ class PINNInferenceEngine:
             voltage_seq[:, 0, 1] = voltage / self.V_max_train
             voltage_seq[:, 0, 2] = t_array / self.t_max
 
-            seq_tensor = torch.tensor(
-                voltage_seq, dtype=torch.float32, device=self.device
-            )
+            seq_tensor = torch.tensor(voltage_seq, dtype=torch.float32, device=self.device)
 
             with torch.no_grad():
                 outputs = self.model(spatial_tensor, t_tensor, seq_tensor).cpu().numpy()
@@ -404,9 +388,7 @@ class PINNInferenceEngine:
                 ],
                 axis=1,
             )
-            inputs_tensor = torch.tensor(
-                inputs, dtype=torch.float32, device=self.device
-            )
+            inputs_tensor = torch.tensor(inputs, dtype=torch.float32, device=self.device)
             with torch.no_grad():
                 outputs = self.model(inputs_tensor).cpu().numpy()
 
@@ -419,9 +401,7 @@ class PINNInferenceEngine:
             "phi": outputs[:, 4],
         }
 
-    def predict_trajectory(
-        self, func: Callable, t_sim: np.ndarray
-    ) -> dict[str, np.ndarray]:
+    def predict_trajectory(self, func: Callable, t_sim: np.ndarray) -> dict[str, np.ndarray]:
         """
         Predict aperture ratio trajectory for a dynamic waveform.
         func: t -> (v_from, v_to, t_local)
@@ -505,14 +485,10 @@ class PINNInferenceEngine:
                 )
 
                 # Split if too large
-                outputs = (
-                    self.model(spatial_repeated, t_tensor, seq_tensor).cpu().numpy()
-                )
+                outputs = self.model(spatial_repeated, t_tensor, seq_tensor).cpu().numpy()
             else:
                 inputs_all = np.concatenate(inputs_list, axis=0)
-                inputs_tensor = torch.tensor(
-                    inputs_all, dtype=torch.float32, device=self.device
-                )
+                inputs_tensor = torch.tensor(inputs_all, dtype=torch.float32, device=self.device)
                 outputs = self.model(inputs_tensor).cpu().numpy()
 
         # Post-process aperture
@@ -542,12 +518,8 @@ class PINNInferenceEngine:
         """
         if LSTMHybridPINN is not None and isinstance(self.model, LSTMHybridPINN):
             # LSTM model requires separate inputs
-            spatial_tensor = torch.tensor(
-                [[x, y, z]], dtype=torch.float32, device=self.device
-            )
-            t_tensor = torch.tensor(
-                [[t_since]], dtype=torch.float32, device=self.device
-            )
+            spatial_tensor = torch.tensor([[x, y, z]], dtype=torch.float32, device=self.device)
+            t_tensor = torch.tensor([[t_since]], dtype=torch.float32, device=self.device)
 
             V_from_norm = V_from / self.V_max_train
             V_to_norm = V_to / self.V_max_train
@@ -598,21 +570,15 @@ class PINNInferenceEngine:
 
         if LSTMHybridPINN is not None and isinstance(self.model, LSTMHybridPINN):
             # Separate inputs for LSTM model
-            spatial_tensor = torch.tensor(
-                points[:, :3], dtype=torch.float32, device=self.device
-            )
-            t_tensor = torch.tensor(
-                points[:, 5:6], dtype=torch.float32, device=self.device
-            )
+            spatial_tensor = torch.tensor(points[:, :3], dtype=torch.float32, device=self.device)
+            t_tensor = torch.tensor(points[:, 5:6], dtype=torch.float32, device=self.device)
 
             V_from_norm = points[:, 3] / self.V_max_train
             V_to_norm = points[:, 4] / self.V_max_train
             t_since_norm = points[:, 5] / self.t_max
 
             seq_tensor = torch.tensor(
-                np.stack([V_from_norm, V_to_norm, t_since_norm], axis=1)[
-                    :, np.newaxis, :
-                ],
+                np.stack([V_from_norm, V_to_norm, t_since_norm], axis=1)[:, np.newaxis, :],
                 dtype=torch.float32,
                 device=self.device,
             )
@@ -621,9 +587,7 @@ class PINNInferenceEngine:
                 outputs = self.model(spatial_tensor, t_tensor, seq_tensor).cpu().numpy()
         else:
             # Standard TwoPhasePINN: use RAW physical values (no normalization)
-            inputs_tensor = torch.tensor(
-                points, dtype=torch.float32, device=self.device
-            )
+            inputs_tensor = torch.tensor(points, dtype=torch.float32, device=self.device)
             with torch.no_grad():
                 outputs = self.model(inputs_tensor).cpu().numpy()
 
@@ -664,9 +628,7 @@ class PINNInferenceEngine:
             "mass_conservation_error": 0.0,
         }
 
-    def check_mass_conservation(
-        self, t: float, voltage_from: float, voltage_to: float
-    ) -> float:
+    def check_mass_conservation(self, t: float, voltage_from: float, voltage_to: float) -> float:
         """Calculate total volume of ink"""
         # Monte Carlo integration or grid summation
         res = 40
@@ -730,9 +692,7 @@ class PINNInferenceEngine:
 
             seq_step = np.array([V_from_norm, V_to_norm, t_since_norm])
             voltage_seq = np.tile(seq_step, (n_points, 1, 1))
-            seq_tensor = torch.tensor(
-                voltage_seq, dtype=torch.float32, device=self.device
-            )
+            seq_tensor = torch.tensor(voltage_seq, dtype=torch.float32, device=self.device)
 
             outputs = self.model(spatial_tensor, t_tensor, seq_tensor)
         else:

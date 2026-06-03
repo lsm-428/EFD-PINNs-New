@@ -34,12 +34,8 @@ def create_parameter_sweep_tab():
 
         if PANEL_AVAILABLE:
             # Create basic controls for parameter sweep
-            voltage_min = pn.widgets.FloatSlider(
-                name="Min Voltage (V)", start=0, end=30, value=0
-            )
-            voltage_max = pn.widgets.FloatSlider(
-                name="Max Voltage (V)", start=0, end=30, value=30
-            )
+            voltage_min = pn.widgets.FloatSlider(name="Min Voltage (V)", start=0, end=30, value=0)
+            voltage_max = pn.widgets.FloatSlider(name="Max Voltage (V)", start=0, end=30, value=30)
             time_step = pn.widgets.FloatSlider(
                 name="Time Step (s)", start=0.001, end=0.01, value=0.002
             )
@@ -54,14 +50,10 @@ def create_parameter_sweep_tab():
                 fig = param_sweep.generate_response_surface(results)
                 return pn.pane.Matplotlib(fig, dpi=144)
 
-            button = pn.widgets.Button(
-                name="Run Parameter Sweep", button_type="primary"
-            )
+            button = pn.widgets.Button(name="Run Parameter Sweep", button_type="primary")
             plot_pane = pn.panel(pn.bind(run_sweep, button))
 
-            return pn.Column(
-                pn.Row(voltage_min, voltage_max), pn.Row(time_step, button), plot_pane
-            )
+            return pn.Column(pn.Row(voltage_min, voltage_max), pn.Row(time_step, button), plot_pane)
         return "Parameter Sweep Component (requires Panel)"
 
     except Exception as e:
@@ -77,12 +69,8 @@ def create_model_comparison_tab():
             model_comp = ModelComparison()
 
             # File selector for checkpoints
-            file_input = pn.widgets.FileInput(
-                name="Select Checkpoint Files", multiple=True
-            )
-            compare_button = pn.widgets.Button(
-                name="Compare Models", button_type="success"
-            )
+            file_input = pn.widgets.FileInput(name="Select Checkpoint Files", multiple=True)
+            compare_button = pn.widgets.Button(name="Compare Models", button_type="success")
 
             def compare_models(*events):
                 if file_input.value:
@@ -155,9 +143,7 @@ def create_experiment_simulator_tab():
                     "initial_voltage": (
                         step_params[0].value if waveform_type.value == "step" else 0
                     ),
-                    "final_voltage": (
-                        step_params[1].value if waveform_type.value == "step" else 0
-                    ),
+                    "final_voltage": (step_params[1].value if waveform_type.value == "step" else 0),
                 }
                 DATA_STORE.update_parameters(**params)
 
@@ -202,12 +188,8 @@ def create_training_monitor_tab():
             log_file = pn.widgets.TextInput(
                 name="Training Log Path", placeholder="/path/to/training.log"
             )
-            start_button = pn.widgets.Button(
-                name="Start Monitoring", button_type="primary"
-            )
-            stop_button = pn.widgets.Button(
-                name="Stop Monitoring", button_type="danger"
-            )
+            start_button = pn.widgets.Button(name="Start Monitoring", button_type="primary")
+            stop_button = pn.widgets.Button(name="Stop Monitoring", button_type="danger")
 
             def start_monitoring(*events):
                 if log_file.value:
@@ -229,9 +211,7 @@ def create_training_monitor_tab():
 
             start_status = pn.panel(pn.bind(start_monitoring, start_button))
             stop_status = pn.panel(pn.bind(stop_monitoring, stop_button))
-            metrics_display = pn.panel(
-                pn.bind(update_metrics, start_button, stop_button)
-            )
+            metrics_display = pn.panel(pn.bind(update_metrics, start_button, stop_button))
 
             loss_plot = pn.pane.Markdown("Loss curve will appear here")
 

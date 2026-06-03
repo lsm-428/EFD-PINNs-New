@@ -166,9 +166,7 @@ class TestVOFTransportEquation:
                 dim=1,
             )
 
-            vof_residual = physics_constraints._compute_vof_residual(
-                x_phys, predictions
-            )
+            vof_residual = physics_constraints._compute_vof_residual(x_phys, predictions)
 
             assert torch.isfinite(
                 vof_residual
@@ -206,9 +204,7 @@ class TestVOFTransportEquation:
         )
 
         # 体积守恒残差
-        residuals = physics_constraints.compute_volume_conservation_residual(
-            x_phys, predictions
-        )
+        residuals = physics_constraints.compute_volume_conservation_residual(x_phys, predictions)
 
         # 初始状态应该满足体积守恒
         assert (
@@ -312,9 +308,7 @@ class TestVOFTransportEquation:
         factor = c_alpha * vel_mag * phi * (1 - phi)
 
         # 应该在[0, 0.25]范围内
-        assert (
-            factor.max() <= 0.25
-        ), f"Max factor should be 0.25, got {factor.max().item()}"
+        assert factor.max() <= 0.25, f"Max factor should be 0.25, got {factor.max().item()}"
         assert factor.min() >= 0.0, f"Min factor should be 0, got {factor.min().item()}"
 
         # 界面区域权重更高

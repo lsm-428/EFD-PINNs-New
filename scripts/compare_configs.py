@@ -11,10 +11,10 @@ def compare_configs():
     """比较两个配置文件"""
 
     # 加载配置文件
-    with open("/home/scnu/Gitee/EFD3D/config/v4.5-standard.json", "r") as f:
+    with open("/home/scnu/Gitee/EFD3D/config/v4.5-standard.json") as f:
         config_v45 = json.load(f)
 
-    with open("/home/scnu/Gitee/EFD3D/config/v4.6-momentum-optimized.json", "r") as f:
+    with open("/home/scnu/Gitee/EFD3D/config/v4.6-momentum-optimized.json") as f:
         config_v46 = json.load(f)
 
     print("=" * 70)
@@ -40,9 +40,7 @@ def compare_configs():
             v46_val = physics_v46.get(param, "N/A")
             if v45_val != v46_val:
                 ratio = (
-                    v46_val / v45_val
-                    if isinstance(v45_val, (int, float)) and v45_val != 0
-                    else 0
+                    v46_val / v45_val if isinstance(v45_val, (int, float)) and v45_val != 0 else 0
                 )
                 print(f"  {param}: {v45_val} → {v46_val} ({ratio:.1f}×)")
             else:
@@ -69,9 +67,7 @@ def compare_configs():
                 v45_val = weights_v45.get(key, "N/A")
                 v46_val = weights_v46.get(key, "N/A")
 
-                if isinstance(v45_val, (int, float)) and isinstance(
-                    v46_val, (int, float)
-                ):
+                if isinstance(v45_val, (int, float)) and isinstance(v46_val, (int, float)):
                     if v45_val != v46_val:
                         ratio = v46_val / v45_val if v45_val != 0 else float("inf")
                         print(f"  {key}: {v45_val} → {v46_val} ({ratio:.1f}×)")
@@ -92,9 +88,7 @@ def compare_configs():
 
                 if v45_combined != 0:
                     ratio = v46_combined / v45_combined
-                    print(
-                        f"  {key}: {v45_combined:.3f} → {v46_combined:.3f} ({ratio:.1f}×)"
-                    )
+                    print(f"  {key}: {v45_combined:.3f} → {v46_combined:.3f} ({ratio:.1f}×)")
 
     # 训练参数对比
     if "training" in config_v45 and "training" in config_v46:

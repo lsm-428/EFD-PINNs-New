@@ -37,9 +37,7 @@ class TestDynamicPhysicsWeightScheduler:
 
     def test_initial_weight_from_dict(self):
         """测试从字典初始化 initial_weight"""
-        scheduler = DynamicPhysicsWeightScheduler(
-            initial_weight={"value": 0.2, "other": 0.3}
-        )
+        scheduler = DynamicPhysicsWeightScheduler(initial_weight={"value": 0.2, "other": 0.3})
         assert scheduler.current_weight == 0.2
 
     def test_default_initialization(self):
@@ -126,9 +124,7 @@ class TestDynamicPhysicsWeightScheduler:
 
     def test_weight_smoothing(self):
         """测试权重平滑处理"""
-        scheduler = DynamicPhysicsWeightScheduler(
-            smoothing_factor=0.9, adjustment_interval=1
-        )
+        scheduler = DynamicPhysicsWeightScheduler(smoothing_factor=0.9, adjustment_interval=1)
 
         old_weight = scheduler.current_weight
         scheduler.update(data_loss=2.0, physics_loss=1.0, val_loss=None)
@@ -174,9 +170,7 @@ class TestDynamicPhysicsWeightScheduler:
 
     def test_adjustment_interval(self):
         """测试调整间隔"""
-        scheduler = DynamicPhysicsWeightScheduler(
-            initial_weight=0.1, adjustment_interval=100
-        )
+        scheduler = DynamicPhysicsWeightScheduler(initial_weight=0.1, adjustment_interval=100)
 
         # 前 99 步权重不应改变
         for i in range(99):
@@ -222,9 +216,7 @@ class TestPhysicsWeightIntegration:
     def test_multiplicative_integration(self):
         """测试乘法集成方法"""
         scheduler = DynamicPhysicsWeightScheduler(initial_weight=2.0)
-        integration = PhysicsWeightIntegration(
-            scheduler, integration_method="multiplicative"
-        )
+        integration = PhysicsWeightIntegration(scheduler, integration_method="multiplicative")
 
         physics_loss = torch.tensor(1.0)
         data_loss = torch.tensor(2.0)

@@ -53,13 +53,9 @@ class TrainingStabilizer:
 
     def save_valid_state(self) -> None:
         """保存当前有效的模型状态"""
-        self.last_valid_state = {
-            k: v.clone().detach() for k, v in self.model.state_dict().items()
-        }
+        self.last_valid_state = {k: v.clone().detach() for k, v in self.model.state_dict().items()}
 
-    def restore_on_nan(
-        self, loss: torch.Tensor, optimizer: torch.optim.Optimizer
-    ) -> bool:
+    def restore_on_nan(self, loss: torch.Tensor, optimizer: torch.optim.Optimizer) -> bool:
         """
         检测 NaN/Inf 并恢复模型状态
 
@@ -96,9 +92,7 @@ class TrainingStabilizer:
         Returns:
             裁剪前的梯度范数
         """
-        grad_norm = torch.nn.utils.clip_grad_norm_(
-            self.model.parameters(), self.grad_clip
-        )
+        grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
         return grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm
 
     def update_lr(self, optimizer: torch.optim.Optimizer, epoch: int) -> None:

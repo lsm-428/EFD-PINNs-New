@@ -79,9 +79,7 @@ class TestEffectiveVoltageProperty:
         V_eff = self.model.effective_voltage(V_target, t_large)
 
         relative_error = abs(V_eff - V_target) / V_target
-        assert (
-            relative_error < 0.01
-        ), f"Relative error {relative_error:.6f} >= 0.01 at t={t_large}"
+        assert relative_error < 0.01, f"Relative error {relative_error:.6f} >= 0.01 at t={t_large}"
 
 
 if __name__ == "__main__":
@@ -112,9 +110,7 @@ class TestVolumeConservationProperty:
         r, h = self.model.calculate_ink_distribution_enhanced(theta)
         error = self.model.verify_volume_conservation(r, h)
 
-        assert (
-            error < 0.1
-        ), f"Volume conservation error {error:.6f}% >= 0.1% at theta={theta}°"
+        assert error < 0.1, f"Volume conservation error {error:.6f}% >= 0.1% at theta={theta}°"
 
 
 class TestTransparentRegionBoundaryProperty:

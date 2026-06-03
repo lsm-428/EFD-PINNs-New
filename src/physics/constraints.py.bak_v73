@@ -1944,4 +1944,3 @@ class PhysicsConstraints:
             "momentum_v": torch.zeros(batch_size, device=device),
             "momentum_w": torch.zeros(batch_size, device=device),
         }
-

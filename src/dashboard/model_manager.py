@@ -111,9 +111,7 @@ class ModelManager:
             self._access_order.remove(path)
         self._access_order.append(path)
 
-    def load_model(
-        self, path: str | None = None, device: str = "auto"
-    ) -> PINNInferenceEngine:
+    def load_model(self, path: str | None = None, device: str = "auto") -> PINNInferenceEngine:
         """
         Load a model from checkpoint with LRU caching.
 
@@ -131,9 +129,7 @@ class ModelManager:
         if path is None:
             path = self.get_latest_model()
             if path is None:
-                raise FileNotFoundError(
-                    f"No model checkpoints found in {self.outputs_dir}"
-                )
+                raise FileNotFoundError(f"No model checkpoints found in {self.outputs_dir}")
 
         # Check if already cached
         if path in self._cache:

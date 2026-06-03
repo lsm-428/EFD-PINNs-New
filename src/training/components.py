@@ -87,9 +87,7 @@ class LossStabilizer:
         self.history_size = self.config.get("history_size", 100)
         self.loss_history = []
         self.early_stopping_patience = self.config.get("early_stopping_patience", 20)
-        self.early_stopping_min_delta = self.config.get(
-            "early_stopping_min_delta", 1e-5
-        )
+        self.early_stopping_min_delta = self.config.get("early_stopping_min_delta", 1e-5)
         self.best_loss = float("inf")
         self.patience_counter = 0
         self.base_physics_weight = self.config.get("base_physics_weight", 1.0)
@@ -150,8 +148,7 @@ class EnhancedDataAugmenter:
 
         if self.enable_scaling:
             scale = (
-                torch.rand(1, device=x.device)
-                * (self.scaling_range[1] - self.scaling_range[0])
+                torch.rand(1, device=x.device) * (self.scaling_range[1] - self.scaling_range[0])
                 + self.scaling_range[0]
             )
             x = x * scale

@@ -116,9 +116,7 @@ class ApertureModel:
         self.d_fluid = Lz  # 流体层总厚度 (m) = 20μm（仅用于几何计算）
 
         logger.info("ApertureModel 初始化完成")
-        logger.info(
-            f"   像素尺寸: {self.pixel_size * 1e6:.0f}×{self.pixel_size * 1e6:.0f} μm"
-        )
+        logger.info(f"   像素尺寸: {self.pixel_size * 1e6:.0f}×{self.pixel_size * 1e6:.0f} μm")
         logger.info(f"   油墨体积: {self.ink_volume * 1e18:.0f} μm³")
 
     def calculate_capacitance(self, aperture_ratio: float) -> float:
@@ -155,17 +153,13 @@ class ApertureModel:
         C_ink_density = self.epsilon_0 * self.epsilon_ink / self.ink_thickness
 
         # 未开口区域：油墨 + SU-8 + Teflon 串联
-        C_ink_region = 1.0 / (
-            1.0 / C_d_density + 1.0 / C_h_density + 1.0 / C_ink_density
-        )
+        C_ink_region = 1.0 / (1.0 / C_d_density + 1.0 / C_h_density + 1.0 / C_ink_density)
 
         # 开口区域：SU-8 + Teflon 串联（极性液体导电，不参与电容）
         C_open_region = 1.0 / (1.0 / C_d_density + 1.0 / C_h_density)
 
         # 两个区域并联（面积加权）
-        C_total_density = (
-            1 - aperture_ratio
-        ) * C_ink_region + aperture_ratio * C_open_region
+        C_total_density = (1 - aperture_ratio) * C_ink_region + aperture_ratio * C_open_region
 
         # 总电容
         C_total = C_total_density * self.pixel_area
@@ -607,9 +601,7 @@ class EnhancedApertureModel(ApertureModel):
             if t_val <= 0.0:
                 theta = theta_start
             else:
-                theta = predictor.dynamic_response(
-                    t_val, theta_start, theta_eq, V_to=V_to_val
-                )
+                theta = predictor.dynamic_response(t_val, theta_start, theta_eq, V_to=V_to_val)
         else:
             theta_start = predictor.young_lippmann(V_from_val)
             theta_eq = predictor.young_lippmann(V_to_val)
@@ -734,9 +726,7 @@ class EnhancedApertureModel(ApertureModel):
             # 稳态计算
             return predictor.young_lippmann(voltage)
         # 动态响应计算
-        return predictor.predict(
-            voltage=voltage, time=time, V_initial=V_initial, t_step=t_step
-        )
+        return predictor.predict(voltage=voltage, time=time, V_initial=V_initial, t_step=t_step)
 
     # === 油墨分布计算 ===
 
@@ -883,9 +873,7 @@ class EnhancedApertureModel(ApertureModel):
                 # 阶跃后，考虑电容器充电
                 t_since = ti - t_step
                 V_eff = self.effective_voltage(V_end - V_start, t_since) + V_start
-                theta = self.get_contact_angle(
-                    V_eff, ti, V_initial=V_start, t_step=t_step
-                )
+                theta = self.get_contact_angle(V_eff, ti, V_initial=V_start, t_step=t_step)
 
             eta[i] = self.contact_angle_to_aperture_ratio(theta)
 
@@ -946,17 +934,13 @@ class EnhancedApertureModel(ApertureModel):
 
             # 找到达到 10% 的时间
             for i in range(step_idx, len(eta)):
-                if (eta_change > 0 and eta[i] >= eta_10) or (
-                    eta_change < 0 and eta[i] <= eta_10
-                ):
+                if (eta_change > 0 and eta[i] >= eta_10) or (eta_change < 0 and eta[i] <= eta_10):
                     t_10 = (t[i] - t_step) * 1000  # 转换为 ms
                     break
 
             # 找到达到 90% 的时间
             for i in range(step_idx, len(eta)):
-                if (eta_change > 0 and eta[i] >= eta_90) or (
-                    eta_change < 0 and eta[i] <= eta_90
-                ):
+                if (eta_change > 0 and eta[i] >= eta_90) or (eta_change < 0 and eta[i] <= eta_90):
                     t_90 = (t[i] - t_step) * 1000  # 转换为 ms
                     break
 
@@ -1047,9 +1031,7 @@ class EnhancedApertureModel(ApertureModel):
 
     # === 可视化方法 ===
 
-    def plot_comparison(
-        self, V_list: list[float] = None, save_path: str = None
-    ) -> None:
+    def plot_comparison(self, V_list: list[float] = None, save_path: str = None) -> None:
         """
         生成电压-开口率对比图（原模型 vs 增强模型）
 
@@ -1076,9 +1058,7 @@ class EnhancedApertureModel(ApertureModel):
 
         # 绘图
         fig, ax = plt.subplots(figsize=(10, 6))
-        ax.plot(
-            V_list, base_apertures, "b-o", linewidth=2, markersize=8, label="原模型"
-        )
+        ax.plot(V_list, base_apertures, "b-o", linewidth=2, markersize=8, label="原模型")
         ax.plot(
             V_list,
             enhanced_apertures,
@@ -1271,9 +1251,7 @@ class EnhancedApertureModel(ApertureModel):
             create_aperture_model_visualization,
         )
 
-        return create_aperture_model_visualization(
-            voltage=voltage, time=time, save_path=save_path
-        )
+        return create_aperture_model_visualization(voltage=voltage, time=time, save_path=save_path)
 
     # === 验证方法 ===
 
@@ -1452,9 +1430,7 @@ def demo():
 
     # 动态响应
     logger.info("\n📈 动态响应 (0V → 30V, 0-100ms):")
-    t, eta = model.aperture_step_response(
-        V_start=0, V_end=30, duration=0.10, t_step=0.002
-    )
+    t, eta = model.aperture_step_response(V_start=0, V_end=30, duration=0.10, t_step=0.002)
     metrics = model.get_aperture_metrics(t, eta, t_step=0.002)
 
     logger.info(f"   初始开口率: {metrics['eta_initial'] * 100:.2f}%")
@@ -1466,9 +1442,7 @@ def demo():
     # 验证
     logger.info("\n🔍 模型验证:")
     validation = model.validate()
-    logger.info(
-        f"   体积守恒: {'✅' if validation['volume_conservation']['passed'] else '❌'}"
-    )
+    logger.info(f"   体积守恒: {'✅' if validation['volume_conservation']['passed'] else '❌'}")
     logger.info(f"   开口率范围: {'✅' if validation['aperture_range']['passed'] else '❌'}")
     logger.info(f"   单调性: {'✅' if validation['monotonicity']['passed'] else '❌'}")
 
@@ -1496,9 +1470,7 @@ def demo():
         label="Base Model",
         alpha=0.7,
     )
-    ax1.plot(
-        voltages, apertures, "r-s", linewidth=2, markersize=8, label="Enhanced Model"
-    )
+    ax1.plot(voltages, apertures, "r-s", linewidth=2, markersize=8, label="Enhanced Model")
     ax1.set_xlabel("Voltage (V)")
     ax1.set_ylabel("Aperture Ratio (%)")
     ax1.set_title("Voltage vs Aperture Ratio Comparison")
@@ -1512,9 +1484,7 @@ def demo():
     result_0V = model.predict_enhanced(0)
     result_30V = model.predict_enhanced(30)
 
-    ax2.plot(
-        result_0V["r"] * 1e6, result_0V["h"] * 1e6, "b-", linewidth=2, label="0V (OFF)"
-    )
+    ax2.plot(result_0V["r"] * 1e6, result_0V["h"] * 1e6, "b-", linewidth=2, label="0V (OFF)")
     ax2.plot(
         result_30V["r"] * 1e6,
         result_30V["h"] * 1e6,
@@ -1597,9 +1567,7 @@ def demo():
     ax4.set_ylim(-pixel_half * 1.1, pixel_half * 1.1)
     ax4.set_xlabel("X (um)")
     ax4.set_ylabel("Y (um)")
-    ax4.set_title(
-        f"Pixel Top View @ 30V (Aperture={result_30V['aperture_percent']:.1f}%)"
-    )
+    ax4.set_title(f"Pixel Top View @ 30V (Aperture={result_30V['aperture_percent']:.1f}%)")
     ax4.legend(loc="upper right")
     ax4.grid(True, alpha=0.3)
 

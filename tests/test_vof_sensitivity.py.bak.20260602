@@ -29,36 +29,30 @@ from src.physics.constraints import PhysicsConstraints
 
 
 class MockPINNModel(nn.Module):
-    """用于测试的简单Mock模型（输出支持梯度传播）"""
+    """用于测试的简单Mock模型"""
 
     def __init__(self):
         super().__init__()
-        # 注册一个可学习参数，确保输出能通过计算图追踪梯度
-        self.dummy = nn.Parameter(torch.zeros(1))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        前向传播 - 返回支持梯度传播的预测
+        前向传播 - 返回随机预测用于测试
 
         Args:
             x: 输入张量 (batch, 6) - [x, y, z, V_from, V_to, t]
 
         Returns:
-            (batch, 5) - [u, v, w, p, phi]，输出依赖 x 以支持 autograd
+            (batch, 5) - [u, v, w, p, phi]
         """
         batch_size = x.shape[0]
         device = x.device
 
-        # 基于输入 x 构造输出，确保 requires_grad=True 且梯度可传播
-        # 使用 x 的线性组合 + dummy 参数，使输出依赖计算图
-        x_mean = x.mean(dim=1, keepdim=True)  # (batch, 1)
-
-        u = x_mean * 1e-4 + self.dummy * 0
-        v = x_mean * 1e-4 + self.dummy * 0
-        w = x_mean * 1e-4 + self.dummy * 0
-        p = x_mean * 100.0 + self.dummy * 0
-        # phi 用 sigmoid 约束到 [0, 1]，且依赖输入
-        phi = torch.sigmoid(x_mean * 0.01 + self.dummy)
+        # 生成符合物理约束的随机预测
+        u = torch.randn(batch_size, 1, device=device) * 1e-4
+        v = torch.randn(batch_size, 1, device=device) * 1e-4
+        w = torch.randn(batch_size, 1, device=device) * 1e-4
+        p = torch.randn(batch_size, 1, device=device) * 100
+        phi = torch.rand(batch_size, 1, device=device)  # phi in [0, 1]
 
         return torch.cat([u, v, w, p, phi], dim=1)
 

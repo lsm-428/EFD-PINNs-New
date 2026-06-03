@@ -24,11 +24,11 @@ class TwoPhasePINN(nn.Module):
     """
     输入: (batch, 6) - [x, y, z, V_from, V_to, t_since]
     输出: (batch, 5) - [u, v, w, p, phi]
-    
+
     网络架构:
     - phi_net: 输入6维 → 隐藏层[128,128,64,32] → 输出1维 (phi)
     - vel_net: 输入7维 (6+phi) → 隐藏层[64,64,32] → 输出4维 (u,v,w,p)
-    
+
     激活函数: Tanh (所有隐藏层)
     初始化: Xavier normal
     """
@@ -139,9 +139,9 @@ f_ew_z = 0  # z方向无力
 ```python
 # 曲率计算 (第207-214行)
 # κ = -div(∇φ/|∇φ|) 精确公式
-numerator = (phi_xx*(phi_y**2+phi_z**2) + 
-             phi_yy*(phi_x**2+phi_z**2) + 
-             phi_zz*(phi_x**2+phi_y**2) - 
+numerator = (phi_xx*(phi_y**2+phi_z**2) +
+             phi_yy*(phi_x**2+phi_z**2) +
+             phi_zz*(phi_x**2+phi_y**2) -
              2*(phi_x*phi_y*phi_xy + phi_x*phi_z*phi_xz + phi_y*phi_z*phi_yz))
 kappa = -numerator / (grad_phi_mag_sq * grad_phi_mag + 1e-10)
 
@@ -297,17 +297,17 @@ mu = phi * mu_oil + (1 - phi) * mu_polar
 
 1. **PINN基础理论**：
    - Raissi et al., "Physics-informed neural networks", JCP 2019
-   
+
 2. **VOF方法**：
    - Hirt & Nichols, "Volume of Fluid (VOF) method", JCP 1981
-   
+
 3. **电润湿理论**：
    - Lippmann, "Relations entre les phénomènes électriques et capillaires", 1904
    - Berge, "Electrowetting of water", C.R. Acad. Sci. 1993
-   
+
 4. **CSF模型**：
    - Brackbill et al., "Continuum surface force model", JCP 1992
-   
+
 5. **两相流PINN应用**：
    - EFD3D相关论文（待发表）
 

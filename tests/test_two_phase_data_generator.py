@@ -19,15 +19,9 @@ from src.models.pinn_two_phase import DEFAULT_CONFIG, PHYSICS, DataGenerator
 # 测试策略
 # ============================================================
 
-voltage_strategy = st.floats(
-    min_value=0, max_value=30, allow_nan=False, allow_infinity=False
-)
-time_strategy = st.floats(
-    min_value=0, max_value=0.05, allow_nan=False, allow_infinity=False
-)
-position_strategy = st.floats(
-    min_value=0, max_value=1, allow_nan=False, allow_infinity=False
-)
+voltage_strategy = st.floats(min_value=0, max_value=30, allow_nan=False, allow_infinity=False)
+time_strategy = st.floats(min_value=0, max_value=0.05, allow_nan=False, allow_infinity=False)
+position_strategy = st.floats(min_value=0, max_value=1, allow_nan=False, allow_infinity=False)
 
 
 # ============================================================
@@ -161,9 +155,7 @@ class TestPhiFieldCalculation:
         assert phi_bottom > 0.9, f"底部中心 φ={phi_bottom} 应接近1"
 
         # 顶部应该是透明液体
-        phi_top = data_generator.target_phi_3d(
-            Lx / 2, Ly / 2, PHYSICS["Lz"] * 0.9, 0, 0
-        )
+        phi_top = data_generator.target_phi_3d(Lx / 2, Ly / 2, PHYSICS["Lz"] * 0.9, 0, 0)
         assert phi_top < 0.1, f"顶部 φ={phi_top} 应接近0"
 
     def test_phi_voltage_response(self, data_generator):
@@ -295,9 +287,7 @@ class TestDataGeneration:
             "bc_points",
             "domain_points",
         ]:
-            points = (
-                data[key].cpu().numpy() if torch.is_tensor(data[key]) else data[key]
-            )
+            points = data[key].cpu().numpy() if torch.is_tensor(data[key]) else data[key]
             x_data = points[:, 0]
             y_data = points[:, 1]
             z_data = points[:, 2]
@@ -305,18 +295,10 @@ class TestDataGeneration:
             V_to = points[:, 4]
             t_data = points[:, 5]
 
-            assert np.all(
-                (x_data >= 0) & (x_data <= PHYSICS["Lx"])
-            ), f"{key}: x超出范围"
-            assert np.all(
-                (y_data >= 0) & (y_data <= PHYSICS["Ly"])
-            ), f"{key}: y超出范围"
-            assert np.all(
-                (z_data >= 0) & (z_data <= PHYSICS["Lz"])
-            ), f"{key}: z超出范围"
-            assert np.all(
-                (t_data >= 0) & (t_data <= PHYSICS["t_max"])
-            ), f"{key}: t超出范围"
+            assert np.all((x_data >= 0) & (x_data <= PHYSICS["Lx"])), f"{key}: x超出范围"
+            assert np.all((y_data >= 0) & (y_data <= PHYSICS["Ly"])), f"{key}: y超出范围"
+            assert np.all((z_data >= 0) & (z_data <= PHYSICS["Lz"])), f"{key}: z超出范围"
+            assert np.all((t_data >= 0) & (t_data <= PHYSICS["t_max"])), f"{key}: t超出范围"
             assert np.all((V_from >= 0) & (V_from <= 30)), f"{key}: V_from超出范围"
             assert np.all((V_to >= 0) & (V_to <= 30)), f"{key}: V_to超出范围"
 

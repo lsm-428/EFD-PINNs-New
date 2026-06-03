@@ -35,9 +35,9 @@ def test_ew_residual_basic():
 
     # 断言: 返回是字典，包含 electrowetting 键
     assert isinstance(residuals, dict), "EW residual should return a dict"
-    assert 'electrowetting' in residuals, "Dict should contain 'electrowetting' key"
+    assert "electrowetting" in residuals, "Dict should contain 'electrowetting' key"
 
-    ew_res = residuals['electrowetting']
+    ew_res = residuals["electrowetting"]
     assert isinstance(ew_res, torch.Tensor), f"EW residual should be a tensor, got {type(ew_res)}"
     assert ew_res.ndim == 1, f"EW residual should be 1D, got {ew_res.ndim}D"
 
@@ -66,8 +66,8 @@ def test_ew_residual_phi_dependence():
     pred_water[:, 4] = 0.1
     res_water = pc.compute_electrowetting_residual(x_phys, pred_water)
 
-    ew_oil = res_oil['electrowetting'].abs().mean().item()
-    ew_water = res_water['electrowetting'].abs().mean().item()
+    ew_oil = res_oil["electrowetting"].abs().mean().item()
+    ew_water = res_water["electrowetting"].abs().mean().item()
 
     # EW 力应与 phi 相关（油墨区域 EW 驱动力强）
     assert ew_oil >= 0, "EW residual magnitude should be non-negative"
@@ -87,13 +87,11 @@ def test_ew_physical_constants():
     p_ew = 0.5 * C_open * V_eff**2
 
     # 电润湿压力应在合理范围 (0.001-1e4 N/m², Route 1 电容使 p_ew ~0.01)
-    assert 1e-3 < p_ew < 1e4, \
-        f"p_ew = {p_ew:.4e} N/m² out of range [1e-3, 1e4]"
+    assert 1e-3 < p_ew < 1e4, f"p_ew = {p_ew:.4e} N/m² out of range [1e-3, 1e4]"
 
     # C_open 应在 μF/m² 量级
     C_open_uF = C_open * 1e6
-    assert 0.1 < C_open_uF < 1000, \
-        f"C_open = {C_open_uF:.2f} μF/m² out of range [0.1, 1000]"
+    assert 0.1 < C_open_uF < 1000, f"C_open = {C_open_uF:.2f} μF/m² out of range [0.1, 1000]"
 
 
 def test_z_decay_profile():
@@ -105,12 +103,15 @@ def test_z_decay_profile():
 
     # 单调递减
     for i in range(len(z_decay) - 1):
-        assert z_decay[i] >= z_decay[i + 1], \
-            f"z_decay should be monotonically decreasing, failed at index {i}"
+        assert (
+            z_decay[i] >= z_decay[i + 1]
+        ), f"z_decay should be monotonically decreasing, failed at index {i}"
 
     # z=0 → 1, z=h_ink → 1/e
     assert abs(z_decay[0].item() - 1.0) < 0.01
-    assert abs(z_decay[4].item() - 1.0/torch.e) < 0.01
+    assert abs(z_decay[4].item() - 1.0 / torch.e) < 0.01
 
     # 远场接近 0
-    assert z_decay[-1].item() < 0.05, f"z_decay at 10μm should be < 0.05, got {z_decay[-1].item():.4f}"
+    assert (
+        z_decay[-1].item() < 0.05
+    ), f"z_decay at 10μm should be < 0.05, got {z_decay[-1].item():.4f}"

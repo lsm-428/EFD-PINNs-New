@@ -95,9 +95,7 @@ def plot_loss_components(records: dict[str, list[Any]], out_dir: str) -> None:
 
     # Figure 1: Loss curves (log scale)
     fig1, ax1 = plt.subplots(figsize=(5, 3.5))
-    ax1.semilogy(
-        epochs, loss_total, "k-", label=r"$\mathcal{L}_{total}$", linewidth=1.5
-    )
+    ax1.semilogy(epochs, loss_total, "k-", label=r"$\mathcal{L}_{total}$", linewidth=1.5)
 
     plot_count = 0
     for i, name in enumerate(component_names):
@@ -161,9 +159,7 @@ def plot_loss_components(records: dict[str, list[Any]], out_dir: str) -> None:
             )
             ax2.set_xlabel("Epoch", fontsize=10)
             ax2.set_ylabel("Fraction", fontsize=10)
-            ax2.set_title(
-                "(b) Relative Loss Contributions", fontsize=11, fontweight="bold"
-            )
+            ax2.set_title("(b) Relative Loss Contributions", fontsize=11, fontweight="bold")
             ax2.set_ylim(0.0, 1.0)
             ax2.set_xlim((float(epochs[0]), float(epochs[-1])))
             ax2.legend(loc="upper right", fontsize=7, ncol=1, framealpha=0.9)
@@ -171,9 +167,7 @@ def plot_loss_components(records: dict[str, list[Any]], out_dir: str) -> None:
 
             output_path2_png = os.path.join(out_dir, "loss_fraction.png")
             output_path2_pdf = os.path.join(out_dir, "loss_fraction.pdf")
-            fig2.savefig(
-                output_path2_png, dpi=300, bbox_inches="tight", facecolor="white"
-            )
+            fig2.savefig(output_path2_png, dpi=300, bbox_inches="tight", facecolor="white")
             fig2.savefig(output_path2_pdf, bbox_inches="tight", facecolor="white")
             plt.close(fig2)
             print(f"  [OK] Loss fraction: {output_path2_png}")
@@ -199,9 +193,7 @@ def plot_learning_curve(records: dict[str, list[Any]], out_dir: str) -> None:
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(5, 4), sharex=True)
 
     # Top: loss curve
-    ax1.semilogy(
-        epochs, loss_total, color="#1f77b4", linewidth=1.5, label=r"$\mathcal{L}$"
-    )
+    ax1.semilogy(epochs, loss_total, color="#1f77b4", linewidth=1.5, label=r"$\mathcal{L}$")
     ax1.set_ylabel(r"Loss $\mathcal{L}$", fontsize=10)
     ax1.set_title("Training Dynamics", fontsize=11, fontweight="bold")
     ax1.legend(loc="upper right", fontsize=8)
@@ -292,7 +284,9 @@ def generate_html_report(records: dict[str, list[Any]], out_dir: str) -> None:
             continue
         status = "Good" if v < 0.5 else ("Medium" if v < 2.0 else "High")
         status_class = "good" if v < 0.5 else ("warning" if v < 2.0 else "bad")
-        html_content += f"<tr><td>{k}</td><td>{v:.4f}</td><td class='{status_class}'>{status}</td></tr>\n"
+        html_content += (
+            f"<tr><td>{k}</td><td>{v:.4f}</td><td class='{status_class}'>{status}</td></tr>\n"
+        )
 
     html_content += f"""</table>
         <div class="footer">

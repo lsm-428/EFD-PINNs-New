@@ -151,7 +151,7 @@ def analyze_volume_trend(log_path: str, out_dir: str) -> None:
     if stage_data:
         bp = ax2.boxplot(stage_data, labels=stage_labels, patch_artist=True)
         colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
-        for patch, color in zip(bp["boxes"], colors[: len(stage_data)]):
+        for patch, color in zip(bp["boxes"], colors[: len(stage_data)], strict=False):
             patch.set_facecolor(color)
             patch.set_alpha(0.6)
 
@@ -214,14 +214,12 @@ def analyze_rmse_per_voltage(log_path: str, out_dir: str) -> None:
 
     voltages = list(voltage_rmse.keys())
     rmse_values = list(voltage_rmse.values())
-    colors = [
-        "green" if v < 0.05 else "orange" if v < 0.08 else "red" for v in rmse_values
-    ]
+    colors = ["green" if v < 0.05 else "orange" if v < 0.08 else "red" for v in rmse_values]
 
     bars = ax.bar(voltages, rmse_values, color=colors, alpha=0.7, edgecolor="black")
 
     # Add value labels
-    for bar, val in zip(bars, rmse_values):
+    for bar, val in zip(bars, rmse_values, strict=False):
         ax.text(
             bar.get_x() + bar.get_width() / 2,
             bar.get_height() + 0.003,
@@ -232,12 +230,8 @@ def analyze_rmse_per_voltage(log_path: str, out_dir: str) -> None:
         )
 
     # Add threshold lines
-    ax.axhline(
-        y=0.05, color="green", linestyle="--", alpha=0.7, label="Excellent (<0.05)"
-    )
-    ax.axhline(
-        y=0.08, color="orange", linestyle="--", alpha=0.7, label="Acceptable (<0.08)"
-    )
+    ax.axhline(y=0.05, color="green", linestyle="--", alpha=0.7, label="Excellent (<0.05)")
+    ax.axhline(y=0.08, color="orange", linestyle="--", alpha=0.7, label="Acceptable (<0.08)")
 
     ax.set_xlabel("Voltage (V)", fontsize=11)
     ax.set_ylabel("RMSE vs Stage 1 Analytical", fontsize=11)

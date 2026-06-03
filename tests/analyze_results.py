@@ -10,8 +10,7 @@ import os
 import pytest
 
 MODEL_BASE_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "outputs", "train"
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "outputs", "train"
 )
 
 
@@ -43,16 +42,14 @@ def test_training_log_exists():
     latest = run_dirs[-1]
     log_path = os.path.join(latest, "training.log")
 
-    assert os.path.isfile(log_path), \
-        f"Latest training run {os.path.basename(latest)} missing training.log"
+    assert os.path.isfile(
+        log_path
+    ), f"Latest training run {os.path.basename(latest)} missing training.log"
 
 
 def test_config_consistency():
     """验证 config 文件结构完整"""
-    config_dir = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "config"
-    )
+    config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")
     assert os.path.isdir(config_dir), "config/ directory should exist"
 
     # 核心配置文件应存在
@@ -67,10 +64,7 @@ def test_config_consistency():
 
 def test_config_physics_params():
     """验证 device_calibrated_physics.json 物理参数完整性"""
-    config_dir = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "config"
-    )
+    config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")
     cfg_path = os.path.join(config_dir, "device_calibrated_physics.json")
 
     if not os.path.exists(cfg_path):
@@ -81,13 +75,13 @@ def test_config_physics_params():
 
     # 关键物理参数应存在于配置中（使用实际键名）
     essential_keys = [
-        "epsilon_r",           # 相对介电常数
+        "epsilon_r",  # 相对介电常数
         "dielectric_thickness",
         "hydrophobic_thickness",
-        "sigma",               # 表面张力 (polar ink)
-        "gamma",               # 表面张力 (另一组分)
+        "sigma",  # 表面张力 (polar ink)
+        "gamma",  # 表面张力 (另一组分)
         "ac_interface_width",
-        "A_eff",               # 有效面积校正因子 (v7.2)
+        "A_eff",  # 有效面积校正因子 (v7.2)
     ]
 
     # 递归查找参数（可能嵌套在 materials/physics/model 等节中）
@@ -106,10 +100,7 @@ def test_config_physics_params():
 
 def test_training_config_structure():
     """验证 v4.6-optimized.json 训练配置结构"""
-    config_dir = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "config"
-    )
+    config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")
     cfg_path = os.path.join(config_dir, "v4.6-optimized.json")
 
     if not os.path.exists(cfg_path):
@@ -123,5 +114,6 @@ def test_training_config_structure():
     assert isinstance(cfg["physics"], dict), "'physics' should be a dict"
 
     # EW 权重应存在
-    assert "electrowetting_weight" in cfg["physics"], \
-        "Missing electrowetting_weight in physics config"
+    assert (
+        "electrowetting_weight" in cfg["physics"]
+    ), "Missing electrowetting_weight in physics config"

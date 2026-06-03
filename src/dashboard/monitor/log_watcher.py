@@ -52,10 +52,7 @@ class LogWatcherHandler(FileSystemEventHandler):
 
     def on_modified(self, event: FileModifiedEvent) -> None:
         """Handle file modification events."""
-        if (
-            not event.is_directory
-            and os.path.basename(event.src_path) == self.log_filename
-        ):
+        if not event.is_directory and os.path.basename(event.src_path) == self.log_filename:
             try:
                 records, new_count = self.parser.parse_incremental(event.src_path)
                 if new_count > 0:

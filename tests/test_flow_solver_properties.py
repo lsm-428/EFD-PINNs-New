@@ -35,14 +35,10 @@ from src.solvers.flow_solver import (
 mesh_size_strategy = st.integers(min_value=4, max_value=64)
 
 # 电压策略
-voltage_strategy = st.floats(
-    min_value=0.0, max_value=40.0, allow_nan=False, allow_infinity=False
-)
+voltage_strategy = st.floats(min_value=0.0, max_value=40.0, allow_nan=False, allow_infinity=False)
 
 # 时间策略
-time_strategy = st.floats(
-    min_value=0.0, max_value=0.1, allow_nan=False, allow_infinity=False
-)
+time_strategy = st.floats(min_value=0.0, max_value=0.1, allow_nan=False, allow_infinity=False)
 
 # 体积分数策略（0-1 范围）
 volume_fraction_strategy = st.floats(
@@ -331,9 +327,7 @@ class TestContactLineHandlerProperties:
 
     @given(voltage=voltage_strategy, time=time_strategy)
     @settings(max_examples=100, deadline=None)
-    def test_contact_angle_consistency_with_predictor(
-        self, voltage: float, time: float
-    ):
+    def test_contact_angle_consistency_with_predictor(self, voltage: float, time: float):
         """
         Property 7: 接触角一致性
 
@@ -553,9 +547,7 @@ class TestNoSlipBoundaryProperties:
         # 所有壁面速度应为零
         for wall_name, vel in wall_vel.items():
             max_vel = np.max(vel)
-            assert (
-                max_vel < 1e-10
-            ), f"Wall '{wall_name}' has non-zero velocity: {max_vel}"
+            assert max_vel < 1e-10, f"Wall '{wall_name}' has non-zero velocity: {max_vel}"
 
     @given(
         nx=st.integers(min_value=8, max_value=12),
@@ -592,9 +584,7 @@ class TestNoSlipBoundaryProperties:
         # 所有壁面速度应为零（数值容差）
         for wall_name, vel in wall_vel.items():
             max_vel = np.max(vel)
-            assert (
-                max_vel < 1e-8
-            ), f"Wall '{wall_name}' has non-zero velocity after step: {max_vel}"
+            assert max_vel < 1e-8, f"Wall '{wall_name}' has non-zero velocity after step: {max_vel}"
 
 
 # ============================================================
@@ -714,11 +704,7 @@ class TestPINNSolverProperties:
 class TestApertureRatioProperties:
     """开口率积分属性测试"""
 
-    @given(
-        voltage=st.floats(
-            min_value=0.0, max_value=40.0, allow_nan=False, allow_infinity=False
-        )
-    )
+    @given(voltage=st.floats(min_value=0.0, max_value=40.0, allow_nan=False, allow_infinity=False))
     @settings(max_examples=50, deadline=None)
     def test_aperture_ratio_range(self, voltage: float):
         """
@@ -752,9 +738,7 @@ class TestApertureRatioProperties:
         simulator = FlowFieldSimulator()
 
         for voltage in [0, 15, 30]:
-            comparison = simulator.compare_with_aperture_model(
-                voltage=voltage, duration=0.01
-            )
+            comparison = simulator.compare_with_aperture_model(voltage=voltage, duration=0.01)
 
             # 对于 hybrid 方法，应该完全一致
             assert (

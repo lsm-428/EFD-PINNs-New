@@ -288,13 +288,9 @@ class MeshGenerator:
         self.Lz = config.get("Lz", DOMAIN_PARAMETERS["Lz"])
 
         # 油墨层厚度（用于初始条件）
-        self.ink_thickness = config.get(
-            "ink_thickness", DOMAIN_PARAMETERS["ink_thickness"]
-        )
+        self.ink_thickness = config.get("ink_thickness", DOMAIN_PARAMETERS["ink_thickness"])
 
-    def generate_structured_mesh(
-        self, nx: int = 32, ny: int = 32, nz: int = 16
-    ) -> Mesh:
+    def generate_structured_mesh(self, nx: int = 32, ny: int = 32, nz: int = 16) -> Mesh:
         """
         生成结构化网格
 
@@ -345,9 +341,7 @@ class MeshGenerator:
 
         return mesh
 
-    def _identify_boundary_cells(
-        self, nx: int, ny: int, nz: int
-    ) -> dict[str, np.ndarray]:
+    def _identify_boundary_cells(self, nx: int, ny: int, nz: int) -> dict[str, np.ndarray]:
         """
         识别边界单元索引
 
@@ -479,9 +473,7 @@ class InterfaceTracker:
         self.reinit_interval = config.get("reinit_interval", 10)
 
         # 表面张力系数
-        self.sigma = config.get(
-            "surface_tension", FLUID_PROPERTIES["oil"]["surface_tension"]
-        )
+        self.sigma = config.get("surface_tension", FLUID_PROPERTIES["oil"]["surface_tension"])
 
     def advect(
         self, phi: np.ndarray, u: np.ndarray, v: np.ndarray, w: np.ndarray, dt: float
@@ -517,9 +509,7 @@ class InterfaceTracker:
                     if u[i + 1, j, k] > 0:
                         flux_x_p = u[i + 1, j, k] * phi[i, j, k]
                     else:
-                        flux_x_p = (
-                            u[i + 1, j, k] * phi[i + 1, j, k] if i + 1 < nx else 0
-                        )
+                        flux_x_p = u[i + 1, j, k] * phi[i + 1, j, k] if i + 1 < nx else 0
 
                     phi_new[i, j, k] -= dt / dx * (flux_x_p - flux_x)
 
@@ -535,9 +525,7 @@ class InterfaceTracker:
                     if v[i, j + 1, k] > 0:
                         flux_y_p = v[i, j + 1, k] * phi[i, j, k]
                     else:
-                        flux_y_p = (
-                            v[i, j + 1, k] * phi[i, j + 1, k] if j + 1 < ny else 0
-                        )
+                        flux_y_p = v[i, j + 1, k] * phi[i, j + 1, k] if j + 1 < ny else 0
 
                     phi_new[i, j, k] -= dt / dy * (flux_y_p - flux_y)
 
@@ -553,9 +541,7 @@ class InterfaceTracker:
                     if w[i, j, k + 1] > 0:
                         flux_z_p = w[i, j, k + 1] * phi[i, j, k]
                     else:
-                        flux_z_p = (
-                            w[i, j, k + 1] * phi[i, j, k + 1] if k + 1 < nz else 0
-                        )
+                        flux_z_p = w[i, j, k + 1] * phi[i, j, k + 1] if k + 1 < nz else 0
 
                     phi_new[i, j, k] -= dt / dz * (flux_z_p - flux_z)
 
@@ -709,11 +695,7 @@ class InterfaceTracker:
                         z = self.mesh.zc[k]
                         interface_points.append([x, y, z])
 
-        return (
-            np.array(interface_points)
-            if interface_points
-            else np.array([]).reshape(0, 3)
-        )
+        return np.array(interface_points) if interface_points else np.array([]).reshape(0, 3)
 
     def compute_interface_thickness(self, phi: np.ndarray) -> float:
         """
@@ -904,12 +886,8 @@ class ContactLineHandler:
                 # 切向速度根据滑移长度调整
                 # u_slip = λ * du/dz
                 if k + 1 < mesh.nz:
-                    u_new[i, j, k] = (
-                        self.slip_length / mesh.dz * (u[i, j, k + 1] - u[i, j, k])
-                    )
-                    v_new[i, j, k] = (
-                        self.slip_length / mesh.dz * (v[i, j, k + 1] - v[i, j, k])
-                    )
+                    u_new[i, j, k] = self.slip_length / mesh.dz * (u[i, j, k + 1] - u[i, j, k])
+                    v_new[i, j, k] = self.slip_length / mesh.dz * (v[i, j, k + 1] - v[i, j, k])
 
         return u_new, v_new, w_new
 
@@ -1043,22 +1021,16 @@ class FlowSolver:
 
         # 物理参数
         self.rho_oil = config.get("rho_oil", FLUID_PROPERTIES["oil"]["density"])
-        self.rho_water = config.get(
-            "rho_water", FLUID_PROPERTIES["polar_liquid"]["density"]
-        )
+        self.rho_water = config.get("rho_water", FLUID_PROPERTIES["polar_liquid"]["density"])
         self.mu_oil = config.get("mu_oil", FLUID_PROPERTIES["oil"]["viscosity"])
-        self.mu_water = config.get(
-            "mu_water", FLUID_PROPERTIES["polar_liquid"]["viscosity"]
-        )
+        self.mu_water = config.get("mu_water", FLUID_PROPERTIES["polar_liquid"]["viscosity"])
         self.sigma = config.get("sigma", FLUID_PROPERTIES["oil"]["surface_tension"])
 
         # 数值参数
         self.cfl = config.get("cfl", NUMERICAL_PARAMETERS["cfl_number"])
         self.max_iter = config.get("max_iter", NUMERICAL_PARAMETERS["max_iterations"])
         self.tol = config.get("tol", NUMERICAL_PARAMETERS["convergence_tol"])
-        self.mass_error_tol = config.get(
-            "mass_error_tol", NUMERICAL_PARAMETERS["mass_error_tol"]
-        )
+        self.mass_error_tol = config.get("mass_error_tol", NUMERICAL_PARAMETERS["mass_error_tol"])
 
         # 初始化组件
         self.interface_tracker = InterfaceTracker(mesh, config)
@@ -1206,9 +1178,7 @@ class FlowSolver:
 
         # 表面张力稳定性条件
         rho_min = min(self.rho_oil, self.rho_water)
-        dt_sigma = 0.5 * np.sqrt(
-            rho_min * min(dx, dy, dz) ** 3 / (np.pi * self.sigma + 1e-10)
-        )
+        dt_sigma = 0.5 * np.sqrt(rho_min * min(dx, dy, dz) ** 3 / (np.pi * self.sigma + 1e-10))
 
         dt = min(dt_cfl, dt_visc, dt_sigma)
 
@@ -1284,83 +1254,32 @@ class FlowSolver:
                     dwdz = (self.w[i, j, k + 1] - self.w[i, j, k - 1]) / (2 * dz)
 
                     conv_u = (
-                        self.u[i, j, k] * dudx
-                        + self.v[i, j, k] * dudy
-                        + self.w[i, j, k] * dudz
+                        self.u[i, j, k] * dudx + self.v[i, j, k] * dudy + self.w[i, j, k] * dudz
                     )
                     conv_v = (
-                        self.u[i, j, k] * dvdx
-                        + self.v[i, j, k] * dvdy
-                        + self.w[i, j, k] * dvdz
+                        self.u[i, j, k] * dvdx + self.v[i, j, k] * dvdy + self.w[i, j, k] * dvdz
                     )
                     conv_w = (
-                        self.u[i, j, k] * dwdx
-                        + self.v[i, j, k] * dwdy
-                        + self.w[i, j, k] * dwdz
+                        self.u[i, j, k] * dwdx + self.v[i, j, k] * dwdy + self.w[i, j, k] * dwdz
                     )
 
                     # 粘性项（拉普拉斯）
                     lap_u = (
-                        (
-                            self.u[i + 1, j, k]
-                            - 2 * self.u[i, j, k]
-                            + self.u[i - 1, j, k]
-                        )
-                        / dx**2
-                        + (
-                            self.u[i, j + 1, k]
-                            - 2 * self.u[i, j, k]
-                            + self.u[i, j - 1, k]
-                        )
-                        / dy**2
-                        + (
-                            self.u[i, j, k + 1]
-                            - 2 * self.u[i, j, k]
-                            + self.u[i, j, k - 1]
-                        )
-                        / dz**2
+                        (self.u[i + 1, j, k] - 2 * self.u[i, j, k] + self.u[i - 1, j, k]) / dx**2
+                        + (self.u[i, j + 1, k] - 2 * self.u[i, j, k] + self.u[i, j - 1, k]) / dy**2
+                        + (self.u[i, j, k + 1] - 2 * self.u[i, j, k] + self.u[i, j, k - 1]) / dz**2
                     )
 
                     lap_v = (
-                        (
-                            self.v[i + 1, j, k]
-                            - 2 * self.v[i, j, k]
-                            + self.v[i - 1, j, k]
-                        )
-                        / dx**2
-                        + (
-                            self.v[i, j + 1, k]
-                            - 2 * self.v[i, j, k]
-                            + self.v[i, j - 1, k]
-                        )
-                        / dy**2
-                        + (
-                            self.v[i, j, k + 1]
-                            - 2 * self.v[i, j, k]
-                            + self.v[i, j, k - 1]
-                        )
-                        / dz**2
+                        (self.v[i + 1, j, k] - 2 * self.v[i, j, k] + self.v[i - 1, j, k]) / dx**2
+                        + (self.v[i, j + 1, k] - 2 * self.v[i, j, k] + self.v[i, j - 1, k]) / dy**2
+                        + (self.v[i, j, k + 1] - 2 * self.v[i, j, k] + self.v[i, j, k - 1]) / dz**2
                     )
 
                     lap_w = (
-                        (
-                            self.w[i + 1, j, k]
-                            - 2 * self.w[i, j, k]
-                            + self.w[i - 1, j, k]
-                        )
-                        / dx**2
-                        + (
-                            self.w[i, j + 1, k]
-                            - 2 * self.w[i, j, k]
-                            + self.w[i, j - 1, k]
-                        )
-                        / dy**2
-                        + (
-                            self.w[i, j, k + 1]
-                            - 2 * self.w[i, j, k]
-                            + self.w[i, j, k - 1]
-                        )
-                        / dz**2
+                        (self.w[i + 1, j, k] - 2 * self.w[i, j, k] + self.w[i - 1, j, k]) / dx**2
+                        + (self.w[i, j + 1, k] - 2 * self.w[i, j, k] + self.w[i, j - 1, k]) / dy**2
+                        + (self.w[i, j, k + 1] - 2 * self.w[i, j, k] + self.w[i, j, k - 1]) / dz**2
                     )
 
                     # 更新预测速度
@@ -1493,12 +1412,8 @@ class FlowSolver:
                 w_list.append(self.w.copy())
                 p_list.append(self.p.copy())
                 phi_list.append(self.phi.copy())
-                aperture_list.append(
-                    compute_aperture_ratio_from_phi(self.phi, self.mesh)
-                )
-                mass_error_list.append(
-                    self.compute_mass_conservation_error()["total_error"]
-                )
+                aperture_list.append(compute_aperture_ratio_from_phi(self.phi, self.mesh))
+                mass_error_list.append(self.compute_mass_conservation_error()["total_error"])
 
         computation_time = time_module.time() - start_time
 
@@ -1543,9 +1458,7 @@ class FlowSolver:
         current_mass_water = np.sum((1 - self.phi) * self.rho_water) * cell_vol
 
         # 相对误差
-        oil_error = abs(current_mass_oil - self.initial_mass_oil) / (
-            self.initial_mass_oil + 1e-10
-        )
+        oil_error = abs(current_mass_oil - self.initial_mass_oil) / (self.initial_mass_oil + 1e-10)
         water_error = abs(current_mass_water - self.initial_mass_water) / (
             self.initial_mass_water + 1e-10
         )
@@ -1589,21 +1502,11 @@ class FlowSolver:
             各壁面的速度数组
         """
         return {
-            "bottom": np.sqrt(
-                self.u[:, :, 0] ** 2 + self.v[:, :, 0] ** 2 + self.w[:, :, 0] ** 2
-            ),
-            "front": np.sqrt(
-                self.u[:, 0, :] ** 2 + self.v[:, 0, :] ** 2 + self.w[:, 0, :] ** 2
-            ),
-            "back": np.sqrt(
-                self.u[:, -1, :] ** 2 + self.v[:, -1, :] ** 2 + self.w[:, -1, :] ** 2
-            ),
-            "left": np.sqrt(
-                self.u[0, :, :] ** 2 + self.v[0, :, :] ** 2 + self.w[0, :, :] ** 2
-            ),
-            "right": np.sqrt(
-                self.u[-1, :, :] ** 2 + self.v[-1, :, :] ** 2 + self.w[-1, :, :] ** 2
-            ),
+            "bottom": np.sqrt(self.u[:, :, 0] ** 2 + self.v[:, :, 0] ** 2 + self.w[:, :, 0] ** 2),
+            "front": np.sqrt(self.u[:, 0, :] ** 2 + self.v[:, 0, :] ** 2 + self.w[:, 0, :] ** 2),
+            "back": np.sqrt(self.u[:, -1, :] ** 2 + self.v[:, -1, :] ** 2 + self.w[:, -1, :] ** 2),
+            "left": np.sqrt(self.u[0, :, :] ** 2 + self.v[0, :, :] ** 2 + self.w[0, :, :] ** 2),
+            "right": np.sqrt(self.u[-1, :, :] ** 2 + self.v[-1, :, :] ** 2 + self.w[-1, :, :] ** 2),
         }
 
 
@@ -1643,13 +1546,9 @@ class PINNSolver:
 
         # 物理参数
         self.rho_oil = config.get("rho_oil", FLUID_PROPERTIES["oil"]["density"])
-        self.rho_water = config.get(
-            "rho_water", FLUID_PROPERTIES["polar_liquid"]["density"]
-        )
+        self.rho_water = config.get("rho_water", FLUID_PROPERTIES["polar_liquid"]["density"])
         self.mu_oil = config.get("mu_oil", FLUID_PROPERTIES["oil"]["viscosity"])
-        self.mu_water = config.get(
-            "mu_water", FLUID_PROPERTIES["polar_liquid"]["viscosity"]
-        )
+        self.mu_water = config.get("mu_water", FLUID_PROPERTIES["polar_liquid"]["viscosity"])
         self.sigma = config.get("sigma", FLUID_PROPERTIES["oil"]["surface_tension"])
 
         # 域参数
@@ -1712,9 +1611,7 @@ class PINNSolver:
         self.model = nn.Sequential(*layers).to(self.device)
 
         # 初始化优化器
-        self.optimizer = torch.optim.Adam(
-            self.model.parameters(), lr=self.learning_rate
-        )
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
         return self.model
 
@@ -1820,19 +1717,13 @@ class PINNSolver:
         # ρ(∂u/∂t + u·∇u) = -∇p + μ∇²u
 
         # x 动量
-        ns_x = (
-            rho * (u_t + u * u_x + v * u_y + w * u_z) + p_x - mu * (u_xx + u_yy + u_zz)
-        )
+        ns_x = rho * (u_t + u * u_x + v * u_y + w * u_z) + p_x - mu * (u_xx + u_yy + u_zz)
 
         # y 动量
-        ns_y = (
-            rho * (v_t + u * v_x + v * v_y + w * v_z) + p_y - mu * (v_xx + v_yy + v_zz)
-        )
+        ns_y = rho * (v_t + u * v_x + v * v_y + w * v_z) + p_y - mu * (v_xx + v_yy + v_zz)
 
         # z 动量
-        ns_z = (
-            rho * (w_t + u * w_x + v * w_y + w * w_z) + p_z - mu * (w_xx + w_yy + w_zz)
-        )
+        ns_z = rho * (w_t + u * w_x + v * w_y + w * w_z) + p_z - mu * (w_xx + w_yy + w_zz)
 
         # ========== VOF 方程残差 ==========
         # ∂φ/∂t + u·∇φ = 0
@@ -1845,9 +1736,7 @@ class PINNSolver:
         loss_ns_z = torch.mean(ns_z**2)
         loss_vof = torch.mean(vof_residual**2)
 
-        total_physics_loss = (
-            loss_continuity + loss_ns_x + loss_ns_y + loss_ns_z + loss_vof
-        )
+        total_physics_loss = loss_continuity + loss_ns_x + loss_ns_y + loss_ns_z + loss_vof
 
         return {
             "total": total_physics_loss,
@@ -1917,12 +1806,8 @@ class PINNSolver:
             self.build_network()
 
         # 转换为 tensor
-        x_data = torch.tensor(
-            training_data["x"], dtype=torch.float32, device=self.device
-        )
-        y_data = torch.tensor(
-            training_data["y"], dtype=torch.float32, device=self.device
-        )
+        x_data = torch.tensor(training_data["x"], dtype=torch.float32, device=self.device)
+        y_data = torch.tensor(training_data["y"], dtype=torch.float32, device=self.device)
         x_bc = torch.tensor(
             training_data.get("x_bc", training_data["x"][:100]),
             dtype=torch.float32,
@@ -1980,9 +1865,7 @@ class PINNSolver:
 
         return self.history
 
-    def predict(
-        self, x: np.ndarray, t: float | None = None
-    ) -> dict[str, np.ndarray]:
+    def predict(self, x: np.ndarray, t: float | None = None) -> dict[str, np.ndarray]:
         """
         预测流场
 
@@ -2209,9 +2092,7 @@ class FlowFieldSimulator:
         # 添加接触角信息
         contact_angles = []
         for t in result.t:
-            theta = self.contact_handler.get_dynamic_contact_angle(
-                voltage, t, V_initial, t_step
-            )
+            theta = self.contact_handler.get_dynamic_contact_angle(voltage, t, V_initial, t_step)
             contact_angles.append(theta)
         result.contact_angle = np.array(contact_angles)
 
@@ -2251,9 +2132,7 @@ class FlowFieldSimulator:
             aperture_list.append(eta)
 
             # 计算接触角
-            theta = self.contact_handler.get_dynamic_contact_angle(
-                voltage, t, V_initial, t_step
-            )
+            theta = self.contact_handler.get_dynamic_contact_angle(voltage, t, V_initial, t_step)
             contact_angles.append(theta)
 
         result = SimulationResult(
@@ -2282,9 +2161,7 @@ class FlowFieldSimulator:
             result = self.aperture_model.predict_enhanced(voltage=voltage, time=t)
             aperture_list.append(result["aperture_ratio"])
             # 使用 contact_handler 获取动态接触角
-            theta = self.contact_handler.get_dynamic_contact_angle(
-                voltage, t, V_initial, t_step
-            )
+            theta = self.contact_handler.get_dynamic_contact_angle(voltage, t, V_initial, t_step)
             contact_angles.append(theta)
 
         return SimulationResult(
@@ -2308,9 +2185,7 @@ class FlowFieldSimulator:
         self._initialize_mesh()
         return compute_aperture_ratio_from_phi(phi, self.mesh)
 
-    def compare_with_aperture_model(
-        self, voltage: float, duration: float
-    ) -> dict[str, Any]:
+    def compare_with_aperture_model(self, voltage: float, duration: float) -> dict[str, Any]:
         """
         与 EnhancedApertureModel 对比
 
@@ -2322,9 +2197,7 @@ class FlowFieldSimulator:
             对比结果
         """
         # 获取 EnhancedApertureModel 结果
-        model_result = self.aperture_model.predict_enhanced(
-            voltage=voltage, time=duration
-        )
+        model_result = self.aperture_model.predict_enhanced(voltage=voltage, time=duration)
 
         # 获取模拟结果（使用 hybrid 方法快速获取）
         sim_result = self.simulate(voltage, duration, method="hybrid")
@@ -2342,9 +2215,7 @@ class FlowFieldSimulator:
             "simulation_theta": sim_result.contact_angle[-1],
         }
 
-    def validate_against_experiment(
-        self, exp_data: dict[str, np.ndarray]
-    ) -> dict[str, float]:
+    def validate_against_experiment(self, exp_data: dict[str, np.ndarray]) -> dict[str, float]:
         """
         与实验数据验证
 
@@ -2386,9 +2257,7 @@ class FlowFieldSimulator:
             "n_points": len(t_exp),
         }
 
-    def export_results(
-        self, result: SimulationResult, output_dir: str, format: str = "vtk"
-    ):
+    def export_results(self, result: SimulationResult, output_dir: str, format: str = "vtk"):
         """
         导出结果
 
@@ -2446,9 +2315,7 @@ class FlowFieldSimulator:
             "t": result.t,
             "aperture_ratio": result.aperture_ratio,
             "contact_angle": result.contact_angle,
-            "mass_error": (
-                result.mass_error if result.mass_error is not None else np.array([])
-            ),
+            "mass_error": (result.mass_error if result.mass_error is not None else np.array([])),
             "computation_time": result.computation_time,
             "method": result.method,
         }
@@ -2468,14 +2335,10 @@ class FlowFieldSimulator:
         summary = {
             "t": result.t.tolist(),
             "aperture_ratio": (
-                result.aperture_ratio.tolist()
-                if result.aperture_ratio is not None
-                else []
+                result.aperture_ratio.tolist() if result.aperture_ratio is not None else []
             ),
             "contact_angle": (
-                result.contact_angle.tolist()
-                if result.contact_angle is not None
-                else []
+                result.contact_angle.tolist() if result.contact_angle is not None else []
             ),
             "computation_time": result.computation_time,
             "method": result.method,
@@ -2492,9 +2355,7 @@ class FlowFieldSimulator:
 # ============================================================
 
 
-def create_initial_conditions(
-    mesh: Mesh, ink_thickness: float = 3e-6
-) -> dict[str, np.ndarray]:
+def create_initial_conditions(mesh: Mesh, ink_thickness: float = 3e-6) -> dict[str, np.ndarray]:
     """
     创建初始条件
 

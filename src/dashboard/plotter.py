@@ -6,7 +6,6 @@ Standardized plotting utilities for EFD3D project.
 Ensures consistent styling (fonts, labels, colormaps) across Web App, CLI, and Notebooks.
 """
 
-
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -119,9 +118,7 @@ class FlowFieldPlotter:
             density = [1.0, 2.0]  # Higher density in Z direction maybe?
 
         try:
-            ax.streamplot(
-                X, Y, u, v, color="white", linewidth=0.5, density=density, arrowsize=1.0
-            )
+            ax.streamplot(X, Y, u, v, color="white", linewidth=0.5, density=density, arrowsize=1.0)
         except Exception as e:
             print(f"Streamplot failed: {e}")
 
@@ -197,9 +194,7 @@ class FlowFieldPlotter:
         # 3. Electric Field (Optional)
         if show_electric_field:
             im3 = self.plot_electric_potential(axes[2], data)
-            plt.colorbar(
-                im3, ax=axes[2], label="Potential (V)", fraction=0.046, pad=0.04
-            )
+            plt.colorbar(im3, ax=axes[2], label="Potential (V)", fraction=0.046, pad=0.04)
 
         plt.tight_layout()
         return fig
@@ -265,9 +260,7 @@ class FlowFieldPlotter:
 
         return fig
 
-    def generate_3d_html(
-        self, data: dict[str, np.ndarray], filename: str = "temp_viz.html"
-    ) -> str:
+    def generate_3d_html(self, data: dict[str, np.ndarray], filename: str = "temp_viz.html") -> str:
         """
         Generate high-quality 3D visualization using PyVista (VTK).
         Returns the path to the generated HTML file.
@@ -315,9 +308,7 @@ class FlowFieldPlotter:
 
         # 4. Add Domain Box
         pl.add_bounding_box(color="black", line_width=2)
-        pl.show_bounds(
-            grid="back", location="outer", ticks="both", font_size=10, color="black"
-        )
+        pl.show_bounds(grid="back", location="outer", ticks="both", font_size=10, color="black")
 
         # 5. Add Electric Potential (Optional slice?)
         # For now, keep it simple: just the ink.
@@ -331,9 +322,7 @@ class FlowFieldPlotter:
 
         return filename
 
-    def create_3d_isosurface_figure(
-        self, data: dict[str, np.ndarray], isovalue: float = 0.5
-    ):
+    def create_3d_isosurface_figure(self, data: dict[str, np.ndarray], isovalue: float = 0.5):
         """
         Create a 3D interactive plot using Plotly.
         Shows the ink interface (phi=0.5).

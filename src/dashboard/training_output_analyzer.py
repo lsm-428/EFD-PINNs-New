@@ -141,9 +141,7 @@ class TrainingOutputScanner:
                 if run_dir.is_dir():
                     # 验证子目录路径是否安全
                     relative_path = run_dir.relative_to(train_dir)
-                    if not validate_path_safe(
-                        str(relative_path), base_dir=self.train_outputs_dir
-                    ):
+                    if not validate_path_safe(str(relative_path), base_dir=self.train_outputs_dir):
                         warnings.warn(f"子目录路径不安全: {run_dir.name}")
                         continue
 
@@ -207,10 +205,7 @@ class TrainingOutputScanner:
         model_files = []
         try:
             for file_path in run_dir.iterdir():
-                if (
-                    file_path.is_file()
-                    and file_path.suffix in self.supported_model_extensions
-                ):
+                if file_path.is_file() and file_path.suffix in self.supported_model_extensions:
                     model_files.append(str(file_path))
         except Exception:
             pass
@@ -276,9 +271,7 @@ class TrainingOutputScanner:
                 return True
         return False
 
-    def get_training_config(
-        self, run_info: TrainingRunInfo
-    ) -> dict[str, Any] | None:
+    def get_training_config(self, run_info: TrainingRunInfo) -> dict[str, Any] | None:
         """获取训练配置
 
         Args:
@@ -337,15 +330,11 @@ class TrainingConfigParser:
             # 提取并结构化配置
             structured_config = {
                 "metadata": TrainingConfigParser._extract_metadata(raw_config),
-                "model_architecture": TrainingConfigParser._extract_model_architecture(
-                    raw_config
-                ),
+                "model_architecture": TrainingConfigParser._extract_model_architecture(raw_config),
                 "training_parameters": TrainingConfigParser._extract_training_parameters(
                     raw_config
                 ),
-                "physics_weights": TrainingConfigParser._extract_physics_weights(
-                    raw_config
-                ),
+                "physics_weights": TrainingConfigParser._extract_physics_weights(raw_config),
                 "data_config": TrainingConfigParser._extract_data_config(raw_config),
                 "dynamic_weight_config": TrainingConfigParser._extract_dynamic_weight_config(
                     raw_config
@@ -730,9 +719,7 @@ class ModelLoader:
             return None, None
 
         # 1. 解析模型类型并确定模型路径
-        model_path, actual_model_type, epoch = ModelLoader._resolve_model_path(
-            run_dir, model_type
-        )
+        model_path, actual_model_type, epoch = ModelLoader._resolve_model_path(run_dir, model_type)
 
         if model_path is None:
             warnings.warn(f"无法找到任何模型文件: {run_path}")
@@ -839,9 +826,7 @@ class ModelLoader:
         return None, None, None
 
     @staticmethod
-    def _load_config(
-        run_dir: Path, config_path: str | None = None
-    ) -> dict[str, Any] | None:
+    def _load_config(run_dir: Path, config_path: str | None = None) -> dict[str, Any] | None:
         """加载配置文件
 
         Args:
@@ -933,9 +918,7 @@ class ModelLoader:
                 elif pth_file.name.startswith("best_model_epoch_"):
                     model_info["type"] = "epoch_N"
                     try:
-                        model_info["epoch"] = int(
-                            pth_file.stem.replace("best_model_epoch_", "")
-                        )
+                        model_info["epoch"] = int(pth_file.stem.replace("best_model_epoch_", ""))
                     except ValueError:
                         pass
 
@@ -1068,9 +1051,7 @@ class TrainingOutputAnalyzer:
         with st.sidebar.expander("📋 选中运行详情", expanded=True):
             st.markdown(f"**名称:** `{selected_run.name}`")
             st.markdown(f"**路径:** `{selected_run.path}`")
-            st.markdown(
-                f"**创建时间:** {selected_run.creation_time.strftime('%Y-%m-%d %H:%M:%S')}"
-            )
+            st.markdown(f"**创建时间:** {selected_run.creation_time.strftime('%Y-%m-%d %H:%M:%S')}")
             st.markdown(f"**模型文件数:** {len(selected_run.model_files)}")
             st.markdown(f"**配置文件:** {'✅' if selected_run.config_path else '❌'}")
             st.markdown(f"**损失数据:** {'✅' if selected_run.has_loss_csv else '❌'}")
@@ -1144,9 +1125,7 @@ class TrainingOutputAnalyzer:
 
         # Chart 1: Total Loss over Epochs
         st.markdown("#### 1️⃣ 总损失曲线")
-        fig1 = self._create_total_loss_chart(
-            df, show_log_scale, show_stage_markers, smooth_window
-        )
+        fig1 = self._create_total_loss_chart(df, show_log_scale, show_stage_markers, smooth_window)
         st.plotly_chart(fig1, use_container_width=True)
 
         # Chart 2: Loss Components Breakdown
@@ -1219,9 +1198,7 @@ class TrainingOutputAnalyzer:
         # 计算平滑后的损失（使用指数移动平均）
         alpha = 2 / (smooth_window + 1)
         df_smooth = df.copy()
-        df_smooth["loss_total_smooth"] = (
-            df["loss_total"].ewm(alpha=alpha, adjust=False).mean()
-        )
+        df_smooth["loss_total_smooth"] = df["loss_total"].ewm(alpha=alpha, adjust=False).mean()
 
         fig = make_subplots(specs=[[{"secondary_y": False}]])
 
@@ -1263,14 +1240,10 @@ class TrainingOutputAnalyzer:
                     # 阶段开始标记
                     fig.add_vline(
                         x=first_epoch,
-                        line=dict(
-                            color=stage_colors.get(stage, "gray"), dash="dash", width=1
-                        ),
+                        line=dict(color=stage_colors.get(stage, "gray"), dash="dash", width=1),
                         annotation_text=stage_names.get(stage, f"阶段{stage}"),
                         annotation_position="top",
-                        annotation=dict(
-                            font_size=10, font_color=stage_colors.get(stage, "gray")
-                        ),
+                        annotation=dict(font_size=10, font_color=stage_colors.get(stage, "gray")),
                     )
 
         # 设置布局
@@ -1280,9 +1253,7 @@ class TrainingOutputAnalyzer:
             yaxis_title="总损失 (Total Loss)",
             hovermode="x unified",
             showlegend=True,
-            legend=dict(
-                orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
-            ),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             template="plotly_white",
         )
 
@@ -1341,17 +1312,13 @@ class TrainingOutputAnalyzer:
             yaxis_title="损失值",
             hovermode="x unified",
             showlegend=True,
-            legend=dict(
-                orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
-            ),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             template="plotly_white",
         )
 
         return fig
 
-    def _create_lr_chart(
-        self, df: pd.DataFrame, show_stage_markers: bool = True
-    ) -> "go.Figure":
+    def _create_lr_chart(self, df: pd.DataFrame, show_stage_markers: bool = True) -> "go.Figure":
         """创建学习率变化图表
 
         Args:
@@ -1388,9 +1355,7 @@ class TrainingOutputAnalyzer:
                     first_epoch = stage_df["epoch"].iloc[0]
                     fig.add_vline(
                         x=first_epoch,
-                        line=dict(
-                            color=stage_colors.get(stage, "gray"), dash="dash", width=1
-                        ),
+                        line=dict(color=stage_colors.get(stage, "gray"), dash="dash", width=1),
                     )
 
         fig.update_layout(
@@ -1399,9 +1364,7 @@ class TrainingOutputAnalyzer:
             yaxis_title="学习率 (Learning Rate)",
             hovermode="x unified",
             showlegend=True,
-            legend=dict(
-                orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
-            ),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             template="plotly_white",
             yaxis=dict(type="log"),
         )
@@ -1673,9 +1636,7 @@ class TrainingOutputAnalyzer:
 
         # 转换阶段名称为中文
         if "stage" in display_df.columns:
-            display_df["阶段"] = display_df["stage"].map(
-                lambda x: stage_names.get(x, f"阶段 {x}")
-            )
+            display_df["阶段"] = display_df["stage"].map(lambda x: stage_names.get(x, f"阶段 {x}"))
 
         # 重命名列
         column_mapping = {
@@ -1973,9 +1934,7 @@ class TrainingOutputAnalyzer:
                         except Exception as e:
                             st.error(f"无法加载图像: {filename}")
                             st.markdown(f"路径: `{image_path}`")
-                            if st.checkbox(
-                                f"显示错误详情: {filename}", key=f"err_{idx}"
-                            ):
+                            if st.checkbox(f"显示错误详情: {filename}", key=f"err_{idx}"):
                                 st.code(str(e))
 
     def _render_inference_tab(self, run: TrainingRunInfo) -> None:
@@ -2020,9 +1979,7 @@ class TrainingOutputAnalyzer:
             st.error("无法列出可用模型。")
             return
 
-        model_options = {
-            f"{m['type']} ({m['name']})": m["type"] for m in available_models
-        }
+        model_options = {f"{m['type']} ({m['name']})": m["type"] for m in available_models}
         selected_model_label = st.selectbox(
             "选择模型",
             options=list(model_options.keys()),
@@ -2037,9 +1994,7 @@ class TrainingOutputAnalyzer:
         )
         if selected_model_info:
             size_mb = selected_model_info["size"] / (1024 * 1024)
-            st.caption(
-                f"模型大小: {size_mb:.2f} MB | 路径: `{selected_model_info['path']}`"
-            )
+            st.caption(f"模型大小: {size_mb:.2f} MB | 路径: `{selected_model_info['path']}`")
 
         st.markdown("---")
 
@@ -2050,25 +2005,17 @@ class TrainingOutputAnalyzer:
 
         # ============ 子标签页 1: 单点推理 ============
         with tab_single:
-            self._render_single_point_inference(
-                selected_model_info, Lx, Ly, Lz, V_max, t_max
-            )
+            self._render_single_point_inference(selected_model_info, Lx, Ly, Lz, V_max, t_max)
 
         # ============ 子标签页 2: 轨迹预测 ============
         with tab_trajectory:
-            self._render_trajectory_prediction(
-                selected_model_info, Lx, Ly, Lz, V_max, t_max
-            )
+            self._render_trajectory_prediction(selected_model_info, Lx, Ly, Lz, V_max, t_max)
 
         # ============ 子标签页 3: 切片可视化 ============
         with tab_slice:
-            self._render_slice_visualization(
-                selected_model_info, Lx, Ly, Lz, V_max, t_max
-            )
+            self._render_slice_visualization(selected_model_info, Lx, Ly, Lz, V_max, t_max)
 
-    def _render_single_point_inference(
-        self, selected_model_info, Lx, Ly, Lz, V_max, t_max
-    ):
+    def _render_single_point_inference(self, selected_model_info, Lx, Ly, Lz, V_max, t_max):
         """渲染单点推理子标签页"""
         import streamlit as st
 
@@ -2191,9 +2138,7 @@ class TrainingOutputAnalyzer:
                 ),
             )
 
-    def _render_trajectory_prediction(
-        self, selected_model_info, Lx, Ly, Lz, V_max, t_max
-    ):
+    def _render_trajectory_prediction(self, selected_model_info, Lx, Ly, Lz, V_max, t_max):
         """渲染轨迹预测子标签页 (Task 5)"""
         import numpy as np
         import streamlit as st
@@ -2454,9 +2399,7 @@ class TrainingOutputAnalyzer:
             st.error(f"❌ 轨迹预测失败: {e}")
             st.exception(e)
 
-    def _render_slice_visualization(
-        self, selected_model_info, Lx, Ly, Lz, V_max, t_max
-    ):
+    def _render_slice_visualization(self, selected_model_info, Lx, Ly, Lz, V_max, t_max):
         """渲染切片可视化子标签页 (Task 7)"""
         import streamlit as st
 
@@ -2902,9 +2845,7 @@ class TrainingOutputAnalyzer:
             st.markdown("#### 🔬 物理验证")
 
             try:
-                physics_check = engine.check_point_physics(
-                    x, y, z, V_from, V_to, t_since
-                )
+                physics_check = engine.check_point_physics(x, y, z, V_from, V_to, t_since)
 
                 phys_col1, phys_col2, phys_col3 = st.columns(3)
 
@@ -2975,9 +2916,7 @@ class TrainingOutputAnalyzer:
                     # 计算预期体积（基于初始条件）
                     from src.config import PHYSICS
 
-                    expected_volume = (
-                        PHYSICS.get("h_ink", 3e-6) * PHYSICS["Lx"] * PHYSICS["Ly"]
-                    )
+                    expected_volume = PHYSICS.get("h_ink", 3e-6) * PHYSICS["Lx"] * PHYSICS["Ly"]
                     volume_error = abs(volume - expected_volume) / expected_volume * 100
 
                     # 显示结果

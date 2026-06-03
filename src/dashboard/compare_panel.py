@@ -53,9 +53,7 @@ def compare_training_runs(run_dirs: list[str]) -> go.Figure:
                             if p == "Epoch":
                                 data["epoch"].append(int(parts[i + 1]))
                             if p == "Loss:":
-                                data["loss_total"].append(
-                                    float(parts[i + 1].rstrip(","))
-                                )
+                                data["loss_total"].append(float(parts[i + 1].rstrip(",")))
         except Exception as e:
             print(f"Warning: Failed to parse log: {e}")
         return data
@@ -102,9 +100,7 @@ def compare_training_runs(run_dirs: list[str]) -> go.Figure:
                         y=m["loss_total"],
                         mode="lines",
                         name=run["id"][-12:],
-                        line=dict(
-                            color=COMPARE_COLORS[i % len(COMPARE_COLORS)], width=2
-                        ),
+                        line=dict(color=COMPARE_COLORS[i % len(COMPARE_COLORS)], width=2),
                         legendgroup="loss",
                     ),
                     row=1,
@@ -113,9 +109,7 @@ def compare_training_runs(run_dirs: list[str]) -> go.Figure:
 
     # Final loss bar chart
     ids = [r["id"][-12:] for r in runs_data]
-    losses = [
-        r["final_loss"] if r["final_loss"] != float("inf") else 0 for r in runs_data
-    ]
+    losses = [r["final_loss"] if r["final_loss"] != float("inf") else 0 for r in runs_data]
     fig.add_trace(
         go.Bar(
             x=ids,
@@ -355,11 +349,7 @@ def render_compare_tab() -> None:
     runs = []
     if train_dir.exists():
         runs = sorted(
-            [
-                d
-                for d in train_dir.iterdir()
-                if d.is_dir() and d.name.startswith("pinn_")
-            ],
+            [d for d in train_dir.iterdir() if d.is_dir() and d.name.startswith("pinn_")],
             key=lambda x: x.stat().st_mtime,
             reverse=True,
         )
@@ -439,9 +429,7 @@ def _extract_run_metrics(run_paths: list[str]) -> list[dict[str, Any]]:
             try:
                 config = json.loads(config_path.read_text())
                 metrics["Epochs"] = config.get("training", {}).get("epochs", "N/A")
-                metrics["Batch Size"] = config.get("training", {}).get(
-                    "batch_size", "N/A"
-                )
+                metrics["Batch Size"] = config.get("training", {}).get("batch_size", "N/A")
                 metrics["LR"] = config.get("training", {}).get("learning_rate", "N/A")
             except Exception:
                 metrics["Epochs"] = "N/A"

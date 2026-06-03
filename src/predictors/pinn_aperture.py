@@ -40,9 +40,7 @@ class PINNAperturePredictor:
         >>> print(f"开口率: {eta:.3f}")
     """
 
-    def __init__(
-        self, checkpoint_path: str | None = None, device: str | None = None
-    ):
+    def __init__(self, checkpoint_path: str | None = None, device: str | None = None):
         """
         初始化预测器
 
@@ -102,17 +100,13 @@ class PINNAperturePredictor:
             from src.models.pinn_two_phase import DEFAULT_CONFIG, TwoPhasePINN
             from src.utils.model_utils import load_model_with_mismatch_handling
 
-            checkpoint = torch.load(
-                checkpoint_path, map_location=self.device, weights_only=True
-            )
+            checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
 
             config = checkpoint.get("config", DEFAULT_CONFIG)
             self.config = config
             self.model = TwoPhasePINN(config).to(self.device)
-            self.model, missing_keys, unexpected_keys = (
-                load_model_with_mismatch_handling(
-                    self.model, checkpoint_path, strict=False
-                )
+            self.model, missing_keys, unexpected_keys = load_model_with_mismatch_handling(
+                self.model, checkpoint_path, strict=False
             )
             self.model.to(self.device)
             self.model.eval()
@@ -188,9 +182,9 @@ class PINNAperturePredictor:
         V_flat = np.full_like(x_flat, voltage)
         V_from_flat = np.zeros_like(x_flat)
 
-        inputs = np.stack(
-            [x_flat, y_flat, z_flat, V_from_flat, V_flat, t_flat], axis=1
-        ).astype(np.float32)
+        inputs = np.stack([x_flat, y_flat, z_flat, V_from_flat, V_flat, t_flat], axis=1).astype(
+            np.float32
+        )
 
         with torch.no_grad():
             outputs = self.model(torch.tensor(inputs, device=self.device))
@@ -239,9 +233,9 @@ class PINNAperturePredictor:
         V_flat = np.full_like(x_flat, voltage)
         V_from_flat = np.zeros_like(x_flat)
 
-        inputs = np.stack(
-            [x_flat, y_flat, z_flat, V_from_flat, V_flat, t_flat], axis=1
-        ).astype(np.float32)
+        inputs = np.stack([x_flat, y_flat, z_flat, V_from_flat, V_flat, t_flat], axis=1).astype(
+            np.float32
+        )
 
         with torch.no_grad():
             outputs = self.model(torch.tensor(inputs, device=self.device)).cpu().numpy()
@@ -257,9 +251,7 @@ class PINNAperturePredictor:
             "Z": Z,
         }
 
-    def _integrate_aperture(
-        self, phi_field: np.ndarray, method: str = "contour"
-    ) -> float:
+    def _integrate_aperture(self, phi_field: np.ndarray, method: str = "contour") -> float:
         """
         从 φ 场计算开口率
 
@@ -480,9 +472,7 @@ class PINNAperturePredictor:
 
 
 # 便捷函数
-def predict_aperture_pinn(
-    voltage: float, time: float, checkpoint_path: str = None
-) -> float:
+def predict_aperture_pinn(voltage: float, time: float, checkpoint_path: str = None) -> float:
     """
     便捷函数：使用 PINN 预测开口率
 

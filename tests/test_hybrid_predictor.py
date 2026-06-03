@@ -122,10 +122,7 @@ class TestHybridPredictor:
         voltages = np.array([0.0, 10.0, 20.0, 30.0])
         time = 0.01  # 10ms
         thetas = np.array(
-            [
-                predictor.predict(voltage=V, time=time, V_initial=0.0, t_step=0.0)
-                for V in voltages
-            ]
+            [predictor.predict(voltage=V, time=time, V_initial=0.0, t_step=0.0) for V in voltages]
         )
 
         assert isinstance(thetas, np.ndarray)
@@ -141,9 +138,7 @@ class TestHybridPredictor:
         V_to = 30.0
         t_since = 0.01  # 10ms，转换为秒
 
-        theta = predictor.predict(
-            voltage=V_to, time=t_since, V_initial=V_from, t_step=0.0
-        )
+        theta = predictor.predict(voltage=V_to, time=t_since, V_initial=V_from, t_step=0.0)
 
         assert isinstance(theta, (float, np.floating))
         assert 0 < theta < 180
@@ -231,9 +226,7 @@ class TestHybridPredictor:
         theta_tau = predictor.dynamic_response(tau, theta_0, theta_inf)
 
         # 对于欠阻尼系统，检查值在合理范围内
-        assert (
-            min(theta_0, theta_inf) <= theta_tau <= max(theta_0, theta_inf) + 10
-        )  # 允许轻微超调
+        assert min(theta_0, theta_inf) <= theta_tau <= max(theta_0, theta_inf) + 10  # 允许轻微超调
 
     def test_multiple_voltage_steps(self):
         """测试多个电压步骤"""
@@ -247,9 +240,7 @@ class TestHybridPredictor:
         for i in range(len(voltage_sequence) - 1):
             V_from = voltage_sequence[i]
             V_to = voltage_sequence[i + 1]
-            theta = predictor.predict(
-                voltage=V_to, time=t_since, V_initial=V_from, t_step=0.0
-            )
+            theta = predictor.predict(voltage=V_to, time=t_since, V_initial=V_from, t_step=0.0)
             thetas.append(theta)
 
         assert len(thetas) == len(voltage_sequence) - 1
@@ -297,9 +288,7 @@ class TestHybridPredictorEdgeCases:
         V_to = 30.0
         t_since = 0.0
 
-        theta = predictor.predict(
-            voltage=V_to, time=t_since, V_initial=V_from, t_step=0.0
-        )
+        theta = predictor.predict(voltage=V_to, time=t_since, V_initial=V_from, t_step=0.0)
 
         # t=0 时应该接近起始电压的静态接触角
         theta_from_static = predictor.young_lippmann(V_from)
@@ -313,9 +302,7 @@ class TestHybridPredictorEdgeCases:
         V_to = 30.0
         t_since = 1.0  # 1 秒
 
-        theta_dynamic = predictor.predict(
-            voltage=V_to, time=t_since, V_initial=V_from, t_step=0.0
-        )
+        theta_dynamic = predictor.predict(voltage=V_to, time=t_since, V_initial=V_from, t_step=0.0)
         theta_static = predictor.young_lippmann(V_to)
 
         # 长时间后应该接近稳态

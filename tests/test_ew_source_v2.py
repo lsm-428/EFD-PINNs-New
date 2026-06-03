@@ -8,18 +8,18 @@ def test_ew_source_magnitude():
     mp = get_materials_params()
 
     eps0 = 8.854e-12
-    eps_r = mp.get('relative_permittivity', 12.0)
-    eps_h = mp.get('epsilon_hydrophobic', 1.934)
-    d_d = mp.get('dielectric_thickness', 8e-7)
-    d_h = mp.get('hydrophobic_thickness', 4e-7)
-    h_ink = mp.get('ink_thickness', 3e-6)
-    eps_ink = mp.get('epsilon_ink', 4.0)
-    sigma_ac = mp.get('surface_tension_polar_ink', 0.02505)
-    eps_ac = mp.get('ac_interface_width', 5e-6)
-    M_ac = mp.get('ac_mobility', 5e-11)
+    eps_r = mp.get("relative_permittivity", 12.0)
+    eps_h = mp.get("epsilon_hydrophobic", 1.934)
+    d_d = mp.get("dielectric_thickness", 8e-7)
+    d_h = mp.get("hydrophobic_thickness", 4e-7)
+    h_ink = mp.get("ink_thickness", 3e-6)
+    eps_ink = mp.get("epsilon_ink", 4.0)
+    sigma_ac = mp.get("surface_tension_polar_ink", 0.02505)
+    eps_ac = mp.get("ac_interface_width", 5e-6)
+    M_ac = mp.get("ac_mobility", 5e-11)
 
-    C_open = 1.0 / (d_d/(eps0*eps_r) + d_h/(eps0*eps_h))
-    C_ink = 1.0 / (d_d/(eps0*eps_r) + d_h/(eps0*eps_h) + h_ink/(eps0*eps_ink))
+    C_open = 1.0 / (d_d / (eps0 * eps_r) + d_h / (eps0 * eps_h))
+    C_ink = 1.0 / (d_d / (eps0 * eps_r) + d_h / (eps0 * eps_h) + h_ink / (eps0 * eps_ink))
     delta_C = C_open - C_ink
 
     V_eff = 25.0  # 30V - 5V
@@ -33,27 +33,27 @@ def test_ew_source_magnitude():
     assert C_ink < C_open, f"C_ink ({C_ink:.4e}) must be less than C_open ({C_open:.4e})"
 
     # EW 源项应在合理量级 (0.001 ~ 10 1/s)
-    assert 0.0001 < ew_at_surface < 100, \
-        f"EW source magnitude {ew_at_surface:.4e} out of reasonable range [1e-4, 1e2]"
+    assert (
+        0.0001 < ew_at_surface < 100
+    ), f"EW source magnitude {ew_at_surface:.4e} out of reasonable range [1e-4, 1e2]"
 
     # 电容量级验证（μF/m² 量级）
-    assert 1e-6 < C_open < 1e-3, \
-        f"C_open = {C_open:.4e} F/m² out of range [1e-6, 1e-3] (μF/m²)"
+    assert 1e-6 < C_open < 1e-3, f"C_open = {C_open:.4e} F/m² out of range [1e-6, 1e-3] (μF/m²)"
 
 
 def test_ew_source_with_oil_layer():
     """验证含油层电容的物理一致性"""
     mp = get_materials_params()
     eps0 = 8.854e-12
-    eps_r = mp.get('relative_permittivity', 12.0)
-    eps_h = mp.get('epsilon_hydrophobic', 1.934)
-    d_d = mp.get('dielectric_thickness', 8e-7)
-    d_h = mp.get('hydrophobic_thickness', 4e-7)
-    h_ink = mp.get('ink_thickness', 3e-6)
-    eps_ink = mp.get('epsilon_ink', 4.0)
+    eps_r = mp.get("relative_permittivity", 12.0)
+    eps_h = mp.get("epsilon_hydrophobic", 1.934)
+    d_d = mp.get("dielectric_thickness", 8e-7)
+    d_h = mp.get("hydrophobic_thickness", 4e-7)
+    h_ink = mp.get("ink_thickness", 3e-6)
+    eps_ink = mp.get("epsilon_ink", 4.0)
 
-    C_open = 1.0 / (d_d/(eps0*eps_r) + d_h/(eps0*eps_h))
-    C_ink = 1.0 / (d_d/(eps0*eps_r) + d_h/(eps0*eps_h) + h_ink/(eps0*eps_ink))
+    C_open = 1.0 / (d_d / (eps0 * eps_r) + d_h / (eps0 * eps_h))
+    C_ink = 1.0 / (d_d / (eps0 * eps_r) + d_h / (eps0 * eps_h) + h_ink / (eps0 * eps_ink))
 
     # 油层增加总阻抗 → 电容下降
     assert C_ink < C_open, "C_ink must be less than C_open (oil adds impedance)"

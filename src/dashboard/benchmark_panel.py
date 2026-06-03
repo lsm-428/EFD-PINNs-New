@@ -233,9 +233,7 @@ def render_benchmark_tab(engine: Optional["PINNInferenceEngine"]) -> None:
         )
 
     # Run benchmark button
-    run_benchmark = st.button(
-        "🚀 Run Benchmark", type="primary", use_container_width=True
-    )
+    run_benchmark = st.button("🚀 Run Benchmark", type="primary", use_container_width=True)
 
     # Initialize session state for results
     if "benchmark_results" not in st.session_state:
@@ -326,9 +324,7 @@ def render_benchmark_tab(engine: Optional["PINNInferenceEngine"]) -> None:
         st.markdown("#### 🚀 Throughput vs Batch Size")
         fig_throughput = go.Figure()
 
-        throughputs = [
-            benchmark_results[bs]["samples_per_sec"] for bs in batch_size_list
-        ]
+        throughputs = [benchmark_results[bs]["samples_per_sec"] for bs in batch_size_list]
 
         fig_throughput.add_trace(
             go.Scatter(

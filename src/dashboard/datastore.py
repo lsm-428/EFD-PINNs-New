@@ -135,9 +135,7 @@ try:
         last_updated = param.Number(default=0.0, readonly=True)
 
         # Model paths state
-        model_paths = param.List(
-            default=[], doc="List of available model checkpoint paths"
-        )
+        model_paths = param.List(default=[], doc="List of available model checkpoint paths")
 
         current_model_path = param.String(
             default=None, allow_None=True, doc="Currently selected model path"
