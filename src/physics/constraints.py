@@ -102,15 +102,15 @@ def _get_default_materials_params() -> dict:
         "domain_height": 20e-6,
         "wall_height": 3.5e-6,
         # 电润湿 EW 力参数
-        "lambda_debye": 50e-9,            # 德拜屏蔽长度 [m] ~50nm
+        "lambda_debye": 50e-9,  # 德拜屏蔽长度 [m] ~50nm
         # 物理模型配置开关
-        "use_convection": False,          # Re<<1, 默认关闭对流项
-        "use_legacy_ac": False,           # 标准化 Allen-Cahn (界面宽度可控)
-        "ac_interface_width": 5e-07,      # 界面宽度 (m) = 0.5μm, v7.2 校准值
-        "ac_mobility": 1e-10,             # 迁移率 (m³·s/kg), mob≈0.1m/s, τ~0.05ms
-        "use_adaptive_loss_scale": False, # 自适应损失归一化 (EMA)
-        "use_unified_wetting": False,     # 统一相场润湿 BC (替代旧版 BW/WW/SW)
-        "theta_wall_teflon": 110.0,       # 侧壁 Teflon 污染接触角 (°)
+        "use_convection": False,  # Re<<1, 默认关闭对流项
+        "use_legacy_ac": False,  # 标准化 Allen-Cahn (界面宽度可控)
+        "ac_interface_width": 5e-07,  # 界面宽度 (m) = 0.5μm, v7.2 校准值
+        "ac_mobility": 1e-10,  # 迁移率 (m³·s/kg), mob≈0.1m/s, τ~0.05ms
+        "use_adaptive_loss_scale": False,  # 自适应损失归一化 (EMA)
+        "use_unified_wetting": False,  # 统一相场润湿 BC (替代旧版 BW/WW/SW)
+        "theta_wall_teflon": 110.0,  # 侧壁 Teflon 污染接触角 (°)
     }
 
 
@@ -129,6 +129,7 @@ class PhysicsConstraints:
 
         # 全局步数计数器，用于控制日志输出频率
         self.global_step = 0
+
     def _compute_capacitance(self, with_oil=False):
         eps0 = self.materials_params.get("epsilon_0", 8.854e-12)
         eps_su8 = self.materials_params.get("epsilon_su8", 3.28)
@@ -145,7 +146,6 @@ class PhysicsConstraints:
             Z = Z + h_ink / (eps0 * eps_oil)
 
         return A_eff / Z
-
 
     def compute_navier_stokes_residual(self, x, predictions, model=None, grads=None):
         """
@@ -177,9 +177,7 @@ class PhysicsConstraints:
                 predictions[:, 2],
                 predictions[:, 3],
             )
-            phi = (
-                predictions[:, 4] if predictions.shape[1] >= 5 else torch.zeros_like(u)
-            )
+            phi = predictions[:, 4] if predictions.shape[1] >= 5 else torch.zeros_like(u)
 
             # 材料参数 (基于 PHYSICS 常量)
             rho_oil = self.materials_params["density_ink"]
@@ -231,8 +229,12 @@ class PhysicsConstraints:
                 lap_v = self._compute_laplacian(v, x)
                 lap_w = self._compute_laplacian(w, x)
                 lap_phi = self._compute_laplacian(phi, x)
-                phi_xx = lap_phi; phi_yy = lap_phi; phi_zz = lap_phi
-                phi_xy = lap_phi; phi_xz = lap_phi; phi_yz = lap_phi
+                phi_xx = lap_phi
+                phi_yy = lap_phi
+                phi_zz = lap_phi
+                phi_xy = lap_phi
+                phi_xz = lap_phi
+                phi_yz = lap_phi
 
             # 表面张力 (CSF 模型 - 精确曲率)
 
@@ -316,24 +318,9 @@ class PhysicsConstraints:
             mu_z = dmu_dphi * phi_z
 
             # ∇·[μ(∇u + ∇uᵀ)] 的各分量
-            viscous_u = (
-                mu * lap_u
-                + mu_x * (2 * u_x)
-                + mu_y * (u_y + v_x)
-                + mu_z * (u_z + w_x)
-            )
-            viscous_v = (
-                mu * lap_v
-                + mu_x * (v_x + u_y)
-                + mu_y * (2 * v_y)
-                + mu_z * (v_z + w_y)
-            )
-            viscous_w = (
-                mu * lap_w
-                + mu_x * (w_x + u_z)
-                + mu_y * (w_y + v_z)
-                + mu_z * (2 * w_z)
-            )
+            viscous_u = mu * lap_u + mu_x * (2 * u_x) + mu_y * (u_y + v_x) + mu_z * (u_z + w_x)
+            viscous_v = mu * lap_v + mu_x * (v_x + u_y) + mu_y * (2 * v_y) + mu_z * (v_z + w_y)
+            viscous_w = mu * lap_w + mu_x * (w_x + u_z) + mu_y * (w_y + v_z) + mu_z * (2 * w_z)
 
             # N-S: ρ(∂u/∂t + u·∇u) = -∇p + ∇·[μ(∇u+∇uᵀ)] + f_st + f_ew
             momentum_u = rho * (u_t + u_conv) + p_x - viscous_u - f_st_x - f_ew_x
@@ -390,29 +377,15 @@ class PhysicsConstraints:
         except Exception:
             return torch.zeros_like(scalar_field)
 
-    def compute_volume_conservation_residual(
-        self, x_phys: torch.Tensor, predictions: torch.Tensor
-    ):
+    def compute_volume_conservation_residual(self, x_phys: torch.Tensor, predictions: torch.Tensor):
         try:
-            device = (
-                x_phys.device
-                if isinstance(x_phys, torch.Tensor)
-                else torch.device("cpu")
-            )
-            batch_size = (
-                predictions.shape[0] if isinstance(predictions, torch.Tensor) else 1
-            )
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            batch_size = predictions.shape[0] if isinstance(predictions, torch.Tensor) else 1
 
             residuals = {
-                "volume_conservation": torch.zeros(
-                    batch_size, device=device, requires_grad=True
-                ),
-                "volume_consistency": torch.zeros(
-                    batch_size, device=device, requires_grad=True
-                ),
-                "ink_potential_min": torch.zeros(
-                    batch_size, device=device, requires_grad=True
-                ),
+                "volume_conservation": torch.zeros(batch_size, device=device, requires_grad=True),
+                "volume_consistency": torch.zeros(batch_size, device=device, requires_grad=True),
+                "ink_potential_min": torch.zeros(batch_size, device=device, requires_grad=True),
             }
 
             if isinstance(predictions, torch.Tensor):
@@ -421,20 +394,14 @@ class PhysicsConstraints:
                     alpha_clamped = torch.clamp(alpha, 0.0, 1.0)
                     base_consistency = alpha - alpha_clamped
 
-                    ink_fraction_target = self.materials_params.get(
-                        "ink_initial_fraction", 0.15
-                    )
+                    ink_fraction_target = self.materials_params.get("ink_initial_fraction", 0.15)
                     alpha_mean = torch.mean(alpha_clamped)
                     global_volume_residual = (alpha_mean - ink_fraction_target) / max(
                         ink_fraction_target, 1e-6
                     )
-                    global_volume_residual_tensor = global_volume_residual.expand(
-                        batch_size
-                    )
+                    global_volume_residual_tensor = global_volume_residual.expand(batch_size)
 
-                    overflow_penalty = torch.zeros(
-                        batch_size, device=device, requires_grad=True
-                    )
+                    overflow_penalty = torch.zeros(batch_size, device=device, requires_grad=True)
                     if (
                         isinstance(x_phys, torch.Tensor)
                         and x_phys.dim() == 2
@@ -470,9 +437,7 @@ class PhysicsConstraints:
                             overflow_penalty = overflow_alpha
 
                     residuals["volume_conservation"] = global_volume_residual_tensor
-                    residuals["volume_consistency"] = (
-                        base_consistency + overflow_penalty
-                    )
+                    residuals["volume_consistency"] = base_consistency + overflow_penalty
 
             if isinstance(predictions, torch.Tensor) and predictions.shape[1] >= 6:
                 ink_potential = predictions[:, 5]
@@ -485,22 +450,12 @@ class PhysicsConstraints:
 
         except Exception as e:
             logger.error(f"计算体积守恒残差失败: {e!s}")
-            device = (
-                x_phys.device
-                if isinstance(x_phys, torch.Tensor)
-                else torch.device("cpu")
-            )
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
             batch_size = x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
             return {
-                "volume_conservation": torch.zeros(
-                    batch_size, device=device, requires_grad=True
-                ),
-                "volume_consistency": torch.zeros(
-                    batch_size, device=device, requires_grad=True
-                ),
-                "ink_potential_min": torch.zeros(
-                    batch_size, device=device, requires_grad=True
-                ),
+                "volume_conservation": torch.zeros(batch_size, device=device, requires_grad=True),
+                "volume_consistency": torch.zeros(batch_size, device=device, requires_grad=True),
+                "ink_potential_min": torch.zeros(batch_size, device=device, requires_grad=True),
             }
 
     def compute_sidewall_contact_angle_residual(
@@ -519,19 +474,12 @@ class PhysicsConstraints:
             predictions: (batch, 5) 模型预测 (u,v,w,p,phi)
         """
         try:
-            device = (
-                x_phys.device
-                if isinstance(x_phys, torch.Tensor)
-                else torch.device("cpu")
-            )
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
             batch_size = x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
             zero = torch.zeros(batch_size, device=device, requires_grad=True)
             residuals = {"sidewall_contact_angle": zero}
 
-            if not (
-                isinstance(x_phys, torch.Tensor)
-                and isinstance(predictions, torch.Tensor)
-            ):
+            if not (isinstance(x_phys, torch.Tensor) and isinstance(predictions, torch.Tensor)):
                 return residuals
             if x_phys.dim() != 2 or x_phys.size(1) < 3:
                 return residuals
@@ -589,16 +537,12 @@ class PhysicsConstraints:
             wall_nx = torch.where(
                 x < margin,
                 torch.ones_like(n_x),
-                torch.where(
-                    x > Lx - margin, -torch.ones_like(n_x), torch.zeros_like(n_x)
-                ),
+                torch.where(x > Lx - margin, -torch.ones_like(n_x), torch.zeros_like(n_x)),
             )
             wall_ny = torch.where(
                 y < margin,
                 torch.ones_like(n_y),
-                torch.where(
-                    y > Ly - margin, -torch.ones_like(n_y), torch.zeros_like(n_y)
-                ),
+                torch.where(y > Ly - margin, -torch.ones_like(n_y), torch.zeros_like(n_y)),
             )
 
             dot = n_x * wall_nx + n_y * wall_ny
@@ -644,12 +588,8 @@ class PhysicsConstraints:
                 )
                 edge_weight = pinning_factor * interface_weight
                 # 边缘点单独加权
-                base_residual = (
-                    ((dot - target_cos) ** 2) * mask.float() * interface_weight
-                )
-                edge_residual = (
-                    ((dot - target_cos) ** 2) * is_bottom_edge.float() * edge_weight
-                )
+                base_residual = ((dot - target_cos) ** 2) * mask.float() * interface_weight
+                edge_residual = ((dot - target_cos) ** 2) * is_bottom_edge.float() * edge_weight
                 residual = base_residual + edge_residual * 0.5  # 0.5 避免边角主导
             else:
                 residual = ((dot - target_cos) ** 2) * mask.float() * interface_weight
@@ -660,16 +600,10 @@ class PhysicsConstraints:
             return residuals
         except Exception as e:
             logger.warning(f"壁面接触角残差计算失败: {e}")
-            device = (
-                x_phys.device
-                if isinstance(x_phys, torch.Tensor)
-                else torch.device("cpu")
-            )
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
             batch_size = x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
             return {
-                "sidewall_contact_angle": torch.zeros(
-                    batch_size, device=device, requires_grad=True
-                )
+                "sidewall_contact_angle": torch.zeros(batch_size, device=device, requires_grad=True)
             }
 
     def compute_laplace_pressure_residual(
@@ -690,19 +624,12 @@ class PhysicsConstraints:
             predictions: (batch, 5) 模型预测
         """
         try:
-            device = (
-                x_phys.device
-                if isinstance(x_phys, torch.Tensor)
-                else torch.device("cpu")
-            )
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
             batch_size = x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
             zero = torch.zeros(1, device=device, requires_grad=True)
             res = {"laplace_pressure": zero}
 
-            if not (
-                isinstance(x_phys, torch.Tensor)
-                and isinstance(predictions, torch.Tensor)
-            ):
+            if not (isinstance(x_phys, torch.Tensor) and isinstance(predictions, torch.Tensor)):
                 return res
             if x_phys.dim() != 2 or x_phys.size(1) < 3:
                 return res
@@ -759,14 +686,8 @@ class PhysicsConstraints:
             return res
         except Exception as e:
             logger.warning(f"Laplace 压力残差计算失败: {e}")
-            device = (
-                x_phys.device
-                if isinstance(x_phys, torch.Tensor)
-                else torch.device("cpu")
-            )
-            return {
-                "laplace_pressure": torch.zeros(1, device=device, requires_grad=True)
-            }
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            return {"laplace_pressure": torch.zeros(1, device=device, requires_grad=True)}
 
     def compute_electrowetting_residual(self, x_phys, predictions, grads=None):
         """电润湿驱动力残差 — 已移除
@@ -777,11 +698,11 @@ class PhysicsConstraints:
         保留此方法以保持 compute_core_residuals 调用兼容，但始终返回零。
         """
         try:
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device('cpu')
-            return {'electrowetting': torch.zeros(1, device=device, requires_grad=True)}
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            return {"electrowetting": torch.zeros(1, device=device, requires_grad=True)}
         except Exception:
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device('cpu')
-            return {'electrowetting': torch.zeros(1, device=device, requires_grad=True)}
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            return {"electrowetting": torch.zeros(1, device=device, requires_grad=True)}
 
     def compute_interface_energy_residual(self, x_phys, predictions, grads=None):
         """界面能 — 纯 sigma*|grad(phi)|, 塑造圆润液滴
@@ -790,16 +711,16 @@ class PhysicsConstraints:
         此项只做表面张力最小化(最小界面面积 = 圆润形状)。
         """
         try:
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device('cpu')
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
             zero = torch.zeros(x_phys.shape[0], device=device, requires_grad=True)
-            res = {'interface_energy': zero}
+            res = {"interface_energy": zero}
             if not (isinstance(x_phys, torch.Tensor) and predictions.dim() >= 2):
                 return res
             phi = predictions[:, 4]
             # 从统一梯度计算结果读取 phi 梯度
             if grads is not None:
                 grad_mag = torch.sqrt(
-                    grads["phi_x"]**2 + grads["phi_y"]**2 + grads["phi_z"]**2
+                    grads["phi_x"] ** 2 + grads["phi_y"] ** 2 + grads["phi_z"] ** 2
                 )
             else:
                 try:
@@ -812,35 +733,24 @@ class PhysicsConstraints:
                     return res
                 grad_mag = torch.norm(g[:, :3], dim=1)
 
-            sigma = self.materials_params.get('surface_tension_polar_ink', 0.02505)
-            res['interface_energy'] = sigma * grad_mag
+            sigma = self.materials_params.get("surface_tension_polar_ink", 0.02505)
+            res["interface_energy"] = sigma * grad_mag
             return res
         except Exception as e:
-            logger.warning(f'界面能失败: {e}')
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device('cpu')
-            return {'interface_energy': torch.zeros(x_phys.shape[0], device=device, requires_grad=True)}
+            logger.warning(f"界面能失败: {e}")
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            return {
+                "interface_energy": torch.zeros(x_phys.shape[0], device=device, requires_grad=True)
+            }
 
     def compute_wall_wetting_residual(
         self, x_phys: torch.Tensor, predictions: torch.Tensor, grads=None
     ):
         try:
-            device = (
-                x_phys.device
-                if isinstance(x_phys, torch.Tensor)
-                else torch.device("cpu")
-            )
-            batch_size = (
-                predictions.shape[0] if isinstance(predictions, torch.Tensor) else 1
-            )
-            residuals = {
-                "wall_wetting": torch.zeros(
-                    batch_size, device=device, requires_grad=True
-                )
-            }
-            if not (
-                isinstance(x_phys, torch.Tensor)
-                and isinstance(predictions, torch.Tensor)
-            ):
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            batch_size = predictions.shape[0] if isinstance(predictions, torch.Tensor) else 1
+            residuals = {"wall_wetting": torch.zeros(batch_size, device=device, requires_grad=True)}
+            if not (isinstance(x_phys, torch.Tensor) and isinstance(predictions, torch.Tensor)):
                 return residuals
             if x_phys.dim() != 2 or x_phys.size(1) < 3:
                 return residuals
@@ -871,17 +781,9 @@ class PhysicsConstraints:
             return residuals
         except Exception as e:
             logger.error(f"计算墙润湿残差失败: {e!s}")
-            device = (
-                x_phys.device
-                if isinstance(x_phys, torch.Tensor)
-                else torch.device("cpu")
-            )
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
             batch_size = x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
-            return {
-                "wall_wetting": torch.zeros(
-                    batch_size, device=device, requires_grad=True
-                )
-            }
+            return {"wall_wetting": torch.zeros(batch_size, device=device, requires_grad=True)}
 
     def _compute_unified_wetting_bc(self, x_phys, predictions):
         """
@@ -943,8 +845,11 @@ class PhysicsConstraints:
                 x_grad = x_phys
 
             g_phi = torch.autograd.grad(
-                phi.sum(), x_grad,
-                create_graph=True, retain_graph=True, allow_unused=True,
+                phi.sum(),
+                x_grad,
+                create_graph=True,
+                retain_graph=True,
+                allow_unused=True,
             )[0]
             if g_phi is None:
                 return {"phase_field_wetting": torch.tensor(0.0, device=device)}
@@ -958,7 +863,7 @@ class PhysicsConstraints:
             # Young-Lippmann: cos(θ_eq) = cos(θ₀) + C_yl·V_eff²/(2σ)
             V_eff = torch.clamp(V_to - V_T_base, min=0.0)
             cos_theta0 = np.cos(np.radians(theta0))
-            cos_theta_eq = cos_theta0 + C_yl * V_eff ** 2 / (2.0 * sigma)
+            cos_theta_eq = cos_theta0 + C_yl * V_eff**2 / (2.0 * sigma)
             cos_theta_eq = torch.clamp(cos_theta_eq, -1.0, 1.0)
 
             f_wall = 6.0 * phi * (1.0 - phi)
@@ -992,11 +897,11 @@ class PhysicsConstraints:
             total_w_sum = total_w.sum().clamp(min=1e-12)
 
             loss = (
-                w_bottom * bc_bottom ** 2
-                + w_x0 * bc_x0 ** 2
-                + w_xX * bc_xX ** 2
-                + w_y0 * bc_y0 ** 2
-                + w_yY * bc_yY ** 2
+                w_bottom * bc_bottom**2
+                + w_x0 * bc_x0**2
+                + w_xX * bc_xX**2
+                + w_y0 * bc_y0**2
+                + w_yY * bc_yY**2
             )
             scalar_loss = loss.sum() / total_w_sum
 
@@ -1019,25 +924,29 @@ class PhysicsConstraints:
           G_ew(t) = G_ew_steady × (1 - exp(-t/τ_RC))²
         """
         try:
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device('cpu')
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
             zero = torch.zeros(1, device=device, requires_grad=True)
-            res = {'dielectric_charge': zero}
+            res = {"dielectric_charge": zero}
             if not (isinstance(x_phys, torch.Tensor) and predictions.dim() >= 2):
                 return res
             if x_phys.shape[1] < 6:
                 return res
             phi = predictions[:, 4]
-            z = x_phys[:, 2]; V_to = x_phys[:, 4]; t_since = x_phys[:, 5]
+            z = x_phys[:, 2]
+            V_to = x_phys[:, 4]
+            t_since = x_phys[:, 5]
             is_bottom = z < 1e-6
             if not is_bottom.any():
                 return res
 
-            phi_b = phi[is_bottom]; V_b = V_to[is_bottom]; t_b = t_since[is_bottom]
-            V_T = self.materials_params.get('V_T_base', 5.0)
+            phi_b = phi[is_bottom]
+            V_b = V_to[is_bottom]
+            t_b = t_since[is_bottom]
+            V_T = self.materials_params.get("V_T_base", 5.0)
             V_eff = torch.clamp(V_b - V_T, min=0.0)
 
             # τ_RC: 介电层RC时间常数 (SU-8电阻率≈10¹⁴Ω·cm → τ_RC≈25μs)
-            tau_rc = self.materials_params.get('charge_relaxation_time', 2.5e-5)
+            tau_rc = self.materials_params.get("charge_relaxation_time", 2.5e-5)
 
             # RC充电曲线: (1-exp(-t/τ_RC))²
             charge_factor = (1.0 - torch.exp(-t_b / tau_rc)) ** 2
@@ -1055,12 +964,12 @@ class PhysicsConstraints:
             residual = torch.relu(ew_driving - ew_available)
 
             n_bottom = is_bottom.float().sum().clamp(min=1)
-            res['dielectric_charge'] = residual.sum() / n_bottom
+            res["dielectric_charge"] = residual.sum() / n_bottom
             return res
         except Exception as e:
-            logger.warning(f'介电电荷残差失败: {e}')
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device('cpu')
-            return {'dielectric_charge': torch.zeros(1, device=device, requires_grad=True)}
+            logger.warning(f"介电电荷残差失败: {e}")
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            return {"dielectric_charge": torch.zeros(1, device=device, requires_grad=True)}
 
     def _compute_contact_line_dynamics_residual(self, x_phys, predictions, grads=None):
         """接触线动力学约束 — Hoffman-Voinov-Tanner 模型适配
@@ -1076,15 +985,16 @@ class PhysicsConstraints:
           接触线处的 θ_local 需满足 cos(θ_eq) = cos(θ₀) + C×V²/(2σ)
         """
         try:
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device('cpu')
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
             zero = torch.zeros(1, device=device, requires_grad=True)
-            res = {'contact_line_dynamics': zero}
+            res = {"contact_line_dynamics": zero}
             if not (isinstance(x_phys, torch.Tensor) and predictions.dim() >= 2):
                 return res
             if x_phys.shape[1] < 6:
                 return res
             phi = predictions[:, 4]
-            z = x_phys[:, 2]; V_to = x_phys[:, 4]
+            z = x_phys[:, 2]
+            V_to = x_phys[:, 4]
             # 接触线区域: z=0 且 φ≈0.5
             is_bottom = z < 1e-6
             is_interface = (phi > 0.2) & (phi < 0.8)
@@ -1117,30 +1027,30 @@ class PhysicsConstraints:
             cos_local = phi_z[mask] / grad_mag[mask]
 
             # cos(θ_eq) from Young-Lippmann
-            theta0_deg = self.materials_params.get('contact_angle_theta0', 120.0)
-            sigma_po = self.materials_params.get('surface_tension_polar_ink',
-                        self.materials_params.get('sigma', 0.02505))
+            theta0_deg = self.materials_params.get("contact_angle_theta0", 120.0)
+            sigma_po = self.materials_params.get(
+                "surface_tension_polar_ink", self.materials_params.get("sigma", 0.02505)
+            )
             # 双层串联电容 (SU-8 + Teflon)，含有效面积校正因子 A_eff
             C_yl = self._compute_capacitance()
 
             cos_theta0 = np.cos(np.radians(theta0_deg))
-            V_m = V_to[mask]; V_T = self.materials_params.get('V_T_base', 5.0)
+            V_m = V_to[mask]
+            V_T = self.materials_params.get("V_T_base", 5.0)
             V_eff = torch.clamp(V_m - V_T, min=0.0)
             ew_term = C_yl * V_eff**2 / (2 * sigma_po)
-            cos_eq = torch.clamp(
-                torch.tensor(cos_theta0, device=device) + ew_term, -1.0, 1.0
-            )
+            cos_eq = torch.clamp(torch.tensor(cos_theta0, device=device) + ew_term, -1.0, 1.0)
 
             # HVT: v_cl ∝ cos_eq - cos_local
-            k_cl = self.materials_params.get('contact_line_friction', 1e-3)
+            k_cl = self.materials_params.get("contact_line_friction", 1e-3)
             residual = v_cl - k_cl * (cos_eq - cos_local)
 
-            res['contact_line_dynamics'] = torch.mean(residual**2)
+            res["contact_line_dynamics"] = torch.mean(residual**2)
             return res
         except Exception as e:
-            logger.warning(f'接触线动力学残差失败: {e}')
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device('cpu')
-            return {'contact_line_dynamics': torch.zeros(1, device=device, requires_grad=True)}
+            logger.warning(f"接触线动力学残差失败: {e}")
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            return {"contact_line_dynamics": torch.zeros(1, device=device, requires_grad=True)}
 
     def _compute_top_boundary_residual(self, x_phys, predictions, grads=None):
         """顶面自由表面边界条件 (z≈Lz)
@@ -1151,14 +1061,14 @@ class PhysicsConstraints:
         - φ=0 (纯极性液体在顶部, 油墨在下层)
         """
         try:
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device('cpu')
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
             zero = torch.zeros(1, device=device, requires_grad=True)
-            res = {'top_boundary': zero}
+            res = {"top_boundary": zero}
             if not (isinstance(x_phys, torch.Tensor) and predictions.dim() >= 2):
                 return res
             if x_phys.shape[1] < 3:
                 return res
-            Lz = self.materials_params.get('domain_height', 20e-6)
+            Lz = self.materials_params.get("domain_height", 20e-6)
             z = x_phys[:, 2]
             is_top = z > (Lz - 1e-6)
             if not is_top.any():
@@ -1192,12 +1102,12 @@ class PhysicsConstraints:
             normal = (w_t**2).mean()
             phi_ok = (phi_t**2).mean()
 
-            res['top_boundary'] = shear + normal + 0.5 * phi_ok
+            res["top_boundary"] = shear + normal + 0.5 * phi_ok
             return res
         except Exception as e:
-            logger.warning(f'顶面BC失败: {e}')
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device('cpu')
-            return {'top_boundary': torch.zeros(1, device=device, requires_grad=True)}
+            logger.warning(f"顶面BC失败: {e}")
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            return {"top_boundary": torch.zeros(1, device=device, requires_grad=True)}
 
     def safe_compute_laplacian_spatial(
         self, scalar_field: torch.Tensor, coords: torch.Tensor, spatial_dims: int = 3
@@ -1224,9 +1134,7 @@ class PhysicsConstraints:
 
     def safe_compute_gradient(self, output: torch.Tensor, input_tensor: torch.Tensor):
         try:
-            if not isinstance(output, torch.Tensor) or not isinstance(
-                input_tensor, torch.Tensor
-            ):
+            if not isinstance(output, torch.Tensor) or not isinstance(input_tensor, torch.Tensor):
                 return torch.zeros_like(input_tensor)
             if not input_tensor.requires_grad:
                 input_tensor = input_tensor.clone().requires_grad_(True)
@@ -1341,9 +1249,7 @@ class PhysicsConstraints:
         先统一计算所有梯度，再分发给各约束子方法。
         避免重复 autograd 调用，训练速度提升 3-4 倍。
         """
-        device = (
-            x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
-        )
+        device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
         batch_size = x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
 
         # === 统一梯度计算（一次性完成所有 autograd） ===
@@ -1367,9 +1273,7 @@ class PhysicsConstraints:
 
         # 2. VOF 方程残差（体积分数输运）
         try:
-            vof_residual = self._compute_vof_residual(
-                x_phys, predictions, model=model, grads=grads
-            )
+            vof_residual = self._compute_vof_residual(x_phys, predictions, model=model, grads=grads)
             residuals["vof"] = vof_residual
         except Exception as e:
             logger.warning(f"VOF 残差计算失败: {e}")
@@ -1377,36 +1281,28 @@ class PhysicsConstraints:
 
         # 3. 体积守恒残差
         try:
-            vc_residuals = self.compute_volume_conservation_residual(
-                x_phys, predictions
-            )
+            vc_residuals = self.compute_volume_conservation_residual(x_phys, predictions)
             residuals.update(vc_residuals)
         except Exception as e:
             logger.warning(f"体积守恒残差计算失败: {e}")
 
         # 4. 电润湿驱动力
         try:
-            ew_residuals = self.compute_electrowetting_residual(
-                x_phys, predictions, grads=grads
-            )
+            ew_residuals = self.compute_electrowetting_residual(x_phys, predictions, grads=grads)
             residuals.update(ew_residuals)
         except Exception as e:
             logger.warning(f"电润湿残差失败: {e}")
 
         # 5. 界面能
         try:
-            ie_residuals = self.compute_interface_energy_residual(
-                x_phys, predictions, grads=grads
-            )
+            ie_residuals = self.compute_interface_energy_residual(x_phys, predictions, grads=grads)
             residuals.update(ie_residuals)
         except Exception as e:
             logger.warning(f"界面能约束计算失败: {e}")
 
         # 6. Laplace 压力一致约束
         try:
-            lp_residuals = self.compute_laplace_pressure_residual(
-                x_phys, predictions, grads=grads
-            )
+            lp_residuals = self.compute_laplace_pressure_residual(x_phys, predictions, grads=grads)
             residuals.update(lp_residuals)
         except Exception as e:
             logger.warning(f"Laplace 压力残差计算失败: {e}")
@@ -1423,9 +1319,7 @@ class PhysicsConstraints:
 
         # 8. 时间连续性正则化（需要 model 做三时间点前向）
         try:
-            temporal_residual = self._compute_temporal_smoothness(
-                x_phys, predictions, model=model
-            )
+            temporal_residual = self._compute_temporal_smoothness(x_phys, predictions, model=model)
             residuals["temporal_smoothness"] = temporal_residual
         except Exception as e:
             logger.warning(f"时间连续性残差计算失败: {e}")
@@ -1434,9 +1328,7 @@ class PhysicsConstraints:
         # 9. 壁面润湿约束
         if not self.materials_params.get("use_unified_wetting", False):
             try:
-                ww_residuals = self.compute_wall_wetting_residual(
-                    x_phys, predictions, grads=grads
-                )
+                ww_residuals = self.compute_wall_wetting_residual(x_phys, predictions, grads=grads)
                 residuals.update(ww_residuals)
             except Exception as e:
                 logger.warning(f"壁面润湿残差计算失败: {e}")
@@ -1444,9 +1336,7 @@ class PhysicsConstraints:
         # 10. 统一相场润湿 BC
         if self.materials_params.get("use_unified_wetting", False):
             try:
-                pfw_residuals = self._compute_unified_wetting_bc(
-                    x_phys, predictions, grads=grads
-                )
+                pfw_residuals = self._compute_unified_wetting_bc(x_phys, predictions, grads=grads)
                 residuals.update(pfw_residuals)
             except Exception as e:
                 logger.warning(f"统一润湿 BC 计算失败: {e}")
@@ -1471,9 +1361,7 @@ class PhysicsConstraints:
 
         # 13. 顶面自由表面边界条件
         try:
-            tbc_residuals = self._compute_top_boundary_residual(
-                x_phys, predictions, grads=grads
-            )
+            tbc_residuals = self._compute_top_boundary_residual(x_phys, predictions, grads=grads)
             residuals.update(tbc_residuals)
         except Exception as e:
             logger.warning(f"顶面BC残差计算失败: {e}")
@@ -1502,9 +1390,7 @@ class PhysicsConstraints:
         替代原有的两次独立前向（t+dt 和 t-dt）。
         t 时刻的预测已在外层传入，无需重复计算。
         """
-        device = (
-            x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
-        )
+        device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
         batch_size = x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
 
         if model is None:
@@ -1581,9 +1467,7 @@ class PhysicsConstraints:
             x_phys: (batch, 6) — (x, y, z, V_from, V_to, t_since)
             predictions: (batch, 5+) — (u, v, w, p, phi, ...)
         """
-        device = (
-            x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
-        )
+        device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
         batch_size = x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
 
         try:
@@ -1597,9 +1481,7 @@ class PhysicsConstraints:
                 predictions = model(x_phys)
 
             u, v, w = predictions[:, 0], predictions[:, 1], predictions[:, 2]
-            phi = (
-                predictions[:, 4] if predictions.shape[1] >= 5 else torch.zeros_like(u)
-            )
+            phi = predictions[:, 4] if predictions.shape[1] >= 5 else torch.zeros_like(u)
 
             # 从统一梯度计算结果读取（由 compute_core_residuals 提供）
             if grads is not None:
@@ -1611,9 +1493,12 @@ class PhysicsConstraints:
             else:
                 # 回退：独立计算
                 g_phi = torch.autograd.grad(
-                    phi.sum(), x_phys,
+                    phi.sum(),
+                    x_phys,
                     grad_outputs=torch.ones_like(phi),
-                    create_graph=True, retain_graph=True, allow_unused=True,
+                    create_graph=True,
+                    retain_graph=True,
+                    allow_unused=True,
                 )[0]
                 if g_phi is None:
                     return torch.zeros(batch_size, device=device)
@@ -1637,9 +1522,7 @@ class PhysicsConstraints:
                 # 其中 D_eff = M_ac·σ·ε / L_ref² 是有效扩散系数 [1/s]
                 # L_ref = ε (界面宽度) 作为特征长度
                 # 量纲: advection [1/s] = D_eff [1/s] * (ε·∇²φ [1/m²] * L_ref² [m²]) ✓
-                sigma_ac = self.materials_params.get(
-                    "surface_tension_polar_ink", 0.02505
-                )
+                sigma_ac = self.materials_params.get("surface_tension_polar_ink", 0.02505)
                 eps_ac = self.materials_params.get("ac_interface_width", 5e-07)
                 M_ac = self.materials_params.get("ac_mobility", 1e-10)
 
@@ -1655,10 +1538,7 @@ class PhysicsConstraints:
                 mob = D_eff / eps_ac  # [m/s] 迁移速度尺度
 
                 # 标准 AC 方程残差: ∂φ/∂t + u·∇φ = mob·[ε·∇²φ − σ·W'(φ)/ε]
-                ac_residual = advection - mob * (
-                    eps_ac * lap_phi
-                    - sigma_ac * f_prime / eps_ac
-                )
+                ac_residual = advection - mob * (eps_ac * lap_phi - sigma_ac * f_prime / eps_ac)
 
             # === 电润湿驱动力源项 (直接加入 AC 方程) ===
             # 物理: 电润湿自由能 G_ew = -½·C(φ)·V²
@@ -1694,7 +1574,7 @@ class PhysicsConstraints:
                 else:
                     V_to = torch.zeros(batch_size, device=device)
 
-                V_T = self.materials_params.get('V_T_base', 5.0)
+                V_T = self.materials_params.get("V_T_base", 5.0)
                 V_eff = torch.clamp(V_to - V_T, min=0.0)
 
                 # z 方向衰减
@@ -1778,5 +1658,6 @@ class PhysicsConstraints:
             "momentum_u": torch.zeros(batch_size, device=device),
             "momentum_v": torch.zeros(batch_size, device=device),
             "momentum_w": torch.zeros(batch_size, device=device),
+            "vof": torch.zeros(batch_size, device=device),
+            "volume_conservation": torch.zeros(batch_size, device=device),
         }
-

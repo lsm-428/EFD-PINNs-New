@@ -2,7 +2,7 @@
 物理残差 Sanity Check 测试
 
 验证：
-1. 参数一致性：θ₀=120°, εᵣ=12.0, σ=0.045 在配置与约束实现中统一
+1. 参数一致性：θ₀=120°, εᵣ=12.0, σ=0.02505 在配置与约束实现中统一
 2. 物理方程形式：N-S + VOF + 表面张力 + 体积守恒 在 PhysicsConstraints 中集中实现
 3. 梯度反向传播：通过小批量点验证模型参数能正确接收梯度
 4. 数值稳定性：在代表性高电压/长时间/边界点样例下无 NaN/Inf
@@ -31,17 +31,13 @@ class TestParameterConsistency:
         config = get_physics_config()
 
         # 验证关键参数
-        assert (
-            abs(config.theta0 - 120.0) < 1e-6
-        ), f"theta0 应为 120.0, 实际为 {config.theta0}"
+        assert abs(config.theta0 - 120.0) < 1e-6, f"theta0 应为 120.0, 实际为 {config.theta0}"
         assert (
             abs(config.epsilon_r - 12.0) < 1e-6
         ), f"epsilon_r 应为 12.0, 实际为 {config.epsilon_r}"
-        assert (
-            abs(config.sigma - 0.045) < 1e-6
-        ), f"sigma 应为 0.045, 实际为 {config.sigma}"
-        assert abs(config.tau - 0.005) < 1e-6, f"tau 应为 0.005, 实际为 {config.tau}"
-        assert abs(config.zeta - 0.8) < 1e-6, f"zeta 应为 0.8, 实际为 {config.zeta}"
+        assert abs(config.sigma - 0.02505) < 1e-6, f"sigma 应为 0.02505, 实际为 {config.sigma}"
+        assert abs(config.tau - 0.0119) < 1e-6, f"tau 应为 0.0119, 实际为 {config.tau}"
+        assert abs(config.zeta - 1.0) < 1e-6, f"zeta 应为 1.0, 实际为 {config.zeta}"
 
         # 验证 PHYSICS 字典与 config 一致
         assert PHYSICS["theta0"] == config.theta0
@@ -59,7 +55,7 @@ class TestParameterConsistency:
         # 验证材料参数已正确传入
         assert pc.materials_params is not None
         assert "surface_tension_polar_ink" in pc.materials_params
-        assert abs(pc.materials_params["surface_tension_polar_ink"] - 0.045) < 1e-6
+        assert abs(pc.materials_params["surface_tension_polar_ink"] - 0.02505) < 1e-6
         assert "relative_permittivity" in pc.materials_params
         assert abs(pc.materials_params["relative_permittivity"] - 12.0) < 1e-6
 
@@ -90,8 +86,10 @@ class TestCoreResiduals:
     def test_compute_core_residuals_returns_all_keys(self, setup_model_and_data):
         """验证 compute_core_residuals 返回所有核心残差项"""
         model, pc, x_phys, device = setup_model_and_data
+        model.eval()
+        predictions = model(x_phys)
 
-        residuals = pc.compute_core_residuals(x_phys, None, model=model)
+        residuals = pc.compute_core_residuals(x_phys, predictions, model=model)
 
         # 验证核心残差项存在
         expected_keys = ["continuity", "momentum_u", "momentum_v", "momentum_w", "vof"]
@@ -114,11 +112,12 @@ class TestCoreResiduals:
         model, pc, x_phys, device = setup_model_and_data
         model.train()
 
-        residuals = pc.compute_core_residuals(x_phys, None, model=model)
+        predictions = model(x_phys)
+        residuals = pc.compute_core_residuals(x_phys, predictions, model=model)
 
         # 计算总损失
         total_loss = torch.tensor(0.0, device=device)
-        for key, val in residuals.items():
+        for _key, val in residuals.items():
             if isinstance(val, torch.Tensor) and val.requires_grad:
                 total_loss = total_loss + torch.mean(val**2)
 
@@ -127,7 +126,7 @@ class TestCoreResiduals:
 
         # 检查模型参数是否有梯度
         has_grad = False
-        for name, param in model.named_parameters():
+        for _name, param in model.named_parameters():
             if param.grad is not None and param.grad.abs().sum() > 0:
                 has_grad = True
                 break
@@ -146,7 +145,6 @@ class TestZeroFieldScenario:
         """
         from src.physics.constraints import PhysicsConstraints
 
-        device = torch.device("cpu")
         batch_size = 16
 
         # 创建一个输出恒定值的简单模型
