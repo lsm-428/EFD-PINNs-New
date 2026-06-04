@@ -44,6 +44,7 @@
         "aperture_eps": 0.05
     },
     "physics": {
+        "use_unified_wetting": true,
         "interface_weight": 500.0,
         "ic_weight": 300.0,
         "bc_weight": 80.0,

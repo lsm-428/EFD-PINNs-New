@@ -529,9 +529,10 @@ class PhysicsConstraints:
 
             dot = n_x * wall_nx + n_y * wall_ny
 
-            # 接触角滞后 (CAH): 根据壁面法向速度选择前进/后退角
-            # u·n̂_wall > 0 → 油墨被推开 → 前进角 θ_A
-            # u·n̂_wall < 0 → 油墨拉回   → 后退角 θ_R
+            # 接触角滞后 (CAH): 接触线沿围堰壁顶移动时的动态接触角
+            # 物理位置: 围堰壁顶部(z≈3.5μm)与顶面交界处
+            # u·n̂_wall > 0 → 油墨被推向壁外 → 前进角 θ_A (更大)
+            # u·n̂_wall < 0 → 油墨被拉回壁内 → 后退角 θ_R (更小)
             u_vel = predictions[:, 0]
             v_vel = predictions[:, 1]
             u_dot_n = u_vel * wall_nx + v_vel * wall_ny
@@ -557,26 +558,19 @@ class PhysicsConstraints:
                 ),
             )
 
-            # 壁面底面边缘钉扎: z≈0 处的接触线被锐缘钉扎
-            # 钉扎条件: |cos_θ_local - cos_θ_eq| < H_pin → 接触线不可移动
-            is_bottom_edge = (z < 1e-6) & near_wall
-            if is_bottom_edge.any():
-                cos_diff = torch.abs(dot - target_cos)
-                H_pin = 0.15  # 钉扎强度阈值
-                pinning_factor = torch.where(
-                    cos_diff < H_pin,
-                    torch.ones_like(cos_diff) * 5.0,  # 钉扎: 加权惩罚
-                    torch.ones_like(cos_diff),  # 突破: 正常权重
-                )
-                edge_weight = pinning_factor * interface_weight
-                # 边缘点单独加权
-                base_residual = ((dot - target_cos) ** 2) * mask.float() * interface_weight
-                edge_residual = ((dot - target_cos) ** 2) * is_bottom_edge.float() * edge_weight
-                residual = base_residual + edge_residual * 0.5  # 0.5 避免边角主导
+            # 接触线位置: 围堰壁顶部与顶面交界处 (z ≈ wall_height)
+            wall_height = self.materials_params.get("wall_height", 3.5e-6)
+            is_wall_top = (z > wall_height - 1e-6) & (z < wall_height + 1e-6)
+            contact_line_mask = is_wall_top & near_wall & (interface_weight > 0.01)
+
+            # 接触线约束: 在壁顶接触线区域施加约束
+            if contact_line_mask.any():
+                residual = ((dot - target_cos) ** 2) * contact_line_mask.float() * interface_weight
+                n_active = contact_line_mask.float().sum().clamp(min=1)
             else:
                 residual = ((dot - target_cos) ** 2) * mask.float() * interface_weight
+                n_active = mask.float().sum().clamp(min=1)
 
-            n_active = mask.float().sum().clamp(min=1)
             residuals["sidewall_contact_angle"] = residual.sum() / n_active
 
             return residuals
