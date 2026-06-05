@@ -11,12 +11,12 @@ EWP 混合预测器
 
 核心功能：
 - Young-Lippmann 方程计算稳态接触角
-- 二阶欠阻尼响应计算动态过渡
+- 一阶指数响应计算动态过渡
 - 电压扫描响应（升压/降压）
 - 方波响应（含表面张力恢复）
 
 物理机制：
-- 升压（水推油走）：电润湿驱动，接触角渐变（二阶欠阻尼）
+- 升压（水推油走）：电润湿驱动，接触角渐变（一阶指数）
 - 降压（油推水走）：接触角瞬间恢复，开口率渐变（油墨铺展）
 
 使用方法:
@@ -53,7 +53,7 @@ class HybridPredictor:
 
     物理基础：
     1. Young-Lippmann 方程: cos(θ) = cos(θ₀) + ε₀εᵣV²/(2γd)
-    2. 二阶欠阻尼响应: θ(t) = θ_eq + (θ₀-θ_eq)·e^(-ζω₀t)·[cos(ω_d·t) + ζ/√(1-ζ²)·sin(ω_d·t)]
+    2. 一阶指数响应: θ(t) = θ_eq + (θ₀-θ_eq)·e^(-ζω₀t)·[cos(ω_d·t) + ζ/√(1-ζ²)·sin(ω_d·t)]
     """
 
     def __init__(
@@ -99,8 +99,8 @@ class HybridPredictor:
                 "tau_onset": 0.0075,  # 低电压区时间常数 (s)
                 "tau_saturation": 0.003,  # 高电压区时间常数 (s)
                 "tau_recovery_factor": 0.4,  # 恢复速度因子（τ_recovery = τ_drive × factor）
-                "zeta": 0.8,  # 阻尼比
-                "dynamic_order": 2,  # 动态阶数：2=二阶欠阻尼, 1=一阶指数
+                "zeta": 1.0,  # 阻尼比
+                "dynamic_order": 1,  # 动态阶数：1=一阶指数, 2=二阶欠阻尼
                 "V_max": 30.0,  # 最大电压 (V)
                 "V_threshold": 5.0,  # 阈值电压（会被PhysicsConfig覆盖）
             }
@@ -118,7 +118,7 @@ class HybridPredictor:
         self._update_derived_params()
 
         logger.info("✅ HybridPredictor 初始化完成")
-        logger.info("   模式: 解析公式 (Young-Lippmann + 二阶欠阻尼)")
+        logger.info("   模式: 解析公式 (Young-Lippmann + 一阶指数)")
         logger.info(
             f"   ε_SU8={self.params['epsilon_r']}, ε_Teflon={self.params['epsilon_h']}, γ={self.params['gamma']} N/m"
         )
@@ -176,7 +176,7 @@ class HybridPredictor:
                 "tau_saturation": dynamics.get("tau_saturation", self.params.get("tau_saturation", 0.003)),
                 "tau_recovery_factor": dynamics.get("tau_recovery_factor", self.params.get("tau_recovery_factor", 0.4)),
                 "zeta": dynamics.get("zeta", self.params["zeta"]),
-                "dynamic_order": dynamics.get("dynamic_order", self.params.get("dynamic_order", 2)),
+                "dynamic_order": dynamics.get("dynamic_order", self.params.get("dynamic_order", 1)),
             }
         )
 
@@ -211,7 +211,7 @@ class HybridPredictor:
                 "tau_saturation": dynamics.get("tau_saturation", self.params.get("tau_saturation", 0.003)),
                 "tau_recovery_factor": dynamics.get("tau_recovery_factor", self.params.get("tau_recovery_factor", 0.4)),
                 "zeta": dynamics.get("zeta", self.params["zeta"]),
-                "dynamic_order": dynamics.get("dynamic_order", self.params.get("dynamic_order", 2)),
+                "dynamic_order": dynamics.get("dynamic_order", self.params.get("dynamic_order", 1)),
             }
         )
 
@@ -309,7 +309,7 @@ class HybridPredictor:
 
     def dynamic_response(self, t: float, theta_start: float, theta_eq: float, V_to: float | None = None) -> float:
         """
-        二阶欠阻尼动态响应（电润湿驱动）
+        一阶指数动态响应（电润湿驱动）
 
         θ(t) = θ_eq + (θ_start - θ_eq) · e^(-ζω₀t) · [cos(ω_d·t) + ζ/√(1-ζ²)·sin(ω_d·t)]
 
@@ -323,7 +323,7 @@ class HybridPredictor:
             当前角度 (度)
         """
         zeta = self.params["zeta"]
-        dynamic_order = self.params.get("dynamic_order", 2)
+        dynamic_order = self.params.get("dynamic_order", 1)
 
         if V_to is not None:
             omega_0, omega_d = self._omega_for_voltage(V_to)
@@ -334,7 +334,7 @@ class HybridPredictor:
             # 一阶指数或临界阻尼/过阻尼
             tau = 1.0 / omega_0 if V_to is not None else self.params["tau"]
             return theta_eq + (theta_start - theta_eq) * np.exp(-t / tau)
-        # 二阶欠阻尼
+        # 一阶指数
         exp_term = np.exp(-zeta * omega_0 * t)
         damping_factor = zeta / np.sqrt(1 - zeta**2)
         return theta_eq + (theta_start - theta_eq) * exp_term * (
@@ -492,8 +492,12 @@ class HybridPredictor:
         混合预测：模型稳态 + 解析动态
 
         物理机制：
-        - 升压（V_initial < voltage）：电润湿驱动，接触角渐变（二阶欠阻尼）
-        - 降压（V_initial > voltage）：接触角瞬间恢复到目标值
+        - 升压（V_initial < voltage）：电润湿驱动，接触角渐变（一阶指数/R2>0.93）
+        - 降压（V_initial > voltage）：RC放电驱动，接触角渐变恢复（一阶指数）
+
+        标定结果（2026-06-01验证）：
+        - 电压上升: theta(t)=theta_min+(theta_0-theta_min)*exp(-t/tau), tau=10-15ms
+        - 电压下降: theta(t)=theta_0+(theta_min-theta_0)*exp(-t/tau_fall), tau_fall=10-12ms
 
         Args:
             voltage: 当前电压 (V)
@@ -512,13 +516,13 @@ class HybridPredictor:
         if time < t_step:
             return theta_start
         # 判断升压还是降压
+        t_since = time - t_step
         if voltage >= V_initial:
-            # 升压：电润湿驱动，接触角渐变（二阶欠阻尼）
-            t_since = time - t_step
+            # 升压：电润湿驱动，接触角渐变（一阶指数）
             return self.dynamic_response(t_since, theta_start, theta_eq, V_to=voltage)
-        # 降压：接触角瞬间恢复到目标值
-        # Young-Lippmann 是瞬态方程，电场消失 → 接触角立即回到本征值
-        return theta_eq
+        # 降压：RC放电驱动，接触角渐变恢复（一阶指数）
+        # 根据标定结果：降压也是一阶指数恢复，tau_fall = tau_drive * tau_recovery_factor
+        return self.surface_tension_recovery(t_since, theta_start, theta_eq, V_from=V_initial)
 
     def step_response(
         self,
@@ -571,7 +575,7 @@ class HybridPredictor:
         物理过程：
         - 升压阶段 (t_rise → t_fall):
           * 电润湿驱动极性液体铺展（水推油走）
-          * 接触角：二阶欠阻尼响应
+          * 接触角：一阶指数响应
           * 开口率：随接触角变化
         - 降压阶段 (t_fall → end):
           * 接触角：瞬间恢复到 θ₀（Young-Lippmann 是瞬态的）
@@ -716,7 +720,7 @@ class HybridPredictor:
                 # 回退到简化映射
                 theta_0 = self.params["theta0"]
                 theta_min = self.params.get("theta_min", 60.0)
-                eta_max = self.params.get("eta_max", 0.85)
+                eta_max = self.params.get("eta_max", 0.68)
                 return np.clip((theta_0 - theta) / (theta_0 - theta_min) * eta_max, 0, eta_max)
 
         model = self._aperture_model

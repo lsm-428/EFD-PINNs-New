@@ -59,9 +59,9 @@ class PhysicsBasedSampler:
 
         # 阈值电压参数 — 优先从 Stage1 读取
         if stage1_predictor is not None:
-            self.V_T_base = stage1_predictor.params.get("V_T_base", stage1_predictor.params.get("V_threshold", 3.0))
+            self.V_T_base = stage1_predictor.params.get("V_T_base", stage1_predictor.params.get("V_threshold", 5.0))
         else:
-            self.V_T_base = config.get("threshold_voltage_base", 3.0)
+            self.V_T_base = config.get("threshold_voltage_base", 5.0)
         self.V_T_sensitivity = config.get("threshold_voltage_sensitivity", 2e6)
 
         # 时间采样配置 — 对齐 Stage1 参数
@@ -158,14 +158,11 @@ class PhysicsBasedSampler:
 
             voltages.extend(v_samples)
 
-        # 补充剩余样本（限制 V <= 20V，避免 target3D 崩溃）
+        # 补充剩余样本
         if len(voltages) < n_samples:
             remaining = n_samples - len(voltages)
-            v_extra = np.random.uniform(0, 20.0, remaining)
+            v_extra = np.random.uniform(0, 30.0, remaining)
             voltages.extend(v_extra)
-
-        # 限制最大电压为 20V（target3D 在 V > 25V 时崩溃）
-        voltages = np.clip(voltages, 0, 20.0)
 
         return np.array(voltages[:n_samples])
 
@@ -291,16 +288,12 @@ class PhysicsBasedSampler:
         # 基于电压和时间确定界面位置
         eta = self._estimate_opening_rate(voltage, time)
 
-        # 计算开口半径和接触角
-        r_open = np.sqrt(eta * 174e-6 * 174e-6 / np.pi) if eta > 0.01 else 0.0
-        theta = self._estimate_contact_angle(voltage, time)
-
         # 空间采样策略
         x_samples = np.random.uniform(0, 174e-6, n_samples)
         y_samples = np.random.uniform(0, 174e-6, n_samples)
 
-        # Z方向：在界面附近加密采样（考虑倾斜界面）
-        z_samples = self._sample_z_interface(n_samples, eta, voltage, time, r_open, theta)
+        # Z方向：在界面附近加密采样
+        z_samples = self._sample_z_interface(n_samples, eta, voltage, time)
 
         return x_samples, y_samples, z_samples
 
@@ -336,44 +329,12 @@ class PhysicsBasedSampler:
         eta_max = min(eta_max_ref, V_eff / 18.0)
         return eta_max * (1.0 - np.exp(-time / tau))
 
-    def _estimate_contact_angle(self, voltage: float, time: float) -> float:
+    def _sample_z_interface(self, n_samples: int, eta: float, voltage: float, time: float) -> np.ndarray:
         """
-        估算接触角（度）
-
-        优先使用 Stage1 精确模型；若不可用则回退到简化模型。
+        在界面附近采样Z坐标
         """
-        if self._stage1_predictor is not None:
-            theta_ss = self._stage1_predictor.young_lippmann(voltage)
-            if time > 1e-6:
-                theta_start = self._stage1_predictor.young_lippmann(0.0)
-                return self._stage1_predictor.dynamic_response(time, theta_start, theta_ss, V_to=voltage)
-            return theta_ss
-
-        # 回退：简化模型
-        V_T = self.V_T_base
-        if voltage <= V_T:
-            return 120.0
-        return 120.0  # 简化：无电压依赖
-
-    def _sample_z_interface(
-        self, n_samples: int, eta: float, voltage: float, time: float, r_open: float = 0.0, theta: float = 120.0
-    ) -> np.ndarray:
-        """
-        在界面附近采样Z坐标（考虑倾斜界面）
-
-        target3D 使用倾斜界面：z_tilt = z + (r - r_open) * tan(theta)
-        界面位置：z = h_edge - (r - r_open) * tan(theta)
-
-        Args:
-            n_samples: 采样数量
-            eta: 开口率
-            voltage: 电压
-            time: 时间
-            r_open: 开口半径
-            theta: 接触角（度）
-        """
-        # 界面高度（基于开口率）
-        h_edge = 3e-6 / max(1.0 - eta, 0.15)
+        # 界面位置（基于开口率）
+        h_interface = 3e-6 * (1 - eta)  # 界面高度
 
         # 界面宽度（动态调整）
         interface_width = self._calculate_interface_width(voltage, time)
@@ -384,14 +345,9 @@ class PhysicsBasedSampler:
 
         z_samples = []
 
-        # 1. 界面附近采样（考虑倾斜界面）
+        # 1. 界面附近采样（高斯分布）
         if n_interface > 0:
-            # 在 r_open 附近采样（界面最清晰的位置）
-            # 界面位置：z = h_edge - (r - r_open) * tan(theta)
-            # 在 r = r_open 处，z = h_edge
-
-            # 在界面附近采样 z
-            z_interface = np.random.normal(h_edge, interface_width, n_interface)
+            z_interface = np.random.normal(h_interface, interface_width, n_interface)
             z_interface = np.clip(z_interface, 0, 20e-6)
             z_samples.extend(z_interface)
 

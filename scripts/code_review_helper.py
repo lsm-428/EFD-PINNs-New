@@ -17,11 +17,20 @@
 import argparse
 import ast
 import json
+import logging
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 from typing import Any
+
+# 配置日志
+logging.basicConfig(
+    level=logging.WARNING,
+    format="%(levelname)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 # 项目根目录
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -126,8 +135,38 @@ def count_lines(path: Path) -> int:
         return 0
 
 
+def _sanitize_git_ref(ref: str) -> bool:
+    """验证 Git 引用是否安全（防止命令注入）。
+
+    只允许以下格式：
+    - HEAD~N (N 为数字)
+    - 完整的 40 位 SHA-1 hash
+    - 简短的 7-15 位 SHA-1 hash
+    - 合法的分支名（字母、数字、下划线、连字符、斜杠）
+    """
+    # HEAD~N 格式
+    if re.match(r"^HEAD~[1-9]\d*$", ref):
+        return True
+
+    # 完整 SHA-1 hash (40 位十六进制)
+    if re.match(r"^[0-9a-f]{40}$", ref, re.IGNORECASE):
+        return True
+
+    # 简短 SHA-1 hash (7-15 位十六进制)
+    if re.match(r"^[0-9a-f]{7,15}$", ref, re.IGNORECASE):
+        return True
+
+    # 分支名（允许字母、数字、下划线、连字符、斜杠、点）
+    return bool(re.match(r"^[a-zA-Z0-9_][a-zA-Z0-9_.-/]*$", ref))
+
+
 def get_changed_files(diff_target: str = "HEAD~1") -> list:
     """获取 Git 变更的文件列表。"""
+    # 安全检查：验证输入参数
+    if not _sanitize_git_ref(diff_target):
+        logger.warning(f"Invalid git reference: {diff_target!r}")
+        return []
+
     try:
         result = subprocess.run(
             ["git", "diff", "--name-only", diff_target],

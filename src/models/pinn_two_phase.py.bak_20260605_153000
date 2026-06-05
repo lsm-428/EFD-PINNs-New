@@ -632,17 +632,6 @@ class DataGenerator:
             except Exception as e:
                 logger.warning(f"HybridPredictor 初始化失败: {e}")
 
-        # 初始化 EnhancedApertureModel（用于 target3D 倾斜界面）
-        self._aperture_model = None
-        if HAS_APERTURE:
-            try:
-                from src.config import CONFIG_PATH
-
-                self._aperture_model = EnhancedApertureModel(config_path=str(CONFIG_PATH))
-                logger.info("✅ 已集成 EnhancedApertureModel 用于 target3D")
-            except Exception as e:
-                logger.warning(f"EnhancedApertureModel 初始化失败: {e}")
-
         self.theta0 = PHYSICS["theta0"]
         self.use_stage1_eta = self.config.get("stage1_eta_from_model", False)
 
@@ -654,11 +643,10 @@ class DataGenerator:
             try:
                 from src.data.physics_sampling import PhysicsBasedSampler
 
-                # 使用已初始化的 Stage1 模型
                 self.physics_sampler = PhysicsBasedSampler(
                     sampling_cfg,
                     stage1_predictor=self.contact_angle_predictor,
-                    stage1_aperture_model=self._aperture_model,
+                    stage1_aperture_model=None,  # 延迟初始化
                 )
                 logger.info("✅ 使用物理采样策略 (PhysicsBasedSampler)")
             except ImportError as e:
@@ -818,15 +806,13 @@ class DataGenerator:
             t_step = 0.0
         t_since = max(0.0, t - t_step)
         eta = None
-        theta = None  # 接触角（用于倾斜界面）
         if HAS_APERTURE:
             try:
                 if not hasattr(self, "_aperture_model"):
                     from src.config import CONFIG_PATH
 
                     self._aperture_model = EnhancedApertureModel(config_path=str(CONFIG_PATH))
-                theta_stage1, eta_stage1 = self._aperture_model.theta_eta_from_triad(V_prev, V, t_since)
-                theta = float(theta_stage1)
+                _, eta_stage1 = self._aperture_model.theta_eta_from_triad(V_prev, V, t_since)
                 eta = float(eta_stage1)
             except Exception as e:
                 logger.warning(f"EnhancedApertureModel 在 target_phi_3d 中失败: {e}")
@@ -839,20 +825,9 @@ class DataGenerator:
                 eta = eta_max * np.exp(-t_since_local / tau_recovery)
                 return self._phi_center_opening_mode(x, y, z, eta, h_ink)
             eta = self.get_opening_rate(V, t)
-            # 计算 θ（如果上面没有设置）
-            if theta is None:
-                theta = self.get_contact_angle(V, t)
 
         # 界面宽度
         interface_width = 1.5e-6  # 1.5 μm
-
-        # 倾斜界面：法向与 z 轴成 θ 角
-        # z_eff = z - (r - r_open) * cot(θ)
-        # cot(120°) = -0.577 (疏油，界面内凹)
-        # cot(60°) = 0.577 (亲油，界面外凸)
-        theta_rad = np.radians(theta) if theta is not None else np.radians(120.0)
-        tan_theta = np.tan(theta_rad)
-        r_open = np.sqrt(eta * self.Lx * self.Ly / np.pi) if eta > 0.01 else 0.0
 
         # 开口率阈值：超过此值从中心开口切换到单角墨滴
         # 物理上 η≈50% 是环形分布→角落汇聚的质变点
@@ -860,28 +835,25 @@ class DataGenerator:
         eta_threshold = 0.45
 
         if eta < 0.01:
-            # 无开口：初始状态，油墨均匀铺在底部（界面倾斜由 θ 决定）
-            r = np.sqrt((x - self.cx) ** 2 + (y - self.cy) ** 2)
-            z_tilt = z + (r - r_open) * tan_theta
-            phi_z = 0.5 * (1 + np.tanh((z_tilt - h_ink) / (interface_width / 3)))
+            # 无开口：初始状态，油墨均匀铺在底部
+            phi_z = 0.5 * (1 - np.tanh((z - h_ink) / (interface_width / 3)))
 
         elif eta < eta_threshold:
             # ============================================================
-            # 中心开口模式 (η < 50%)：油墨环形分布（倾斜界面）
+            # 中心开口模式 (η < 50%)：油墨环形分布
             # ============================================================
             r = np.sqrt((x - self.cx) ** 2 + (y - self.cy) ** 2)
+            r_open = np.sqrt(eta * self.Lx * self.Ly / np.pi)
             radial_factor = 0.5 * (1 + np.tanh((r - r_open) / interface_width))
             h_edge = h_ink / max(1.0 - eta, 0.15)
-            # 倾斜 z 坐标
-            z_tilt = z + (r - r_open) * tan_theta  # 注意：界面倾斜由接触角决定
 
             if r < r_open - interface_width:
                 phi_z = 0.0  # 开口区: 极性液体柱
             elif r > r_open + interface_width:
-                phi_z = 0.5 * (1 + np.tanh((z_tilt - h_edge) / (interface_width / 2)))
+                phi_z = 0.5 * (1 - np.tanh((z - h_edge) / (interface_width / 2)))
             else:
                 phi_center = 0.0
-                phi_edge = 0.5 * (1 + np.tanh((z_tilt - h_edge) / (interface_width / 2)))
+                phi_edge = 0.5 * (1 - np.tanh((z - h_edge) / (interface_width / 2)))
                 phi_z = phi_center * (1 - radial_factor) + phi_edge * radial_factor
 
         else:
@@ -918,9 +890,7 @@ class DataGenerator:
 
         return np.clip(phi_z, 0, 1)
 
-    def _phi_center_opening_mode(
-        self, x: float, y: float, z: float, eta: float, h_ink: float, theta: float = 120.0
-    ) -> float:
+    def _phi_center_opening_mode(self, x: float, y: float, z: float, eta: float, h_ink: float) -> float:
         """
         中心开口模式的 φ 分布（用于升压和降压）
 
@@ -928,33 +898,26 @@ class DataGenerator:
         - 中心区域透明（φ=0），油墨在边缘形成环形分布
         - 开口半径 r_open = sqrt(η × Lx × Ly / π)
         - 油墨堆高满足体积守恒
-        - 界面倾斜角度由接触角 θ 决定
 
         Args:
             x, y, z: 空间坐标 (m)
             eta: 开口率 ∈ [0, 1]
             h_ink: 初始油墨厚度 (m)
-            theta: 接触角 (度)
 
         Returns:
             φ ∈ [0, 1]
         """
         interface_width = 1.5e-6  # 1.5 μm (方案B: 减小界面宽度提高精度)
 
-        # 倾斜界面：法向与 z 轴成 θ 角
-        theta_rad = np.radians(theta)
-        tan_theta = np.tan(theta_rad)
-        r_open = np.sqrt(eta * self.Lx * self.Ly / np.pi) if eta > 0.01 else 0.0
-        r = np.sqrt((x - self.cx) ** 2 + (y - self.cy) ** 2)
-        z_tilt = z + (r - r_open) * tan_theta  # 注意：界面倾斜由接触角决定
-
         if eta < 0.01:
-            # 无开口：初始状态，油墨均匀铺在底部（倾斜界面）
-            return 0.5 * (1 + np.tanh((z_tilt - h_ink) / (interface_width / 3)))
+            # 无开口：初始状态，油墨均匀铺在底部
+            return 0.5 * (1 - np.tanh((z - h_ink) / (interface_width / 3)))
 
         if eta > 0.99:
             # 完全开口：几乎没有油墨
             return 0.0
+
+        r = np.sqrt((x - self.cx) ** 2 + (y - self.cy) ** 2)
 
         # 开口半径
         r_open = np.sqrt(eta * self.Lx * self.Ly / np.pi)
@@ -974,10 +937,10 @@ class DataGenerator:
         if r < r_open - interface_width:
             phi_z = 0.0  # 中心透明
         elif r > r_open + interface_width:
-            phi_z = 0.5 * (1 + np.tanh((z_tilt - h_ink_edge) / (interface_width / 2)))
+            phi_z = 0.5 * (1 - np.tanh((z - h_ink_edge) / (interface_width / 2)))
         else:
             phi_center = 0.0
-            phi_edge = 0.5 * (1 + np.tanh((z_tilt - h_ink_edge) / (interface_width / 2)))
+            phi_edge = 0.5 * (1 - np.tanh((z - h_ink_edge) / (interface_width / 2)))
             phi_z = phi_center * (1 - radial_factor) + phi_edge * radial_factor
 
         return np.clip(phi_z, 0, 1)
@@ -1906,13 +1869,7 @@ class Trainer:
     def _compute_contact_angle_loss(self, data: dict[str, torch.Tensor]):
         """2. 接触角边界条件损失 + 接触线滑移动态
 
-        物理：
-        - 接触角 θ 是油-水-疏水层系统的接触角，从油侧测量
-        - 界面法向 n = ∇φ/|∇φ| 指向 φ 增加方向（水→油）
-        - cos(θ) = -n_z（从油侧测量）
-        - 第二接触线处 φ=0.5（油-水界面）
-
-        静态约束: cos(θ_local) = cos(θ_eq)  @ z=0
+        静态约束: ∂φ/∂z = |∇φ|cos(θ_eq)  @ z=0
         滑移约束: v_slip = α × (cos θ_eq - cos θ_local)  @ 接触线
         """
         idx = torch.randperm(len(data["contact_points"]))[: self.batch_size // 2]
@@ -1925,13 +1882,13 @@ class Trainer:
 
         theta_rad = data["contact_theta"][idx] * np.pi / 180.0
         target_cos = torch.cos(theta_rad)
-        # cos(θ) = -dphi_dz / grad_mag（从油侧测量，界面法向指向 φ 增加方向）
-        actual_cos = -dphi_dz / grad_mag
+        actual_cos = dphi_dz / grad_mag
 
-        # 移除界面加权：接触角 BC 已在接触线采样点处计算
-        # 界面加权 exp(-100*(φ-0.5)²) 在锐利界面处失效
+        # 界面加权 (只作用于 φ≈0.5)
+        interface_weight = torch.exp(-100 * (phi - 0.5) ** 2)
+
         # 静态接触角损失
-        loss_static = torch.mean((actual_cos - target_cos) ** 2) * 100.0
+        loss_static = torch.mean((actual_cos - target_cos) ** 2 * interface_weight) * 100.0
 
         # 接触线滑移损失 (CAH 动态)
         # v_slip = φ_t / (|∇φ| + ε), Δcos = cos_θ_eq - cos_θ_local
@@ -1940,7 +1897,7 @@ class Trainer:
         delta_cos = target_cos - actual_cos
         alpha_slip = 0.1  # 滑移系数
 
-        loss_slip = torch.mean((v_slip - alpha_slip * delta_cos) ** 2) * 10.0
+        loss_slip = torch.mean((v_slip - alpha_slip * delta_cos) ** 2 * interface_weight) * 10.0
 
         return loss_static + loss_slip
 

@@ -44,7 +44,7 @@
         "aperture_eps": 0.05
     },
     "physics": {
-        "interface_weight": 500.0,
+        "interface_weight": 50.0,
         "ic_weight": 300.0,
         "bc_weight": 80.0,
         "continuity_weight": 0.5,
@@ -64,14 +64,5 @@
         "top_boundary_weight": 0.05,
         "ac_interface_width": 5e-07,
         "ac_mobility": 1e-10
-    },
-    "sampling": {
-        "strategy": "physics_based",
-        "voltage_weights": {
-            "no_response": 0.1,
-            "onset": 0.5,
-            "linear": 0.3,
-            "saturation": 0.1
-        }
     }
 }

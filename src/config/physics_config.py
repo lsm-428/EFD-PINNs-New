@@ -106,7 +106,7 @@ PHYSICS: dict[str, Any] = {
     "ac_interface_width": 5e-07,  # 界面宽度 (m) = 0.5μm, v7.2 校准值
     "ac_mobility": 1e-10,  # 迁移率 (m³·s/kg), mob≈0.1m/s, τ~0.05ms
     # ========== 开口率参数 ==========
-    "eta_max": 0.85,  # 最大开口率
+    "eta_max": 0.68,  # 最大开口率
     "ink_initial_fraction": 0.15,  # 初始油墨体积分数
     # ========== 电润湿 EW 力参数 ==========
     "lambda_debye": 50e-9,  # 德拜屏蔽长度 [m] ~50nm，EW 力 z 方向衰减尺度
@@ -186,7 +186,7 @@ class PhysicsConfig:
     V_max: float = 30.0
 
     # 开口率
-    eta_max: float = 0.85
+    eta_max: float = 0.68
     ink_initial_fraction: float = 0.15
     aperture_k: float = 3.0
     aperture_theta_scale: float = 19.0

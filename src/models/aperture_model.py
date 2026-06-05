@@ -495,7 +495,7 @@ class EnhancedApertureModel(ApertureModel):
         self.aperture_k = aperture_mapping.get("k", PHYSICS.get("aperture_k", 3.0))
         self.aperture_theta_scale = aperture_mapping.get("theta_scale", PHYSICS.get("aperture_theta_scale", 19.0))
         self.aperture_alpha = aperture_mapping.get("alpha", PHYSICS.get("aperture_alpha", 0.03))
-        self.aperture_max = aperture_mapping.get("aperture_max", PHYSICS.get("eta_max", 0.85))
+        self.aperture_max = aperture_mapping.get("aperture_max", PHYSICS.get("eta_max", 0.68))
 
     def calibrate_with_experimental_data(
         self,
