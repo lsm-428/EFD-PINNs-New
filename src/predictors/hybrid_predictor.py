@@ -99,8 +99,8 @@ class HybridPredictor:
                 "tau_onset": 0.0075,  # 低电压区时间常数 (s)
                 "tau_saturation": 0.003,  # 高电压区时间常数 (s)
                 "tau_recovery_factor": 0.4,  # 恢复速度因子（τ_recovery = τ_drive × factor）
-                "zeta": 1.0,  # 阻尼比
-                "dynamic_order": 1,  # 动态阶数：1=一阶指数, 2=二阶欠阻尼
+                "zeta": 1.0,  # 阻尼比（一阶系统）
+                "dynamic_order": 1,  # 动态阶数：1=一阶指数（校正后确认）
                 "V_max": 30.0,  # 最大电压 (V)
                 "V_threshold": 5.0,  # 阈值电压（会被PhysicsConfig覆盖）
             }

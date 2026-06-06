@@ -94,8 +94,8 @@ PHYSICS: dict[str, Any] = {
     "tau_saturation": 0.003,  # 高电压区 τ (s)
     "tau_recovery_factor": 0.4,  # 恢复因子
     "tau_recovery": 0.002,  # 恢复时间常数 = tau × factor = 5ms × 0.4 = 2ms
-    "zeta": 0.8,  # 阻尼比（欠阻尼）
-    "dynamic_order": 2,  # 动态阶数：2=二阶欠阻尼, 1=一阶指数
+    "zeta": 1.0,  # 阻尼比（一阶系统，校正后确认）
+    "dynamic_order": 1,  # 动态阶数：1=一阶指数（校正后确认，所有 R²>0.93）
     "t_max": 0.05,  # 最大仿真时间 (s) = 50ms
     # ========== 电压参数 ==========
     "V_T_base": 5.0,  # 3μm油膜对应的阈值电压 (V)
@@ -117,6 +117,13 @@ PHYSICS: dict[str, Any] = {
     "aperture_k": 3.0,  # 映射陡度（提高以补偿 Δθ 缩小）
     "aperture_theta_scale": 19.0,  # 角度缩放因子（降低使 tanh 更早饱和）
     "aperture_alpha": 0.03,  # 电容反馈强度（稍增）
+    # ========== 数据生成与采样参数 (2026-06-06 新增) ==========
+    "ic_width": 1e-6,  # 初始条件界面宽度 (m) = 1μm
+    "sample_spread_small": 10e-6,  # 小范围采样扩展 (m) = 10μm
+    "sample_spread_large": 30e-6,  # 大范围采样扩展 (m) = 30μm
+    "contact_line_sigma": 5e-6,  # 接触线高斯扩展 (m) = 5μm
+    "breakthrough_tau": 0.0005,  # 突破时间常数 (s) = 0.5ms
+    "breakthrough_t_max": 0.005,  # 突破最大时间 (s) = 5ms
 }
 
 
@@ -176,8 +183,8 @@ class PhysicsConfig:
     tau_onset: float = 0.0075
     tau_saturation: float = 0.003
     tau_recovery_factor: float = 0.4
-    zeta: float = 0.8
-    dynamic_order: int = 2
+    zeta: float = 1.0  # 一阶系统
+    dynamic_order: int = 1  # 一阶指数（校正后确认）
     t_max: float = 0.05
 
     # 电压 — V_threshold 是 property，从 V_T_base + 油膜厚度计算
@@ -206,6 +213,14 @@ class PhysicsConfig:
 
     # 侧壁 Teflon 污染接触角 (°)
     theta_wall_teflon: float = 110.0
+
+    # 数据生成与采样参数 (2026-06-06)
+    ic_width: float = 1e-6
+    sample_spread_small: float = 10e-6
+    sample_spread_large: float = 30e-6
+    contact_line_sigma: float = 5e-6
+    breakthrough_tau: float = 0.0005
+    breakthrough_t_max: float = 0.005
 
     # 配置来源（用于追踪）
     _source: str = field(default="default", repr=False)
@@ -294,6 +309,13 @@ class PhysicsConfig:
             ac_interface_width=materials.get("ac_interface_width", cls.ac_interface_width),
             ac_mobility=materials.get("ac_mobility", cls.ac_mobility),
             electrowetting_weight=materials.get("electrowetting_weight", cls.electrowetting_weight),
+            # 数据生成与采样参数 (2026-06-06)
+            ic_width=data_cfg.get("ic_width", cls.ic_width),
+            sample_spread_small=data_cfg.get("sample_spread_small", cls.sample_spread_small),
+            sample_spread_large=data_cfg.get("sample_spread_large", cls.sample_spread_large),
+            contact_line_sigma=data_cfg.get("contact_line_sigma", cls.contact_line_sigma),
+            breakthrough_tau=dynamics.get("breakthrough_tau", cls.breakthrough_tau),
+            breakthrough_t_max=dynamics.get("breakthrough_t_max", cls.breakthrough_t_max),
             _source=str(path),
         )
 
@@ -364,6 +386,13 @@ class PhysicsConfig:
             "ac_interface_width": getattr(self, "ac_interface_width", 5e-07),
             "ac_mobility": getattr(self, "ac_mobility", 1e-10),
             "electrowetting_weight": getattr(self, "electrowetting_weight", 1.0),
+            # 数据生成与采样参数 (2026-06-06)
+            "ic_width": self.ic_width,
+            "sample_spread_small": self.sample_spread_small,
+            "sample_spread_large": self.sample_spread_large,
+            "contact_line_sigma": self.contact_line_sigma,
+            "breakthrough_tau": self.breakthrough_tau,
+            "breakthrough_t_max": self.breakthrough_t_max,
         }
 
     def to_predictor_params(self) -> dict[str, Any]:

@@ -135,7 +135,9 @@ DEFAULT_CONFIG = {
         "vof_weight": 0.5,  # VOF 方程
         "ns_weight": 0.1,  # Navier-Stokes
         "surface_tension_weight": 0.01,  # 表面张力 CSF
-        "sharpening": 0.1,  # [Added] VOF Sharpening Loss
+        "sharpening_weight": 0.1,  # VOF Sharpening Loss
+        # 垂直方向 φ 场连续性约束权重（2026-06-06 新增）
+        "vertical_continuity_weight": 10.0,
     },
     "data": {
         "n_interface": 100000,
@@ -144,6 +146,9 @@ DEFAULT_CONFIG = {
         "n_domain": 20000,
         "voltages": [0.5 * i for i in range(0, 61)],
         "times": 50,
+        # 垂直方向结构化采样（2026-06-06 新增）
+        "use_vertical_sampling": True,  # 是否启用垂直方向分层采样
+        "n_vertical_samples": 5,  # 每个 XY 点的 Z 方向采样数
     },
 }
 
@@ -224,7 +229,7 @@ class TwoPhasePINN(nn.Module):
         hard_cfg = config.get("hard_constraints", {})
         self.use_hard_constraints = hard_cfg.get("enable", False)
         self.h_ink = hard_cfg.get("h_ink", 3e-6)
-        self.hard_ic_width = hard_cfg.get("ic_width", 1e-6)
+        self.hard_ic_width = hard_cfg.get("ic_width", PHYSICS["ic_width"])
         self.sigmoid_temperature = hard_cfg.get("sigmoid_temperature", 1.0)
 
         self.apply(self._init_weights)
@@ -300,8 +305,8 @@ class TwoPhasePINN(nn.Module):
             # 2. 初始条件: φ(t=0) = φ_IC(z)
             #    φ_IC: tanh 平滑台阶, 油墨(z<h_ink)→1, 极性液体(z>h_ink)→0
             z_phys = z_coord  # 物理单位 (m)
-            h_ink = getattr(self, "h_ink", 3e-6)
-            delta_ic = getattr(self, "hard_ic_width", 1e-6)
+            h_ink = getattr(self, "h_ink", PHYSICS["h_ink"])
+            delta_ic = getattr(self, "hard_ic_width", PHYSICS["ic_width"])
             phi_ic = 0.5 * (1.0 + torch.tanh((h_ink - z_phys) / delta_ic))
 
             #    Blend: 混合 phi_ic（初始条件）和 phi（模型预测+顶面BC）
@@ -844,7 +849,7 @@ class DataGenerator:
                 theta = self.get_contact_angle(V, t)
 
         # 界面宽度
-        interface_width = 1.5e-6  # 1.5 μm
+        interface_width = PHYSICS["ac_interface_width"]
 
         # 倾斜界面：法向与 z 轴成 θ 角
         # z_eff = z - (r - r_open) * cot(θ)
@@ -867,21 +872,34 @@ class DataGenerator:
 
         elif eta < eta_threshold:
             # ============================================================
-            # 中心开口模式 (η < 50%)：油墨环形分布（倾斜界面）
+            # 中心开口模式 (η < 50%)：油墨环形分布
             # ============================================================
             r = np.sqrt((x - self.cx) ** 2 + (y - self.cy) ** 2)
-            radial_factor = 0.5 * (1 + np.tanh((r - r_open) / interface_width))
-            h_edge = h_ink / max(1.0 - eta, 0.15)
-            # 倾斜 z 坐标
-            z_tilt = z + (r - r_open) * tan_theta  # 注意：界面倾斜由接触角决定
+            h_edge = h_ink / max(1.0 - eta, PHYSICS["ink_initial_fraction"])
 
             if r < r_open - interface_width:
-                phi_z = 0.0  # 开口区: 极性液体柱
+                # 中心开口区：全是极性液体
+                phi_z = 0.0
             elif r > r_open + interface_width:
-                phi_z = 0.5 * (1 + np.tanh((z_tilt - h_edge) / (interface_width / 2)))
+                # 边缘油墨区：Z 方向有分布
+                if z < h_edge - interface_width:
+                    phi_z = 1.0  # 底部：油
+                elif z > h_edge + interface_width:
+                    phi_z = 0.0  # 顶部：水
+                else:
+                    # 界面过渡区
+                    phi_z = 0.5 * (1 + np.tanh((h_edge - z) / (interface_width / 2)))
             else:
+                # 径向过渡区
+                radial_factor = (r - (r_open - interface_width)) / (2 * interface_width)
+                # 中心是极性液体，边缘是油（带 Z 分布）
                 phi_center = 0.0
-                phi_edge = 0.5 * (1 + np.tanh((z_tilt - h_edge) / (interface_width / 2)))
+                if z < h_edge - interface_width:
+                    phi_edge = 1.0
+                elif z > h_edge + interface_width:
+                    phi_edge = 0.0
+                else:
+                    phi_edge = 0.5 * (1 + np.tanh((h_edge - z) / (interface_width / 2)))
                 phi_z = phi_center * (1 - radial_factor) + phi_edge * radial_factor
 
         else:
@@ -899,7 +917,7 @@ class DataGenerator:
             corner_x, corner_y = 0.0, 0.0  # 固定 (0,0) 角落
 
             # 油墨堆高（体积守恒，可超过围堰形成凸面）
-            h_edge = h_ink / max(1.0 - eta, 0.15)
+            h_edge = h_ink / max(1.0 - eta, PHYSICS["ink_initial_fraction"])
 
             # blob 等效半径：1/4 圆柱近似
             ink_volume = self.Lx * self.Ly * h_ink
@@ -939,7 +957,7 @@ class DataGenerator:
         Returns:
             φ ∈ [0, 1]
         """
-        interface_width = 1.5e-6  # 1.5 μm (方案B: 减小界面宽度提高精度)
+        interface_width = PHYSICS["ac_interface_width"]
 
         # 倾斜界面：法向与 z 轴成 θ 角
         theta_rad = np.radians(theta)
@@ -989,7 +1007,7 @@ class DataGenerator:
         if eta < eta_threshold and np.random.rand() < 0.4 and eta > 0.01:
             # 中心开口模式：在界面附近采样
             r_open = np.sqrt(eta * self.Lx * self.Ly / np.pi)
-            r = r_open + np.random.randn() * 10e-6
+            r = r_open + np.random.randn() * PHYSICS["sample_spread_small"]
             r = max(0, min(r, self.r_max))
             theta_angle = np.random.rand() * 2 * np.pi
             x = self.cx + r * np.cos(theta_angle)
@@ -1000,7 +1018,7 @@ class DataGenerator:
             # 四角/单角模式：在角落附近采样
             corners = [(0, 0), (self.Lx, 0), (0, self.Ly), (self.Lx, self.Ly)]
             cx, cy = corners[np.random.randint(4)]
-            r = np.abs(np.random.randn()) * 30e-6
+            r = np.abs(np.random.randn()) * PHYSICS["sample_spread_large"]
             theta_angle = np.random.rand() * np.pi / 2
             x = cx + r * np.cos(theta_angle) * (1 if cx == 0 else -1)
             y = cy + r * np.sin(theta_angle) * (1 if cy == 0 else -1)
@@ -1186,7 +1204,7 @@ class DataGenerator:
             y = np.random.rand() * self.Ly
             z = np.random.rand() * self.Lz  # 全域采样 [0, Lz]
 
-            interface_width = 1e-6
+            interface_width = PHYSICS["ic_width"]
             phi = 0.5 * (1 - np.tanh((z - self.h_ink) / interface_width))
             phi = np.clip(phi, 0, 1)
 
@@ -1284,11 +1302,45 @@ class DataGenerator:
         for i in range(n_dom_down):
             dom_scenarios.append((V_d[i], 0.0, t_d[i]))
 
+        # 垂直方向结构化采样配置
+        use_vertical_sampling = data_cfg.get("use_vertical_sampling", True)
+        n_vertical_samples = data_cfg.get("n_vertical_samples", 5)  # 每个 XY 点的垂直采样数
+
         for V_from, V_to, t in dom_scenarios:
             x = np.random.uniform(0, self.Lx)
             y = np.random.uniform(0, self.Ly)
-            z = np.random.uniform(0, self.Lz)
-            domain_points.append([x, y, z, V_from, V_to, t])
+
+            if use_vertical_sampling and n_vertical_samples > 1:
+                # === 垂直方向分层采样 ===
+                # 对每个 XY 点，沿 Z 轴采样 n_vertical_samples 个点
+                # 采样策略：均匀 + 界面附近加密
+
+                # 估计界面位置（用于加密采样）
+                eta = self.get_opening_rate(V_to, t)
+                h_ink_edge = self.h_ink / max(1.0 - eta, PHYSICS["ink_initial_fraction"])
+
+                # Z 方向采样点：均匀分布 + 界面附近加密
+                z_base = np.linspace(0, self.Lz, n_vertical_samples)
+
+                # 在界面附近额外加密（±20% 界面高度范围）
+                z_extra = []
+                if 0 < h_ink_edge < self.Lz:
+                    z_interface_samples = np.linspace(
+                        max(0, h_ink_edge * 0.5),
+                        min(self.Lz, h_ink_edge * 1.5),
+                        n_vertical_samples // 2,
+                    )
+                    z_extra = z_interface_samples
+
+                # 合并采样点（去重）
+                z_all = np.unique(np.concatenate([z_base, z_extra]))
+
+                for z in z_all:
+                    domain_points.append([x, y, z, V_from, V_to, t])
+            else:
+                # 原始均匀采样
+                z = np.random.uniform(0, self.Lz)
+                domain_points.append([x, y, z, V_from, V_to, t])
 
         logger.info(f"  域内配点: {len(domain_points)}")
 
@@ -1374,7 +1426,7 @@ class DataGenerator:
 
             # 接触线附近采样 (r ≈ r_open, z=0)
             angle = np.random.uniform(0, 2 * np.pi)
-            r = r_open + np.random.normal(0, 5e-6)  # 高斯扩展 (±5μm)
+            r = r_open + np.random.normal(0, PHYSICS["contact_line_sigma"])  # 高斯扩展 (±5μm)
             r = np.clip(r, 1e-6, self.Lx / 2 * 0.98)
             x_cl = self.cx + r * np.cos(angle)
             y_cl = self.cy + r * np.sin(angle)
@@ -1396,8 +1448,8 @@ class DataGenerator:
         for _ in range(n_breakthrough):
             V = np.random.uniform(5.0, 30.0)  # 突破只发生在 V>V_T
             # 时间集中在 0-2ms (突破窗口)
-            t = np.random.exponential(scale=0.0005)  # τ=0.5ms 指数分布
-            t = np.clip(t, 0, 0.005)
+            t = np.random.exponential(scale=PHYSICS["breakthrough_tau"])  # τ=0.5ms 指数分布
+            t = np.clip(t, 0, PHYSICS["breakthrough_t_max"])
             # z=0 底面 + r 靠近开口半径
             eta = self.get_opening_rate(V, 0.02)  # 用稳态 η 估计初始 r
             r_open = np.sqrt(max(0.01, eta) * self.Lx * self.Ly / np.pi)
@@ -1878,6 +1930,12 @@ class Trainer:
         if epoch >= self.stage1_epochs:
             losses["continuity_transition"] = self._compute_continuity_transition_loss()
 
+        # 11. 垂直方向 φ 场连续性约束（2026-06-06 新增）
+        # 强制模型学习"固定 XY，沿 Z 轴 φ 单调递减"的物理图像
+        vertical_weight = physics_cfg.get("vertical_continuity_weight", 10.0)
+        if vertical_weight > 0:
+            losses["vertical_continuity"] = self._compute_vertical_continuity_loss(stage1_factor) * vertical_weight
+
         # 计算总损失
         total_loss = torch.tensor(0.0, device=self.device)
         for name, val in losses.items():
@@ -2038,6 +2096,89 @@ class Trainer:
         res["zero_voltage"] = F.mse_loss(phi_0v, phi_ic_target) * 100.0 * _volt_anneal
         res["low_voltage"] = F.mse_loss(phi_low, phi_ic_target) * 100.0 * _volt_anneal
         return res
+
+    def _compute_vertical_continuity_loss(self, stage1_factor: float):
+        """垂直方向 φ 场连续性约束（2026-06-06 新增）。
+
+        物理图像：固定 XY 点，沿 Z 轴看：
+        - 底部 (z→0): φ = 1（纯油）
+        - 界面: φ = 0.5（油水混合）
+        - 顶部 (z→Lz): φ = 0（纯水）
+
+        约束：
+        1. 单调性：φ 沿 Z 轴单调递减（油在下，水在上）
+        2. 边界：底部 φ≈0.9，顶部 φ≈0.1（留有过渡层余量）
+        3. 平滑性：二阶差分 ≈ 0（无振荡）
+
+        Args:
+            stage1_factor: S1/S2 退火因子（S3 时 stage1_factor ≈ 0）
+
+        Returns:
+            垂直连续性损失标量
+        """
+        Lx, Ly, Lz = PHYSICS["Lx"], PHYSICS["Ly"], PHYSICS["Lz"]
+        n_xy = 256  # 随机 XY 点数
+        n_z = 10  # 每个 XY 点的 Z 方向采样数
+
+        # 随机 XY 点
+        x = torch.rand(n_xy, device=self.device) * Lx
+        y = torch.rand(n_xy, device=self.device) * Ly
+
+        # 随机场景
+        V_from = torch.rand(n_xy, device=self.device) * 30.0
+        V_to = torch.rand(n_xy, device=self.device) * 30.0
+        t_since = torch.rand(n_xy, device=self.device) * 0.030
+
+        # Z 方向分层采样（在界面附近加密）
+        # 使用 tanh 分布的采样点：更多点集中在 φ 变化快的区域
+        z_ratios = torch.linspace(0.0, 1.0, n_z, device=self.device)
+        z_samples = z_ratios * Lz  # (n_z,)
+
+        # 构造 (n_xy * n_z, 6) 的批量点
+        x_rep = x.repeat_interleave(n_z)
+        y_rep = y.repeat_interleave(n_z)
+        z_rep = z_samples.repeat(n_xy)
+        Vf_rep = V_from.repeat_interleave(n_z)
+        Vt_rep = V_to.repeat_interleave(n_z)
+        ts_rep = t_since.repeat_interleave(n_z)
+
+        pts = torch.stack([x_rep, y_rep, z_rep, Vf_rep, Vt_rep, ts_rep], dim=1)
+
+        # 一次前向（带梯度，让模型能学到这个约束）
+        phi_all = torch.clamp(self.model(pts)[:, 4], 0.0, 1.0)
+
+        # reshape → (n_xy, n_z)
+        phi_vertical = phi_all.view(n_xy, n_z)
+
+        # === 损失 1：单调性（φ[z_i] >= φ[z_{i+1}] - margin）===
+        # 允许小 margin 避免过约束
+        margin = 0.05
+        diff = phi_vertical[:, :-1] - phi_vertical[:, 1:]  # (n_xy, n_z-1)
+        monotonicity_loss = torch.mean(F.relu(diff + margin))
+
+        # === 损失 2：边界条件 ===
+        # 底部 (z=0): φ ≈ 0.9（不是 1.0，因为界面过渡层可能延伸到 z=0）
+        # 顶部 (z=Lz): φ ≈ 0.1（不是 0.0，同理）
+        bottom_phi = phi_vertical[:, 0]
+        top_phi = phi_vertical[:, -1]
+        bottom_loss = torch.mean((bottom_phi - 0.9) ** 2)
+        top_loss = torch.mean((top_phi - 0.1) ** 2)
+
+        # === 损失 3：二阶平滑（Laplacian ≈ 0，防止振荡）===
+        # 二阶差分：φ[z-1] - 2*φ[z] + φ[z+1]
+        if n_z >= 3:
+            second_diff = phi_vertical[:, :-2] - 2 * phi_vertical[:, 1:-1] + phi_vertical[:, 2:]
+            smoothness_loss = torch.mean(second_diff**2)
+        else:
+            smoothness_loss = torch.tensor(0.0, device=self.device)
+
+        # === 总损失 ===
+        # 权重分配：平滑性 > 单调性 > 边界
+        total_loss = monotonicity_loss * 100.0 + (bottom_loss + top_loss) * 50.0 + smoothness_loss * 200.0
+
+        # S3 阶段保留弱约束（不完全归零，防止 φ 场退化）
+        s3_factor = max(0.2, stage1_factor)
+        return total_loss * s3_factor
 
     def _compute_monotonicity_response_loss(self):
         """5. 单调性 & 电压响应约束 — 批量前向版本（4次→1次）。"""

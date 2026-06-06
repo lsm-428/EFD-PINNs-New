@@ -48,32 +48,20 @@ def _get_default_materials_params() -> dict:
     except Exception:
         pass
 
-    # 回退到硬编码默认值
+    # 回退到 PHYSICS 配置（单一来源）
+    # 使用 PHYSICS.get() 确保向后兼容（PHYSICS 不可用时使用默认值）
+    from src.config import PHYSICS
+
     return {
-        "viscosity": 1.01e-3,
-        "density": 998.0,
-        "surface_tension": 0.048,
+        # 基础流体属性
+        "viscosity": PHYSICS.get("mu_polar", 1.01e-3),
+        "density": PHYSICS.get("rho_polar", 998.0),
+        "surface_tension": PHYSICS.get("gamma", 0.048),
+        # 材料属性（PHYSICS 中无对应，保留硬编码）
         "permittivity": 80.1,
         "conductivity": 5.5e7,
         "youngs_modulus": 210e9,
-        "allen_cahn_gamma": 4.5e-7,
         "poisson_ratio": 0.3,
-        "contact_angle_theta0": 120.0,
-        "epsilon_0": 8.854e-12,
-        # 新参数 (纯物理值 + A_eff)
-        "epsilon_su8": 3.28,
-        "epsilon_teflon": 1.934,
-        "d_su8": 400e-9,
-        "d_teflon": 400e-9,
-        "A_eff": 1.20,
-        # 旧参数 (向后兼容)
-        "dielectric_thickness": 4e-7,
-        "relative_permittivity": 3.28,
-        "dynamic_contact_angle_advancing": 120.0,
-        "dynamic_contact_angle_receding": 100.0,
-        "contact_line_friction": 1e-3,
-        "pinning_energy": 1e-5,
-        "slip_length": 1e-6,
         "dielectric_conductivity": 1e-12,
         "charge_relaxation_time": 1e-3,
         "leakage_current_coefficient": 1e-6,
@@ -86,28 +74,49 @@ def _get_default_materials_params() -> dict:
         "thermal_expansion_water": 2.1e-4,
         "temperature_coefficient_surface_tension": -1.5e-4,
         "temperature_coefficient_viscosity": -3.5e-3,
-        "density_polar": 998.0,
-        "density_ink": 763.0,
-        "viscosity_polar": 1.01e-3,
-        "viscosity_ink": 9.41e-4,
-        "surface_tension_polar_ink": 0.02505,
-        "contact_angle_ink": 120.0,
-        "theta_wall": 71.0,
+        # 电学属性
+        "epsilon_0": PHYSICS.get("epsilon_0", 8.854e-12),
+        "epsilon_su8": PHYSICS.get("epsilon_r", 3.28),
+        "epsilon_teflon": PHYSICS.get("epsilon_h", 1.934),
+        "d_su8": PHYSICS.get("d_dielectric", 400e-9),
+        "d_teflon": PHYSICS.get("d_hydrophobic", 400e-9),
+        "A_eff": 1.20,  # PHYSICS 中无对应
+        "dielectric_thickness": PHYSICS.get("d_dielectric", 4e-7),
+        "relative_permittivity": PHYSICS.get("epsilon_r", 3.28),
+        # 两相流属性
+        "density_polar": PHYSICS.get("rho_polar", 998.0),
+        "density_ink": PHYSICS.get("rho_oil", 763.0),
+        "viscosity_polar": PHYSICS.get("mu_polar", 1.01e-3),
+        "viscosity_ink": PHYSICS.get("mu_oil", 9.41e-4),
+        "surface_tension_polar_ink": PHYSICS.get("sigma", 0.02505),
+        # 接触角
+        "contact_angle_theta0": PHYSICS.get("theta0", 120.0),
+        "contact_angle_ink": PHYSICS.get("theta0", 120.0),
+        "dynamic_contact_angle_advancing": PHYSICS.get("theta0", 120.0),
+        "dynamic_contact_angle_receding": 100.0,
+        "theta_wall": PHYSICS.get("theta_wall", 71.0),
+        "contact_line_friction": 1e-3,
+        "pinning_energy": 1e-5,
+        "slip_length": 1e-6,
+        # 几何参数
+        "ink_thickness": PHYSICS.get("h_ink", 3e-6),
+        "domain_height": PHYSICS.get("Lz", 20e-6),
+        "wall_height": PHYSICS.get("wall_height", 3.5e-6),
+        "ink_initial_fraction": PHYSICS.get("ink_initial_fraction", 0.15),
         "ink_potential_min": 0.0,
-        "ink_initial_fraction": 0.15,
-        "ink_thickness": 3e-6,
-        "domain_height": 20e-6,
-        "wall_height": 3.5e-6,
         # 电润湿 EW 力参数
-        "lambda_debye": 50e-9,  # 德拜屏蔽长度 [m] ~50nm
+        "lambda_debye": PHYSICS.get("lambda_debye", 50e-9),
         # 物理模型配置开关
-        "use_convection": False,  # Re<<1, 默认关闭对流项
-        "use_legacy_ac": False,  # 标准化 Allen-Cahn (界面宽度可控)
-        "ac_interface_width": 5e-07,  # 界面宽度 (m) = 0.5μm, v7.2 校准值
-        "ac_mobility": 1e-10,  # 迁移率 (m³·s/kg), mob≈0.1m/s, τ~0.05ms
-        "use_adaptive_loss_scale": False,  # 自适应损失归一化 (EMA)
-        "use_unified_wetting": False,  # 统一相场润湿 BC (替代旧版 BW/WW/SW)
-        "theta_wall_teflon": 110.0,  # 侧壁 Teflon 污染接触角 (°)
+        "use_convection": PHYSICS.get("use_convection", False),
+        "use_unified_wetting": PHYSICS.get("use_unified_wetting", False),
+        "use_legacy_ac": False,  # 保留（PHYSICS 中无对应）
+        "use_adaptive_loss_scale": False,  # 保留（PHYSICS 中无对应）
+        # Allen-Cahn 相场参数
+        "ac_interface_width": PHYSICS.get("ac_interface_width", 5e-07),
+        "ac_mobility": PHYSICS.get("ac_mobility", 1e-10),
+        "electrowetting_weight": PHYSICS.get("electrowetting_weight", 1.0),
+        # 侧壁 Teflon 污染接触角
+        "theta_wall_teflon": PHYSICS.get("theta_wall_teflon", 110.0),
     }
 
 

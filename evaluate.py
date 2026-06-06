@@ -64,7 +64,7 @@ class PINNEvaluator:
         self.config_path = config_path or str(CONFIG_PATH)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.stage1_model = EnhancedApertureModel(config_path=self.config_path)
-        self.eta_max = PHYSICS.get("eta_max", 0.85)
+        self.eta_max = PHYSICS.get("eta_max", 0.68)
         self.spatial_res = 64
         self.aperture_res = 96
         self.aperture_phi0 = 0.3
@@ -191,6 +191,10 @@ class PINNEvaluator:
 
         Use z=0 to match Stage 1 model's aperture definition.
         Stage 1 calculates aperture based on contact angle at z=0 surface.
+
+        Note: This calculation assumes the model outputs a clear interface
+        (φ ≈ 0 in water, φ ≈ 1 in ink). If the model outputs a constant field,
+        the result will be unreliable. Use check_constant_field() to verify.
         """
         z_sample = 0.0  # Use z=0 to match Stage 1
         fields = self.get_fields(
@@ -203,12 +207,48 @@ class PINNEvaluator:
             spatial_res=self.aperture_res,
         )
         phi = fields["phi"]
+
+        # Check if the model outputs a constant field
+        phi_std = np.std(phi)
+        if phi_std < 0.05:
+            # Constant field - aperture calculation is unreliable
+            return float(np.nan)
+
         phi0 = float(self.aperture_phi0)
         eps = float(self.aperture_eps)
         if eps <= 0:
             return float(np.mean(phi < phi0))
         m = 0.5 * (1.0 + np.tanh((phi0 - phi) / eps))
         return float(np.mean(m))
+
+    def check_constant_field(self, model: TwoPhasePINN, V: float, t: float) -> dict:
+        """Check if the model outputs a constant φ field.
+
+        Returns:
+            dict with keys:
+                - is_constant: bool
+                - phi_mean: float
+                - phi_std: float
+                - message: str
+        """
+        z_sample = 0.0
+        fields = self.get_fields(model, V, t, V, plane="xy", coord=z_sample, spatial_res=self.aperture_res)
+        phi = fields["phi"]
+        phi_mean = float(np.mean(phi))
+        phi_std = float(np.std(phi))
+
+        is_constant = phi_std < 0.05
+        if is_constant:
+            message = f"常数场 (φ={phi_mean:.3f}, std={phi_std:.4f})"
+        else:
+            message = f"正常场 (φ_mean={phi_mean:.3f}, std={phi_std:.3f})"
+
+        return {
+            "is_constant": is_constant,
+            "phi_mean": phi_mean,
+            "phi_std": phi_std,
+            "message": message,
+        }
 
     def plot_dashboard(self, model: TwoPhasePINN, output_path: str, model_name: str = "PINN"):
         """Generate a professional 4-panel dashboard for a single model."""

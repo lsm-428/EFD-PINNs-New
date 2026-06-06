@@ -39,6 +39,14 @@
         "lbfgs_iter": 3000,
         "resample_interval": 0
     },
+    "data": {
+        "n_interface": 100000,
+        "n_initial": 10000,
+        "n_boundary": 10000,
+        "n_domain": 20000,
+        "use_vertical_sampling": true,
+        "n_vertical_samples": 5
+    },
     "eval": {
         "aperture_phi0": 0.3,
         "aperture_eps": 0.05
@@ -63,7 +71,8 @@
         "contact_line_dynamics_weight": 0.2,
         "top_boundary_weight": 0.05,
         "ac_interface_width": 5e-07,
-        "ac_mobility": 1e-10
+        "ac_mobility": 1e-10,
+        "vertical_continuity_weight": 10.0
     },
     "sampling": {
         "strategy": "physics_based",
