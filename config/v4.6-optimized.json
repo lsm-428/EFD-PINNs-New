@@ -71,8 +71,7 @@
         "contact_line_dynamics_weight": 0.2,
         "top_boundary_weight": 0.05,
         "ac_interface_width": 5e-07,
-        "ac_mobility": 1e-10,
-        "vertical_continuity_weight": 10.0
+        "ac_mobility": 1e-10
     },
     "sampling": {
         "strategy": "physics_based",

@@ -136,8 +136,6 @@ DEFAULT_CONFIG = {
         "ns_weight": 0.1,  # Navier-Stokes
         "surface_tension_weight": 0.01,  # 表面张力 CSF
         "sharpening_weight": 0.1,  # VOF Sharpening Loss
-        # 垂直方向 φ 场连续性约束权重（2026-06-06 新增）
-        "vertical_continuity_weight": 10.0,
     },
     "data": {
         "n_interface": 100000,
@@ -1930,12 +1928,6 @@ class Trainer:
         if epoch >= self.stage1_epochs:
             losses["continuity_transition"] = self._compute_continuity_transition_loss()
 
-        # 11. 垂直方向 φ 场连续性约束（2026-06-06 新增）
-        # 强制模型学习"固定 XY，沿 Z 轴 φ 单调递减"的物理图像
-        vertical_weight = physics_cfg.get("vertical_continuity_weight", 10.0)
-        if vertical_weight > 0:
-            losses["vertical_continuity"] = self._compute_vertical_continuity_loss(stage1_factor) * vertical_weight
-
         # 计算总损失
         total_loss = torch.tensor(0.0, device=self.device)
         for name, val in losses.items():
@@ -2096,89 +2088,6 @@ class Trainer:
         res["zero_voltage"] = F.mse_loss(phi_0v, phi_ic_target) * 100.0 * _volt_anneal
         res["low_voltage"] = F.mse_loss(phi_low, phi_ic_target) * 100.0 * _volt_anneal
         return res
-
-    def _compute_vertical_continuity_loss(self, stage1_factor: float):
-        """垂直方向 φ 场连续性约束（2026-06-06 新增）。
-
-        物理图像：固定 XY 点，沿 Z 轴看：
-        - 底部 (z→0): φ = 1（纯油）
-        - 界面: φ = 0.5（油水混合）
-        - 顶部 (z→Lz): φ = 0（纯水）
-
-        约束：
-        1. 单调性：φ 沿 Z 轴单调递减（油在下，水在上）
-        2. 边界：底部 φ≈0.9，顶部 φ≈0.1（留有过渡层余量）
-        3. 平滑性：二阶差分 ≈ 0（无振荡）
-
-        Args:
-            stage1_factor: S1/S2 退火因子（S3 时 stage1_factor ≈ 0）
-
-        Returns:
-            垂直连续性损失标量
-        """
-        Lx, Ly, Lz = PHYSICS["Lx"], PHYSICS["Ly"], PHYSICS["Lz"]
-        n_xy = 256  # 随机 XY 点数
-        n_z = 10  # 每个 XY 点的 Z 方向采样数
-
-        # 随机 XY 点
-        x = torch.rand(n_xy, device=self.device) * Lx
-        y = torch.rand(n_xy, device=self.device) * Ly
-
-        # 随机场景
-        V_from = torch.rand(n_xy, device=self.device) * 30.0
-        V_to = torch.rand(n_xy, device=self.device) * 30.0
-        t_since = torch.rand(n_xy, device=self.device) * 0.030
-
-        # Z 方向分层采样（在界面附近加密）
-        # 使用 tanh 分布的采样点：更多点集中在 φ 变化快的区域
-        z_ratios = torch.linspace(0.0, 1.0, n_z, device=self.device)
-        z_samples = z_ratios * Lz  # (n_z,)
-
-        # 构造 (n_xy * n_z, 6) 的批量点
-        x_rep = x.repeat_interleave(n_z)
-        y_rep = y.repeat_interleave(n_z)
-        z_rep = z_samples.repeat(n_xy)
-        Vf_rep = V_from.repeat_interleave(n_z)
-        Vt_rep = V_to.repeat_interleave(n_z)
-        ts_rep = t_since.repeat_interleave(n_z)
-
-        pts = torch.stack([x_rep, y_rep, z_rep, Vf_rep, Vt_rep, ts_rep], dim=1)
-
-        # 一次前向（带梯度，让模型能学到这个约束）
-        phi_all = torch.clamp(self.model(pts)[:, 4], 0.0, 1.0)
-
-        # reshape → (n_xy, n_z)
-        phi_vertical = phi_all.view(n_xy, n_z)
-
-        # === 损失 1：单调性（φ[z_i] >= φ[z_{i+1}] - margin）===
-        # 允许小 margin 避免过约束
-        margin = 0.05
-        diff = phi_vertical[:, :-1] - phi_vertical[:, 1:]  # (n_xy, n_z-1)
-        monotonicity_loss = torch.mean(F.relu(diff + margin))
-
-        # === 损失 2：边界条件 ===
-        # 底部 (z=0): φ ≈ 0.9（不是 1.0，因为界面过渡层可能延伸到 z=0）
-        # 顶部 (z=Lz): φ ≈ 0.1（不是 0.0，同理）
-        bottom_phi = phi_vertical[:, 0]
-        top_phi = phi_vertical[:, -1]
-        bottom_loss = torch.mean((bottom_phi - 0.9) ** 2)
-        top_loss = torch.mean((top_phi - 0.1) ** 2)
-
-        # === 损失 3：二阶平滑（Laplacian ≈ 0，防止振荡）===
-        # 二阶差分：φ[z-1] - 2*φ[z] + φ[z+1]
-        if n_z >= 3:
-            second_diff = phi_vertical[:, :-2] - 2 * phi_vertical[:, 1:-1] + phi_vertical[:, 2:]
-            smoothness_loss = torch.mean(second_diff**2)
-        else:
-            smoothness_loss = torch.tensor(0.0, device=self.device)
-
-        # === 总损失 ===
-        # 权重分配：平滑性 > 单调性 > 边界
-        total_loss = monotonicity_loss * 100.0 + (bottom_loss + top_loss) * 50.0 + smoothness_loss * 200.0
-
-        # S3 阶段保留弱约束（不完全归零，防止 φ 场退化）
-        s3_factor = max(0.2, stage1_factor)
-        return total_loss * s3_factor
 
     def _compute_monotonicity_response_loss(self):
         """5. 单调性 & 电压响应约束 — 批量前向版本（4次→1次）。"""
