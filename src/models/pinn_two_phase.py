@@ -3056,7 +3056,12 @@ class Trainer:
                 y = np.random.uniform(0, self.model.Ly)
                 # z 在油膜层加密
                 if np.random.rand() < 0.6:
-                    z = np.random.uniform(0, min(self.model.h_ink * 3 / max(1 - eta, 0.15), self.model.Lz))
+                    # 使用 PHYSICS 中的最小油墨面积分数
+                    min_ink_frac = PHYSICS["ink_initial_fraction"]
+                    z = np.random.uniform(
+                        0,
+                        min(self.model.h_ink * 3 / max(1 - eta, min_ink_frac), self.model.Lz),
+                    )
                 else:
                     z = np.random.uniform(0, self.model.Lz)
 

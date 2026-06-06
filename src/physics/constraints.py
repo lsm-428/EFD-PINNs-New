@@ -76,13 +76,19 @@ def _get_default_materials_params() -> dict:
         "temperature_coefficient_viscosity": -3.5e-3,
         # 电学属性
         "epsilon_0": PHYSICS.get("epsilon_0", 8.854e-12),
-        "epsilon_su8": PHYSICS.get("epsilon_r", 3.28),
+        # 注意：epsilon_su8 使用 PHYSICS 中的 epsilon_r（SU-8 相对介电常数）
+        # 但 PHYSICS 中 epsilon_r 已被更新为四层串联等效值（12.0）
+        # 这里使用 PhysicsConfig 中的 epsilon_su8 字段（3.28）
+        "epsilon_su8": PHYSICS.get("epsilon_su8", 3.28),  # SU-8 相对介电常数
         "epsilon_teflon": PHYSICS.get("epsilon_h", 1.934),
-        "d_su8": PHYSICS.get("d_dielectric", 400e-9),
+        # 注意：d_su8 使用 PHYSICS 中的 d_dielectric（介电层厚度）
+        # 但 PHYSICS 中 d_dielectric 已被更新为有效值（8e-7）
+        # 这里使用 PhysicsConfig 中的 d_su8 字段（400e-9）
+        "d_su8": PHYSICS.get("d_su8", 400e-9),  # SU-8 厚度 (m) = 400nm
         "d_teflon": PHYSICS.get("d_hydrophobic", 400e-9),
         "A_eff": 1.20,  # PHYSICS 中无对应
-        "dielectric_thickness": PHYSICS.get("d_dielectric", 4e-7),
-        "relative_permittivity": PHYSICS.get("epsilon_r", 3.28),
+        "dielectric_thickness": PHYSICS.get("d_dielectric", 8e-7),
+        "relative_permittivity": PHYSICS.get("epsilon_r", 12.0),
         # 两相流属性
         "density_polar": PHYSICS.get("rho_polar", 998.0),
         "density_ink": PHYSICS.get("rho_oil", 763.0),

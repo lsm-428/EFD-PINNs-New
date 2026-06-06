@@ -367,6 +367,8 @@ class PhysicsConfig:
             # 接触角
             "contact_angle_theta0": self.theta0,
             "contact_angle_ink": self.theta0,
+            "dynamic_contact_angle_advancing": self.theta0,
+            "dynamic_contact_angle_receding": 100.0,
             "theta_wall": self.theta_wall,
             # 几何参数
             "Lx": self.Lx,
