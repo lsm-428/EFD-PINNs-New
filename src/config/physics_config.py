@@ -104,7 +104,8 @@ PHYSICS: dict[str, Any] = {
     "V_threshold": 5.0,  # 阈值电压 (V) = V_T_base + (h_ink-3μm)×sensitivity，计算值
     # ========== Allen-Cahn 相场参数 ==========
     "ac_interface_width": 5e-07,  # 界面宽度 (m) = 0.5μm, v7.2 校准值
-    "ac_mobility": 1e-10,  # 迁移率 (m³·s/kg), mob≈0.1m/s, τ~0.05ms
+    "ac_mobility": 1e-13,  # 迁移率 (m³·s/kg), mob≈0.01m/s, τ~0.5ms (电润湿匹配)
+    # ew_scale removed: EW force now in NS equation as body force
     # ========== 开口率参数 ==========
     "eta_max": 0.68,  # 最大开口率
     "ink_initial_fraction": 0.15,  # 初始油墨体积分数
@@ -204,7 +205,8 @@ class PhysicsConfig:
 
     # Allen-Cahn 相场参数
     ac_interface_width: float = 5e-07  # 界面宽度 (m) = 0.5μm, v7.2 校准值
-    ac_mobility: float = 1e-10  # 迁移率 (m³·s/kg)
+    ac_mobility: float = 1e-13  # 迁移率 (m³·s/kg), mob≈0.01m/s (电润湿匹配)
+    ew_scale: float = 0.01  # EW 源项缩放因子 (匹配 AC 残差量级)
     electrowetting_weight: float = 1.0  # EW 源项权重 (1.0=全强度, 0.02=2%)
 
     # 物理模型开关
@@ -308,6 +310,7 @@ class PhysicsConfig:
             # Allen-Cahn 相场参数 (v7.2 校准)
             ac_interface_width=materials.get("ac_interface_width", cls.ac_interface_width),
             ac_mobility=materials.get("ac_mobility", cls.ac_mobility),
+            ew_scale=materials.get("ew_scale", cls.ew_scale),
             electrowetting_weight=materials.get("electrowetting_weight", cls.electrowetting_weight),
             # 数据生成与采样参数 (2026-06-06)
             ic_width=data_cfg.get("ic_width", cls.ic_width),
@@ -387,6 +390,7 @@ class PhysicsConfig:
             # Allen-Cahn 相场参数 (v7.2 校准)
             "ac_interface_width": getattr(self, "ac_interface_width", 5e-07),
             "ac_mobility": getattr(self, "ac_mobility", 1e-10),
+            "ew_scale": getattr(self, "ew_scale", 0.01),
             "electrowetting_weight": getattr(self, "electrowetting_weight", 1.0),
             # 数据生成与采样参数 (2026-06-06)
             "ic_width": self.ic_width,

@@ -1302,7 +1302,7 @@ class DataGenerator:
 
         # 垂直方向结构化采样配置
         use_vertical_sampling = data_cfg.get("use_vertical_sampling", True)
-        n_vertical_samples = data_cfg.get("n_vertical_samples", 5)  # 每个 XY 点的垂直采样数
+        n_vertical_samples = data_cfg.get("n_vertical_samples", 20)  # 每个 XY 点的垂直采样数
 
         for V_from, V_to, t in dom_scenarios:
             x = np.random.uniform(0, self.Lx)
@@ -1311,27 +1311,40 @@ class DataGenerator:
             if use_vertical_sampling and n_vertical_samples > 1:
                 # === 垂直方向分层采样 ===
                 # 对每个 XY 点，沿 Z 轴采样 n_vertical_samples 个点
-                # 采样策略：均匀 + 界面附近加密
+                # 采样策略：界面附近大幅加密 + 上下区域稀疏
 
-                # 估计界面位置（用于加密采样）
+                # 估计界面位置
                 eta = self.get_opening_rate(V_to, t)
                 h_ink_edge = self.h_ink / max(1.0 - eta, PHYSICS["ink_initial_fraction"])
 
-                # Z 方向采样点：均匀分布 + 界面附近加密
-                z_base = np.linspace(0, self.Lz, n_vertical_samples)
+                # 界面附近加密采样（±50% 界面高度范围，占 70% 采样点）
+                n_interface = int(n_vertical_samples * 0.7)
+                n_bottom = int(n_vertical_samples * 0.15)
+                n_top = n_vertical_samples - n_interface - n_bottom
 
-                # 在界面附近额外加密（±20% 界面高度范围）
-                z_extra = []
-                if 0 < h_ink_edge < self.Lz:
-                    z_interface_samples = np.linspace(
+                z_points = []
+
+                # 底部区域 [0, h_ink_edge * 0.5]：稀疏采样
+                if n_bottom > 0:
+                    z_bottom = np.linspace(0, h_ink_edge * 0.5, n_bottom)
+                    z_points.extend(z_bottom)
+
+                # 界面区域 [h_ink_edge * 0.5, h_ink_edge * 1.5]：密集采样
+                if n_interface > 0:
+                    z_interface = np.linspace(
                         max(0, h_ink_edge * 0.5),
                         min(self.Lz, h_ink_edge * 1.5),
-                        n_vertical_samples // 2,
+                        n_interface,
                     )
-                    z_extra = z_interface_samples
+                    z_points.extend(z_interface)
 
-                # 合并采样点（去重）
-                z_all = np.unique(np.concatenate([z_base, z_extra]))
+                # 顶部区域 [h_ink_edge * 1.5, Lz]：稀疏采样
+                if n_top > 0:
+                    z_top = np.linspace(h_ink_edge * 1.5, self.Lz, n_top)
+                    z_points.extend(z_top)
+
+                # 去重并排序
+                z_all = np.unique(z_points)
 
                 for z in z_all:
                     domain_points.append([x, y, z, V_from, V_to, t])

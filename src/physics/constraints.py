@@ -282,8 +282,10 @@ class PhysicsConstraints:
             V_T = self.materials_params.get("V_T_base", 5.0)
             V_eff_ew = torch.clamp(V_to - V_T, min=0.0)
 
-            # 电润湿力幅值: f_ew = ½·C_ew·V_eff² (双层串联电容)
-            f_ew_magnitude = 0.5 * C_ew * V_eff_ew**2
+            # 电润湿压力幅值: p_ew = ½·C_ew·V_eff² / d_eff
+            # C_ew [F/m²] * V² [V²] / d_eff [m] = [J/m²] / [m] = [N/m²] ✅
+            d_eff = self.materials_params.get("dielectric_thickness", 800e-9)
+            f_ew_magnitude = 0.5 * C_ew * V_eff_ew**2 / d_eff
 
             # 空间坐标
             x[:, 0]
@@ -293,16 +295,16 @@ class PhysicsConstraints:
             # 电润湿力作用在底面 (z=0)
             # z 方向衰减尺度: 用油墨厚度 h_ink 作为特征长度
             # 电润湿力是界面力，作用在油墨-极性液体界面附近，尺度 ~h_ink (3μm)
-            # 与 EW 残差 (compute_electrowetting_residual) 保持一致
             h_ink_ns = self.materials_params.get("ink_thickness", 3e-6)
             z_decay = torch.exp(-z_coord / h_ink_ns)
 
-            # 电润湿体积力: f_ew = ½ C_ew V_eff² * z_decay * ∇φ
-            # 量纲: [N/m] * [1/m] = [N/m³] ✅
+            # 电润湿体积力: f_ew = p_ew * z_decay * ∇φ / |∇φ|
+            # 量纲: [N/m²] * [1/m] = [N/m³] ✅
             # 方向: 沿 ∇φ（从水指向油），极性液体推动油墨向外
-            # z_decay: 在底面 ~100nm 内急剧衰减（德拜屏蔽）
-            f_ew_x = f_ew_magnitude * z_decay * phi_x
-            f_ew_y = f_ew_magnitude * z_decay * phi_y
+            # z_decay: 在底面 ~h_ink 内衰减
+            grad_mag = torch.sqrt(phi_x**2 + phi_y**2 + 1e-10)
+            f_ew_x = f_ew_magnitude * z_decay * phi_x / grad_mag
+            f_ew_y = f_ew_magnitude * z_decay * phi_y / grad_mag
             f_ew_z = torch.zeros_like(f_ew_x)  # z 方向无电润湿力
 
             # 连续性方程
@@ -674,25 +676,10 @@ class PhysicsConstraints:
             device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
             return {"laplace_pressure": torch.zeros(1, device=device, requires_grad=True)}
 
-    def compute_electrowetting_residual(self, x_phys, predictions, grads=None):
-        """电润湿驱动力残差 — 已移除
-
-        EW 驱动力已整合到 AC 方程（_compute_vof_residual）的 ew_source 项中，
-        直接驱动相场演化，不再需要独立残差。
-
-        保留此方法以保持 compute_core_residuals 调用兼容，但始终返回零。
-        """
-        try:
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
-            return {"electrowetting": torch.zeros(1, device=device, requires_grad=True)}
-        except Exception:
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
-            return {"electrowetting": torch.zeros(1, device=device, requires_grad=True)}
-
     def compute_interface_energy_residual(self, x_phys, predictions, grads=None):
         """界面能 — 纯 sigma*|grad(phi)|, 塑造圆润液滴
 
-        电润湿项已拆分到 compute_electrowetting_residual。
+        电润湿项已整合到 AC 方程的 ew_source 中。
         此项只做表面张力最小化(最小界面面积 = 圆润形状)。
         """
         try:
@@ -1246,14 +1233,7 @@ class PhysicsConstraints:
         except Exception as e:
             logger.warning(f"体积守恒残差计算失败: {e}")
 
-        # 4. 电润湿驱动力
-        try:
-            ew_residuals = self.compute_electrowetting_residual(x_phys, predictions, grads=grads)
-            residuals.update(ew_residuals)
-        except Exception as e:
-            logger.warning(f"电润湿残差失败: {e}")
-
-        # 5. 界面能
+        # 4. 界面能
         try:
             ie_residuals = self.compute_interface_energy_residual(x_phys, predictions, grads=grads)
             residuals.update(ie_residuals)
@@ -1491,8 +1471,10 @@ class PhysicsConstraints:
                 D_eff = M_ac * sigma_ac / eps_ac  # [m²/s] 扩散系数
                 mob = D_eff / eps_ac  # [m/s] 迁移速度尺度
 
-                # 标准 AC 方程残差: ∂φ/∂t + u·∇φ = mob·[ε·∇²φ − σ·W'(φ)/ε]
-                ac_residual = advection - mob * (eps_ac * lap_phi - sigma_ac * f_prime / eps_ac)
+                # 标准 AC 方程残差: ∂φ/∂t + u·∇φ = mob·[ε·∇²φ − W'(φ)/ε]
+                # 注意: W'(φ) = f_prime = 2φ(1-φ)(1-2φ)，量纲 [1]
+                # eps_ac * lap_phi [1/m] - f_prime / eps_ac [1/m] → 量纲匹配
+                ac_residual = advection - mob * (eps_ac * lap_phi - f_prime / eps_ac)
 
             # === 电润湿驱动力源项 (直接加入 AC 方程) ===
             # 物理: 电润湿自由能 G_ew = -½·C(φ)·V²
@@ -1510,37 +1492,9 @@ class PhysicsConstraints:
             # = [m³·s/kg] * [J / m³]  (因为 J = A·s·V)
             # = [m³·s/kg] · [kg·m/s² · m / m³]
             # = [m²/s]
-            # 所以 S_ew 量纲是 [m²/s]，需要再除以 eps_ac [m] 得到 [m/s]
-            # 再除以 eps_ac [m] 得到 [1/s] ← 与 advection 匹配
-            #
-            # 归一化因子：S_ew = M_ac * delta_C * V² * z_decay / eps_ac²
-            try:
-                # 开口区域电容（SU-8 + Teflon），含有效面积校正因子 A_eff
-                C_open = self._compute_capacitance(with_oil=False)
-                # 油墨区域电容（SU-8 + Teflon + 油墨层串联），含 A_eff
-                C_ink = self._compute_capacitance(with_oil=True)
-                # 电容差
-                delta_C = C_open - C_ink  # > 0
-
-                # V_to 在 x_phys 索引 4
-                V_to = x_phys[:, 4] if x_phys.shape[1] >= 5 else torch.zeros(batch_size, device=device)
-
-                V_T = self.materials_params.get("V_T_base", 5.0)
-                V_eff = torch.clamp(V_to - V_T, min=0.0)
-
-                # z 方向衰减
-                z_coord = x_phys[:, 2]
-                h_ink_v = self.materials_params.get("ink_thickness", 3e-6)
-                z_decay = torch.exp(-z_coord / h_ink_v)
-
-                # EW 源项: S_ew = M_ac * delta_C * V_eff² * z_decay / eps_ac²
-                # 量纲: [m³·s/kg] * [F/m²] * [V²] / [m²] = [m²/s] / [m] = [1/s] ✓
-                ew_source = M_ac * delta_C * V_eff**2 * z_decay / (eps_ac**2 + 1e-20)
-
-                # 负号：驱动力使 phi 减小（油墨被极性液体替代）
-                ac_residual = ac_residual - ew_source
-            except Exception:
-                pass  # EW 源项失败不影响主残差
+            # 注意: 电润湿力已作为体积力加入 NS 方程（f_ew_x, f_ew_y）
+            # AC 方程中不再需要独立的 EW 源项
+            # 相场演化由 NS 方程中的 EW 力自然驱动
 
             return ac_residual
 
