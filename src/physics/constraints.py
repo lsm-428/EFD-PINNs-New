@@ -291,9 +291,12 @@ class PhysicsConstraints:
             # 量纲: [N/m²] * [1/m] = [N/m³] ✅
             # 方向: 沿 -∇φ（从油指向水/中心），极性液体推动油墨向外收缩
             # z_decay: 在底面 ~50nm 内急剧衰减
+            # 数值稳定性：|∇φ| 过小时关闭 EW 力（避免除零）
             grad_mag = torch.sqrt(phi_x**2 + phi_y**2 + 1e-10)
-            f_ew_x = -f_ew_magnitude * z_decay * phi_x / grad_mag
-            f_ew_y = -f_ew_magnitude * z_decay * phi_y / grad_mag
+            # 当界面过度扩散时（|∇φ| < 1e-3），EW 力趋近于零
+            ew_active = (grad_mag > 1e-3).float()
+            f_ew_x = -f_ew_magnitude * z_decay * phi_x / grad_mag * ew_active
+            f_ew_y = -f_ew_magnitude * z_decay * phi_y / grad_mag * ew_active
             f_ew_z = torch.zeros_like(f_ew_x)  # z 方向无电润湿力
 
             # 连续性方程

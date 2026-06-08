@@ -52,7 +52,7 @@
         "aperture_eps": 0.05
     },
     "physics": {
-        "interface_weight": 10.0,
+        "interface_weight": 5.0,
         "ic_weight": 300.0,
         "bc_weight": 80.0,
         "continuity_weight": 2.0,
