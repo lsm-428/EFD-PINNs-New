@@ -298,13 +298,13 @@ class PhysicsConstraints:
             h_ink_ns = self.materials_params.get("ink_thickness", 3e-6)
             z_decay = torch.exp(-z_coord / h_ink_ns)
 
-            # 电润湿体积力: f_ew = p_ew * z_decay * ∇φ / |∇φ|
+            # 电润湿体积力: f_ew = -p_ew * z_decay * ∇φ / |∇φ|
             # 量纲: [N/m²] * [1/m] = [N/m³] ✅
-            # 方向: 沿 ∇φ（从水指向油），极性液体推动油墨向外
+            # 方向: 沿 -∇φ（从油指向水/中心），极性液体推动油墨向外收缩
             # z_decay: 在底面 ~h_ink 内衰减
             grad_mag = torch.sqrt(phi_x**2 + phi_y**2 + 1e-10)
-            f_ew_x = f_ew_magnitude * z_decay * phi_x / grad_mag
-            f_ew_y = f_ew_magnitude * z_decay * phi_y / grad_mag
+            f_ew_x = -f_ew_magnitude * z_decay * phi_x / grad_mag
+            f_ew_y = -f_ew_magnitude * z_decay * phi_y / grad_mag
             f_ew_z = torch.zeros_like(f_ew_x)  # z 方向无电润湿力
 
             # 连续性方程
