@@ -280,15 +280,15 @@ class PhysicsConstraints:
             z_coord = x[:, 2]
 
             # 电润湿力作用在底面 (z=0)
-            # z 方向衰减尺度: 用油墨厚度 h_ink 作为特征长度
-            # 电润湿力是界面力，作用在油墨-极性液体界面附近，尺度 ~h_ink (3μm)
-            h_ink_ns = self.materials_params.get("ink_thickness", 3e-6)
-            z_decay = torch.exp(-z_coord / h_ink_ns)
+            # z 方向衰减尺度: 德拜屏蔽长度 ~50nm（不是油墨厚度 3μm）
+            # 电润湿力是表面力，作用在 Z=0 疏水层表面纳米尺度
+            lambda_d = self.materials_params.get("lambda_debye", 50e-9)
+            z_decay = torch.exp(-z_coord / lambda_d)
 
             # 电润湿体积力: f_ew = -p_ew * z_decay * ∇φ / |∇φ|
             # 量纲: [N/m²] * [1/m] = [N/m³] ✅
             # 方向: 沿 -∇φ（从油指向水/中心），极性液体推动油墨向外收缩
-            # z_decay: 在底面 ~h_ink 内衰减
+            # z_decay: 在底面 ~50nm 内急剧衰减
             grad_mag = torch.sqrt(phi_x**2 + phi_y**2 + 1e-10)
             f_ew_x = -f_ew_magnitude * z_decay * phi_x / grad_mag
             f_ew_y = -f_ew_magnitude * z_decay * phi_y / grad_mag
