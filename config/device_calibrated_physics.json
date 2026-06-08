@@ -196,7 +196,7 @@
             "tau_recovery": 0.010115,
             "zeta": 1.0,
             "dynamic_order": 1,
-            "V_T_base": 5.0,
+            "V_T_base": 3.0,
             "V_T_sensitivity": 2000000.0,
             "_comment": "tau=11.9ms avg from 501-C/D/E/F RT fitting (range 10.2-13.9). Rise slower than fall. 1st-order confirmed: all R2>0.93."
         },

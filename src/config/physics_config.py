@@ -71,14 +71,16 @@ PHYSICS: dict[str, Any] = {
     "density_polar": 998.0,  # 别名
     "viscosity_polar": 1.01e-3,  # 别名
     # 界面张力
-    "sigma": 0.02505,  # 油墨-极性液体界面张力 (N/m)，实测
-    "gamma": 0.048,  # 极性液体表面张力 (N/m)，水+EG 38:62实测
+    "sigma": 0.02505,  # 油墨-极性液体界面张力 (N/m)，实测（CSF 用）
+    "gamma": 0.015,  # 有效宏观表面张力 (N/m)，从 CV 拟合（校正后）
     "surface_tension_polar_ink": 0.02505,  # 别名
     # ========== 电学参数 ==========
     "epsilon_0": 8.854e-12,  # 真空介电常数 (F/m)
-    "epsilon_r": 3.28,  # SU-8 相对介电常数（实测值）
+    "epsilon_r": 12.0,  # 四层串联等效相对介电常数（SU-8+Teflon+Oil+Polar，校正后）
+    "epsilon_su8": 3.28,  # SU-8 相对介电常数（材料本身）
     "epsilon_h": 1.934,  # Teflon AF 相对介电常数（实测值）
-    "d_dielectric": 4e-7,  # 介电层厚度 (m) = 400nm (SU-8)
+    "d_dielectric": 8e-7,  # 有效介电层厚度 (m) = 800nm（校正后）
+    "d_su8": 4e-7,  # SU-8 厚度 (m) = 400nm
     "d_hydrophobic": 4e-7,  # 疏水层厚度 (m) = 400nm (Teflon)
     # ========== 接触角参数 ==========
     "theta0": 120.0,  # 本征接触角 (度)，无电压时
@@ -89,23 +91,22 @@ PHYSICS: dict[str, Any] = {
     "contact_angle_theta0": 120.0,  # 别名，兼容 constraints.py
     "contact_angle_ink": 120.0,  # 别名
     # ========== 动力学参数 ==========
-    "tau": 0.005,  # 电润湿响应时间常数 (s) = 5ms
+    "tau": 0.0119,  # 电润湿响应时间常数 (s) = 11.9ms（校正后，从 RT 数据一阶拟合）
     "tau_onset": 0.0075,  # 低电压区 τ (s)
     "tau_saturation": 0.003,  # 高电压区 τ (s)
     "tau_recovery_factor": 0.85,  # 恢复因子（校正后）
-    "tau_recovery": 0.0101,  # 恢复时间常数 = tau × factor = 11.9ms × 0.85 ≈ 10.1ms
+    "tau_recovery": 0.010115,  # 恢复时间常数 = tau × factor = 11.9ms × 0.85 = 10.115ms
     "zeta": 1.0,  # 阻尼比（一阶系统，校正后确认）
     "dynamic_order": 1,  # 动态阶数：1=一阶指数（校正后确认，所有 R²>0.93）
     "t_max": 0.05,  # 最大仿真时间 (s) = 50ms
     # ========== 电压参数 ==========
-    "V_T_base": 5.0,  # 3μm油膜对应的阈值电压 (V)
+    "V_T_base": 3.0,  # 阈值电压 (V)，校正后（从 CV 数据）
     "V_T_sensitivity": 2e6,  # 阈值电压灵敏度 (V/m) = 2V/μm
     "V_max": 30.0,  # 最大工作电压 (V)
-    "V_threshold": 5.0,  # 阈值电压 (V) = V_T_base + (h_ink-3μm)×sensitivity，计算值
+    "V_threshold": 3.0,  # 阈值电压 (V) = V_T_base（校正后）
     # ========== Allen-Cahn 相场参数 ==========
     "ac_interface_width": 5e-07,  # 界面宽度 (m) = 0.5μm, v7.2 校准值
     "ac_mobility": 1e-10,  # 迁移率 (m³·s/kg)
-    # ew_scale removed: EW force now in NS equation as body force
     # ========== 开口率参数 ==========
     "eta_max": 0.68,  # 最大开口率
     "ink_initial_fraction": 0.15,  # 初始油墨体积分数
@@ -180,7 +181,7 @@ class PhysicsConfig:
     theta_min: float = 60.0
 
     # 动力学
-    tau: float = 0.005
+    tau: float = 0.0119  # 电润湿响应时间常数 (s) = 11.9ms（校正后）
     tau_onset: float = 0.0075
     tau_saturation: float = 0.003
     tau_recovery_factor: float = 0.85  # 恢复因子（校正后）
@@ -189,7 +190,7 @@ class PhysicsConfig:
     t_max: float = 0.05
 
     # 电压 — V_threshold 是 property，从 V_T_base + 油膜厚度计算
-    V_T_base: float = 5.0
+    V_T_base: float = 3.0  # 阈值电压 (V)，校正后
     V_T_sensitivity: float = 2e6
     V_max: float = 30.0
 
@@ -206,8 +207,6 @@ class PhysicsConfig:
     # Allen-Cahn 相场参数
     ac_interface_width: float = 5e-07  # 界面宽度 (m) = 0.5μm, v7.2 校准值
     ac_mobility: float = 1e-10  # 迁移率 (m³·s/kg)
-    ew_scale: float = 0.01  # EW 源项缩放因子 (匹配 AC 残差量级)
-    electrowetting_weight: float = 1.0  # EW 源项权重 (1.0=全强度, 0.02=2%)
 
     # 物理模型开关
     use_convection: bool = False  # Re≈1-5, 默认关闭对流项
@@ -310,8 +309,6 @@ class PhysicsConfig:
             # Allen-Cahn 相场参数 (v7.2 校准)
             ac_interface_width=materials.get("ac_interface_width", cls.ac_interface_width),
             ac_mobility=materials.get("ac_mobility", cls.ac_mobility),
-            ew_scale=materials.get("ew_scale", cls.ew_scale),
-            electrowetting_weight=materials.get("electrowetting_weight", cls.electrowetting_weight),
             # 数据生成与采样参数 (2026-06-06)
             ic_width=data_cfg.get("ic_width", cls.ic_width),
             sample_spread_small=data_cfg.get("sample_spread_small", cls.sample_spread_small),
@@ -390,8 +387,6 @@ class PhysicsConfig:
             # Allen-Cahn 相场参数 (v7.2 校准)
             "ac_interface_width": getattr(self, "ac_interface_width", 5e-07),
             "ac_mobility": getattr(self, "ac_mobility", 1e-10),
-            "ew_scale": getattr(self, "ew_scale", 0.01),
-            "electrowetting_weight": getattr(self, "electrowetting_weight", 1.0),
             # 数据生成与采样参数 (2026-06-06)
             "ic_width": self.ic_width,
             "sample_spread_small": self.sample_spread_small,

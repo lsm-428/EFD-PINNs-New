@@ -61,7 +61,6 @@
         "surface_tension_weight": 2.0,
         "sharpening_weight": 1.0,
         "explicit_volume_weight": 100.0,
-        "electrowetting_weight": 1.0,
         "laplace_pressure_weight": 0.05,
         "sidewall_contact_angle": 20.0,
         "interface_energy_weight": 2.0,
@@ -71,9 +70,7 @@
         "contact_line_dynamics_weight": 0.2,
         "top_boundary_weight": 0.05,
         "ac_interface_width": 5e-07,
-        "ac_mobility": 1e-10,
-        "ew_scale": 1.0,
-        "n_vertical_samples": 50
+        "ac_mobility": 1e-10
     },
     "sampling": {
         "strategy": "physics_based",

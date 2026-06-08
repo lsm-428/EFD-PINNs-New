@@ -666,7 +666,8 @@ class PhysicsConstraints:
     def compute_interface_energy_residual(self, x_phys, predictions, grads=None):
         """界面能 — 纯 sigma*|grad(phi)|, 塑造圆润液滴
 
-        电润湿项已整合到 AC 方程的 ew_source 中。
+        注意：电润湿力已作为体积力加入 NS 方程（f_ew_x, f_ew_y）。
+        AC 方程中不再有独立的 EW 源项。
         此项只做表面张力最小化(最小界面面积 = 圆润形状)。
         """
         try:
