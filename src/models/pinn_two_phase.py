@@ -146,7 +146,7 @@ DEFAULT_CONFIG = {
         "times": 50,
         # 垂直方向结构化采样（2026-06-06 新增）
         "use_vertical_sampling": True,  # 是否启用垂直方向分层采样
-        "n_vertical_samples": 5,  # 每个 XY 点的 Z 方向采样数
+        "n_vertical_samples": 50,  # 每个 XY 点的 Z 方向采样数
     },
 }
 

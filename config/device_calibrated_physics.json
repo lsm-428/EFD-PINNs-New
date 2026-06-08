@@ -193,6 +193,7 @@
             "tau_onset": 0.015,
             "tau_saturation": 0.008,
             "tau_recovery_factor": 0.85,
+            "tau_recovery": 0.010115,
             "zeta": 1.0,
             "dynamic_order": 1,
             "V_T_base": 5.0,
