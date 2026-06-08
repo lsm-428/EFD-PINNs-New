@@ -89,20 +89,22 @@ class HybridPredictor:
             self.params = {
                 "theta0": 120.0,  # 初始接触角 (度)
                 "epsilon_0": 8.854e-12,  # 真空介电常数
-                "gamma": 0.048,  # 极性液体-气表面张力 (N/m), 水+EG 38:62
+                "gamma": 0.015,  # 有效宏观表面张力 (N/m)，CV 拟合（校正后）
                 "sigma": 0.02505,  # 油-极性液体界面张力 (N/m), Young-Lippmann用此值
-                "epsilon_r": 3.28,  # SU-8 相对介电常数（真实值）
-                "d": 4e-7,  # 介电层厚度 (m) = 400nm
+                "epsilon_r": 12.0,  # 四层串联等效相对介电常数（校正后）
+                "d": 8e-7,  # 有效介电层厚度 (m) = 800nm（校正后）
                 "epsilon_h": 1.934,  # Teflon AF 相对介电常数（实测值）
                 "d_h": 4e-7,  # Teflon 厚度 (m) = 400nm
-                "tau": 0.005,  # 电润湿响应时间常数 (s)
-                "tau_onset": 0.0075,  # 低电压区时间常数 (s)
-                "tau_saturation": 0.003,  # 高电压区时间常数 (s)
-                "tau_recovery_factor": 0.4,  # 恢复速度因子（τ_recovery = τ_drive × factor）
+                "tau": 0.0119,  # 电润湿响应时间常数 (s) = 11.9ms（校正后）
+                "tau_onset": 0.015,  # 低电压区时间常数 (s)（校正后）
+                "tau_saturation": 0.008,  # 高电压区时间常数 (s)（校正后）
+                "tau_recovery_factor": 0.85,  # 恢复速度因子（校正后）
                 "zeta": 1.0,  # 阻尼比（一阶系统）
+                "V_T_base": 3.0,  # 阈值电压 (V)（校正后）
+                "V_T_sensitivity": 2e6,  # 阈值电压灵敏度 (V/m)
                 "dynamic_order": 1,  # 动态阶数：1=一阶指数（校正后确认）
                 "V_max": 30.0,  # 最大电压 (V)
-                "V_threshold": 5.0,  # 阈值电压（会被PhysicsConfig覆盖）
+                "V_threshold": 3.0,  # 阈值电压（校正后）
             }
 
         # 加载模型和配置

@@ -82,6 +82,7 @@ class PINNEvaluator:
             config = checkpoint.get("config", DEFAULT_CONFIG)
 
             # 更新全局物理参数，确保评估与训练一致
+            # 注意：evaluate.py 是独立运行的脚本，修改全局 PHYSICS 是安全的
             if "physics" in config:
                 for k, v in config["physics"].items():
                     PHYSICS[k] = v
