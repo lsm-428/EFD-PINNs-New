@@ -1505,6 +1505,9 @@ class Trainer:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logger.info(f"使用设备: {self.device}")
 
+        # 配置参数范围验证
+        self._validate_config()
+
         # 模型
         self.model = TwoPhasePINN(self.config).to(self.device)
         logger.info(f"模型参数量: {sum(p.numel() for p in self.model.parameters()):,}")
@@ -1624,6 +1627,50 @@ class Trainer:
         # 预先保存一份配置
         with open(os.path.join(self.output_dir, "config.json"), "w") as f:
             json.dump(self.config, f, indent=2, default=str)
+
+    def _validate_config(self):
+        """验证配置参数范围，提前发现错误"""
+        errors = []
+
+        # 训练参数
+        training = self.config.get("training", {})
+        if training.get("epochs", 0) <= 0:
+            errors.append(f"epochs 应为正数，当前 {training.get('epochs')}")
+        if training.get("batch_size", 0) <= 0:
+            errors.append(f"batch_size 应为正数，当前 {training.get('batch_size')}")
+        if training.get("learning_rate", 0) <= 0:
+            errors.append(f"learning_rate 应为正数，当前 {training.get('learning_rate')}")
+
+        # 阶段顺序
+        s1 = training.get("stage1_epochs", 0)
+        s2 = training.get("stage2_epochs", 0)
+        s3 = training.get("epochs", 0)
+        if not (s1 < s2 < s3):
+            errors.append(f"阶段 epoch 应递增: S1={s1}, S2={s2}, S3={s3}")
+
+        # 物理权重非负
+        physics = self.config.get("physics", {})
+        for key in ["interface_weight", "continuity_weight", "vof_weight", "ns_weight"]:
+            if physics.get(key, 0) < 0:
+                errors.append(f"{key} 应非负，当前 {physics.get(key)}")
+
+        # 采样参数
+        data = self.config.get("data", {})
+        n_vert = data.get("n_vertical_samples", 50)
+        if n_vert < 2:
+            errors.append(f"n_vertical_samples 应 >= 2，当前 {n_vert}")
+
+        # 物理参数
+        if PHYSICS.get("V_T_base", 0) < 0:
+            errors.append(f"V_T_base 应非负，当前 {PHYSICS['V_T_base']}")
+        if PHYSICS.get("tau", 0) <= 0:
+            errors.append(f"tau 应为正数，当前 {PHYSICS['tau']}")
+
+        if errors:
+            for e in errors:
+                logger.warning(f"配置验证: {e}")
+            raise ValueError("配置验证失败:\n" + "\n".join(f"  - {e}" for e in errors))
+        logger.info("✅ 配置验证通过")
 
     def _save_checkpoint(self, epoch: int, is_best: bool = False, is_final: bool = False):
         """
