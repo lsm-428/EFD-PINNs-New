@@ -92,8 +92,8 @@ PHYSICS: dict[str, Any] = {
     "tau": 0.005,  # 电润湿响应时间常数 (s) = 5ms
     "tau_onset": 0.0075,  # 低电压区 τ (s)
     "tau_saturation": 0.003,  # 高电压区 τ (s)
-    "tau_recovery_factor": 0.4,  # 恢复因子
-    "tau_recovery": 0.002,  # 恢复时间常数 = tau × factor = 5ms × 0.4 = 2ms
+    "tau_recovery_factor": 0.85,  # 恢复因子（校正后）
+    "tau_recovery": 0.0101,  # 恢复时间常数 = tau × factor = 11.9ms × 0.85 ≈ 10.1ms
     "zeta": 1.0,  # 阻尼比（一阶系统，校正后确认）
     "dynamic_order": 1,  # 动态阶数：1=一阶指数（校正后确认，所有 R²>0.93）
     "t_max": 0.05,  # 最大仿真时间 (s) = 50ms
@@ -183,7 +183,7 @@ class PhysicsConfig:
     tau: float = 0.005
     tau_onset: float = 0.0075
     tau_saturation: float = 0.003
-    tau_recovery_factor: float = 0.4
+    tau_recovery_factor: float = 0.85  # 恢复因子（校正后）
     zeta: float = 1.0  # 一阶系统
     dynamic_order: int = 1  # 一阶指数（校正后确认）
     t_max: float = 0.05

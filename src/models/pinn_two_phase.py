@@ -834,13 +834,6 @@ class DataGenerator:
             except Exception as e:
                 logger.warning(f"EnhancedApertureModel 在 target_phi_3d 中失败: {e}")
         if eta is None:
-            is_voltage_down = V_prev > V
-            if is_voltage_down:
-                tau_recovery = PHYSICS["tau_recovery"]
-                eta_max = self.get_opening_rate(V_prev, 0.020)
-                t_since_local = max(0, t - t_step) if t_step is not None and t_step >= 0 else max(0, t - 0.015)
-                eta = eta_max * np.exp(-t_since_local / tau_recovery)
-                return self._phi_center_opening_mode(x, y, z, eta, h_ink)
             eta = self.get_opening_rate(V, t)
             # 计算 θ（如果上面没有设置）
             if theta is None:
