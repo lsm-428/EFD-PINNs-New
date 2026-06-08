@@ -864,9 +864,10 @@ class DataGenerator:
 
         if eta < 0.01:
             # 无开口：初始状态，油墨均匀铺在底部（界面倾斜由 θ 决定）
+            # φ=1 在底部（油），φ=0 在顶部（水）
             r = np.sqrt((x - self.cx) ** 2 + (y - self.cy) ** 2)
             z_tilt = z + (r - r_open) * tan_theta
-            phi_z = 0.5 * (1 + np.tanh((z_tilt - h_ink) / (interface_width / 3)))
+            phi_z = 0.5 * (1 + np.tanh((h_ink - z_tilt) / (interface_width / 3)))
 
         elif eta < eta_threshold:
             # ============================================================
@@ -966,7 +967,8 @@ class DataGenerator:
 
         if eta < 0.01:
             # 无开口：初始状态，油墨均匀铺在底部（倾斜界面）
-            return 0.5 * (1 + np.tanh((z_tilt - h_ink) / (interface_width / 3)))
+            # φ=1 在底部（油），φ=0 在顶部（水）
+            return 0.5 * (1 + np.tanh((h_ink - z_tilt) / (interface_width / 3)))
 
         if eta > 0.99:
             # 完全开口：几乎没有油墨
@@ -990,7 +992,8 @@ class DataGenerator:
         if r < r_open - interface_width:
             phi_z = 0.0  # 中心透明
         elif r > r_open + interface_width:
-            phi_z = 0.5 * (1 + np.tanh((z_tilt - h_ink_edge) / (interface_width / 2)))
+            # φ=1 在底部（油），φ=0 在顶部（水）
+            phi_z = 0.5 * (1 + np.tanh((h_ink_edge - z_tilt) / (interface_width / 2)))
         else:
             phi_center = 0.0
             phi_edge = 0.5 * (1 + np.tanh((z_tilt - h_ink_edge) / (interface_width / 2)))
