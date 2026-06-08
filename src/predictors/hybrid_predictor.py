@@ -179,6 +179,11 @@ class HybridPredictor:
                 "tau_recovery_factor": dynamics.get("tau_recovery_factor", self.params.get("tau_recovery_factor", 0.4)),
                 "zeta": dynamics.get("zeta", self.params["zeta"]),
                 "dynamic_order": dynamics.get("dynamic_order", self.params.get("dynamic_order", 1)),
+                # 阈值电压（优先从 dynamics_params 读取）
+                "V_T_base": dynamics.get("V_T_base", materials.get("V_T_base", self.params.get("V_T_base", 3.0))),
+                "V_threshold": dynamics.get(
+                    "V_threshold", materials.get("V_threshold", self.params.get("V_threshold", 3.0))
+                ),
             }
         )
 

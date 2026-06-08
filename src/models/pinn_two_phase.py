@@ -720,15 +720,23 @@ class DataGenerator:
         theta_eq = np.degrees(np.arccos(cos_theta_eq))
 
         if V_eff > 0:
-            # 电润湿驱动: 二阶欠阻尼
+            # 电润湿驱动: 动态响应
+            # zeta=1.0 → 临界阻尼（一级指数），zeta<1 → 欠阻尼（振荡）
             omega_0 = 1.0 / tau
-            omega_d = omega_0 * np.sqrt(max(0, 1 - zeta**2))
-            exp_term = np.exp(-zeta * omega_0 * t)
-            damping = zeta / np.sqrt(1 - zeta**2) if zeta < 1 else 1.0
-            theta_t = theta_eq + (theta0 - theta_eq) * exp_term * (np.cos(omega_d * t) + damping * np.sin(omega_d * t))
+            if zeta >= 1.0:
+                # 临界/过阻尼：一级指数衰减（无振荡）
+                theta_t = theta_eq + (theta0 - theta_eq) * np.exp(-omega_0 * t)
+            else:
+                # 欠阻尼：衰减振荡
+                omega_d = omega_0 * np.sqrt(1 - zeta**2)
+                exp_term = np.exp(-zeta * omega_0 * t)
+                damping = zeta / np.sqrt(1 - zeta**2)
+                theta_t = theta_eq + (theta0 - theta_eq) * exp_term * (
+                    np.cos(omega_d * t) + damping * np.sin(omega_d * t)
+                )
         else:
-            # 表面张力恢复: 一阶指数 (过阻尼, 无振荡)
-            # τ_recovery = τ × 0.4 (恢复快于驱动)
+            # 表面张力恢复: 一阶指数
+            # τ_recovery = τ × tau_recovery_factor (恢复快于驱动)
             tau_rec = tau * tau_recovery_factor
             theta_t = theta0 + (theta_eq - theta0) * np.exp(-t / tau_rec)
 

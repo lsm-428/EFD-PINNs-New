@@ -55,6 +55,8 @@ EWD_CMAP = LinearSegmentedColormap.from_list("EWD", ["#E0FFFF", "#FF00FF"])
 def load_model(checkpoint_path: str) -> tuple[TwoPhasePINN, torch.device, dict]:
     """加载模型和配置"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # 注意：weights_only=False 是必要的，因为 checkpoint 包含 config 字典
+    # 这是测试代码，加载的是受信任的训练输出文件
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
 
     config = checkpoint.get("config", DEFAULT_CONFIG)

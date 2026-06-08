@@ -108,6 +108,8 @@ def _get_default_materials_params() -> dict:
         "ac_interface_width": _get("ac_interface_width"),
         "ac_mobility": _get("ac_mobility"),
         "electrowetting_weight": _get("electrowetting_weight"),
+        # 阈值电压
+        "V_T_base": _get("V_T_base"),
         # 侧壁 Teflon 污染接触角
         "theta_wall_teflon": _get("theta_wall_teflon"),
     }
@@ -266,7 +268,7 @@ class PhysicsConstraints:
             V_to = x[:, 4] if x.shape[1] >= 5 else torch.zeros_like(u)
 
             # 电润湿有效电压: 低于阈值无驱动力
-            V_T = self.materials_params.get("V_T_base", 5.0)
+            V_T = self.materials_params.get("V_T_base", 3.0)
             V_eff_ew = torch.clamp(V_to - V_T, min=0.0)
 
             # 电润湿压力幅值: p_ew = ½·C_ew·V_eff² / d_eff
@@ -771,7 +773,7 @@ class PhysicsConstraints:
             sigma = self.materials_params.get("surface_tension_polar_ink", 0.02505)
             eps = self.materials_params.get("ac_interface_width", 5e-07)
             theta0 = self.materials_params.get("contact_angle_theta0", 120.0)
-            V_T_base = self.materials_params.get("V_T_base", 5.0)
+            V_T_base = self.materials_params.get("V_T_base", 3.0)
             theta_wall_teflon = self.materials_params.get("theta_wall_teflon", 110.0)
 
             # 双层串联电容 (SU-8 + Teflon)，含有效面积校正因子 A_eff
@@ -885,7 +887,7 @@ class PhysicsConstraints:
             phi_b = phi[is_bottom]
             V_b = V_to[is_bottom]
             t_b = t_since[is_bottom]
-            V_T = self.materials_params.get("V_T_base", 5.0)
+            V_T = self.materials_params.get("V_T_base", 3.0)
             V_eff = torch.clamp(V_b - V_T, min=0.0)
 
             # τ_RC: 介电层RC时间常数 (SU-8电阻率≈10¹⁴Ω·cm → τ_RC≈25μs)
@@ -977,7 +979,7 @@ class PhysicsConstraints:
 
             cos_theta0 = np.cos(np.radians(theta0_deg))
             V_m = V_to[mask]
-            V_T = self.materials_params.get("V_T_base", 5.0)
+            V_T = self.materials_params.get("V_T_base", 3.0)
             V_eff = torch.clamp(V_m - V_T, min=0.0)
             ew_term = C_yl * V_eff**2 / (2 * sigma_po)
             cos_eq = torch.clamp(torch.tensor(cos_theta0, device=device) + ew_term, -1.0, 1.0)
