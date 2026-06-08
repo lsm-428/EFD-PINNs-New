@@ -45,14 +45,14 @@
         "n_boundary": 10000,
         "n_domain": 20000,
         "use_vertical_sampling": true,
-        "n_vertical_samples": 20
+        "n_vertical_samples": 50
     },
     "eval": {
         "aperture_phi0": 0.3,
         "aperture_eps": 0.05
     },
     "physics": {
-        "interface_weight": 50.0,
+        "interface_weight": 10.0,
         "ic_weight": 300.0,
         "bc_weight": 80.0,
         "continuity_weight": 2.0,

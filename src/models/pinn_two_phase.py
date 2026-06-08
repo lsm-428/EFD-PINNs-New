@@ -1305,7 +1305,7 @@ class DataGenerator:
 
         # 垂直方向结构化采样配置
         use_vertical_sampling = data_cfg.get("use_vertical_sampling", True)
-        n_vertical_samples = data_cfg.get("n_vertical_samples", 20)  # 每个 XY 点的垂直采样数
+        n_vertical_samples = data_cfg.get("n_vertical_samples", 50)  # 每个 XY 点的垂直采样数
 
         for V_from, V_to, t in dom_scenarios:
             x = np.random.uniform(0, self.Lx)
@@ -1313,37 +1313,38 @@ class DataGenerator:
 
             if use_vertical_sampling and n_vertical_samples > 1:
                 # === 垂直方向分层采样 ===
-                # 对每个 XY 点，沿 Z 轴采样 n_vertical_samples 个点
-                # 采样策略：界面附近大幅加密 + 上下区域稀疏
+                # 核心思想：在界面附近（φ 变化剧烈的区域）大幅加密采样
+                # 让模型能够学到 φ(Z) 的连续分布，而不仅仅是散点值
 
                 # 估计界面位置
                 eta = self.get_opening_rate(V_to, t)
                 h_ink_edge = self.h_ink / max(1.0 - eta, PHYSICS["ink_initial_fraction"])
+                interface_width = PHYSICS["ac_interface_width"]
 
-                # 界面附近加密采样（±50% 界面高度范围，占 70% 采样点）
-                n_interface = int(n_vertical_samples * 0.7)
-                n_bottom = int(n_vertical_samples * 0.15)
+                # 界面附近 ±3 倍界面宽度范围（覆盖 φ 从 0.95 到 0.05 的过渡区）
+                n_interface = int(n_vertical_samples * 0.8)  # 80% 采样点在界面附近
+                n_bottom = int(n_vertical_samples * 0.1)
                 n_top = n_vertical_samples - n_interface - n_bottom
 
                 z_points = []
 
-                # 底部区域 [0, h_ink_edge * 0.5]：稀疏采样
-                if n_bottom > 0:
-                    z_bottom = np.linspace(0, h_ink_edge * 0.5, n_bottom)
+                # 底部区域 [0, h_ink_edge - 3*interface_width]：稀疏采样
+                z_bottom_max = max(0, h_ink_edge - 3 * interface_width)
+                if n_bottom > 0 and z_bottom_max > 0:
+                    z_bottom = np.linspace(0, z_bottom_max, n_bottom)
                     z_points.extend(z_bottom)
 
-                # 界面区域 [h_ink_edge * 0.5, h_ink_edge * 1.5]：密集采样
+                # 界面区域 [h_ink_edge - 3*interface_width, h_ink_edge + 3*interface_width]：密集采样
+                z_interface_min = max(0, h_ink_edge - 3 * interface_width)
+                z_interface_max = min(self.Lz, h_ink_edge + 3 * interface_width)
                 if n_interface > 0:
-                    z_interface = np.linspace(
-                        max(0, h_ink_edge * 0.5),
-                        min(self.Lz, h_ink_edge * 1.5),
-                        n_interface,
-                    )
+                    z_interface = np.linspace(z_interface_min, z_interface_max, n_interface)
                     z_points.extend(z_interface)
 
-                # 顶部区域 [h_ink_edge * 1.5, Lz]：稀疏采样
-                if n_top > 0:
-                    z_top = np.linspace(h_ink_edge * 1.5, self.Lz, n_top)
+                # 顶部区域 [h_ink_edge + 3*interface_width, Lz]：稀疏采样
+                z_top_min = min(self.Lz, h_ink_edge + 3 * interface_width)
+                if n_top > 0 and z_top_min < self.Lz:
+                    z_top = np.linspace(z_top_min, self.Lz, n_top)
                     z_points.extend(z_top)
 
                 # 去重并排序
@@ -1838,15 +1839,15 @@ class Trainer:
         s2_end = self.stage2_epochs
         s2_span = max(1, s2_end - s2_start)
 
-        # S3 退火: stage2_epochs → stage2_epochs + anneal_span, factor 0.1 → 0.05
+        # S3 退火: stage2_epochs → stage2_epochs + anneal_span, factor 0.1 → 0.0
         s3_start = self.stage2_epochs
         s3_anneal_epochs = int(training_cfg.get("s3_anneal_span", 15000))
         s3_end = s3_start + s3_anneal_epochs
         s3_span = max(1, s3_end - s3_start)
 
-        # 可配置最低因子，防止数据锚定完全消失
-        min_factor = float(training_cfg.get("stage1_tutor_min_factor", 0.05))
-        min_factor = float(np.clip(min_factor, 0.01, 0.5))
+        # S3 后期 Interface loss 权重极低，让物理方程主导
+        # interface_weight=10, min_factor=0.01 → 最终权重 0.1
+        min_factor = 0.01
 
         if epoch < s2_start:
             return 1.0
