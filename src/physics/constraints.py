@@ -95,6 +95,7 @@ def _get_default_materials_params() -> dict:
         "ink_thickness": _get("h_ink"),
         "domain_height": _get("Lz"),
         "wall_height": _get("wall_height"),
+        "wall_top_half_width": _get("wall_top_half_width"),
         "ink_initial_fraction": _get("ink_initial_fraction"),
         "ink_potential_min": 0.0,
         # 电润湿 EW 力参数
