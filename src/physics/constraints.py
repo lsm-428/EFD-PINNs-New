@@ -577,13 +577,11 @@ class PhysicsConstraints:
         变分得到自然 BC: ε·n·∇φ + cos(θ_eq)·6φ(1-φ) = 0
 
         区域划分（互斥，避免角落重复）：
-          侧壁区：靠近壁面 + z ∈ (h_ink, wall_height - side_margin)
-                  → θ = 110° (Teflon，亲油，无滑移)
-          壁顶接触线区：z ≈ wall_height + 靠近壁面
-                  → θ = 125° (SU-8 前进角，固定不受 EW 影响)
+          侧壁区：靠近壁面 + z 在壁顶以下 → θ = 110° (Teflon，亲油，无滑移)
+          壁顶接触线区：z ≈ wall_height ± z_tol + 靠近壁面 → θ = 125° (SU-8 前进角)
           底面区 (z=0)：由 _compute_contact_angle_loss 负责，此处不处理
 
-        侧壁作用尺度 = wall_height（毛细半径），不用 0.1*Lx 避免覆盖内部区域。
+        利用传入的 grads（由 compute_core_residuals 统一计算），避免重复 autograd。
         界面加权: exp(-100*(φ-0.5)²) — 体相连续消失。
         归一化: sum(w·R²)/sum(w)，不对全 batch 平均。
         """
@@ -614,22 +612,22 @@ class PhysicsConstraints:
             X = self.materials_params.get("Lx", 174e-6)
             Ly = self.materials_params.get("Ly", 174e-6)
 
-            # 安全梯度计算（需要 φ_x, φ_y, φ_z）
-            x_grad = x_phys.clone().detach().requires_grad_(True) if not x_phys.requires_grad else x_phys
-
-            g_phi = torch.autograd.grad(
-                phi.sum(),
-                x_grad,
-                create_graph=True,
-                retain_graph=True,
-                allow_unused=True,
-            )[0]
-            if g_phi is None:
-                return {"phase_field_wetting": torch.tensor(0.0, device=device)}
-
-            phi_x = g_phi[:, 0]
-            phi_y = g_phi[:, 1]
-            phi_z = g_phi[:, 2]
+            # 从统一梯度计算结果读取（避免重复 autograd）
+            if grads is not None:
+                phi_x = grads["phi_x"]
+                phi_y = grads["phi_y"]
+                phi_z = grads["phi_z"]
+            else:
+                # 回退：独立计算（兼容直接调用场景）
+                x_grad = x_phys.clone().detach().requires_grad_(True) if not x_phys.requires_grad else x_phys
+                g_phi = torch.autograd.grad(phi.sum(), x_grad, create_graph=True, retain_graph=True, allow_unused=True)[
+                    0
+                ]
+                if g_phi is None:
+                    return {"phase_field_wetting": torch.tensor(0.0, device=device)}
+                phi_x = g_phi[:, 0]
+                phi_y = g_phi[:, 1]
+                phi_z = g_phi[:, 2]
 
             # 几何参数
             wall_height = self.materials_params.get("wall_height", 3.5e-6)

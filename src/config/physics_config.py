@@ -59,6 +59,9 @@ PHYSICS: dict[str, Any] = {
     "h_ink": 3e-6,  # 油墨层厚度 (m)
     "h_polar": 17e-6,  # 极性液体层厚度 (m)
     "wall_height": 3.5e-6,  # 围堰高度 (m)，实际器件
+    "wall_top_half_width": 5e-6,  # 壁顶 x/y 方向半宽 (m) = 5μm（本像素 5μm + 隔壁 5μm = 10μm 全宽）
+    "wall_top_z_tol": 1e-6,  # 壁顶 z 方向容差 (m) = 1μm（界面过渡区厚度）
+    "theta_adv_su8": 125.0,  # 油膜在 SU-8 上的前进角 (°)，水环境中固定不受 EW 影响
     # ========== 流体属性 ==========
     # 油墨（非极性，深色）
     "rho_oil": 763.0,  # 油墨密度 (kg/m³)，实测
@@ -146,6 +149,9 @@ class PhysicsConfig:
     h_ink: float = 3e-6
     h_polar: float = 17e-6
     wall_height: float = 3.5e-6
+    wall_top_half_width: float = 5e-6  # 壁顶 x/y 方向半宽 (m)
+    wall_top_z_tol: float = 1e-6  # 壁顶 z 方向容差 (m)
+    theta_adv_su8: float = 125.0  # 油膜在 SU-8 上的前进角 (°)
 
     # 流体属性 - 油墨
     rho_oil: float = 763.0
@@ -267,6 +273,8 @@ class PhysicsConfig:
             Lz=geometry.get("Lz", cls.Lz),
             h_ink=geometry.get("ink_thickness", cls.h_ink),
             wall_height=geometry.get("wall_height", cls.wall_height),
+            wall_top_half_width=geometry.get("wall_top_half_width", cls.wall_top_half_width),
+            wall_top_z_tol=geometry.get("wall_top_z_tol", cls.wall_top_z_tol),
             # 流体属性
             rho_oil=materials.get("rho_oil", cls.rho_oil),
             mu_oil=materials.get("mu_oil", cls.mu_oil),
@@ -375,6 +383,9 @@ class PhysicsConfig:
             "ink_thickness": self.h_ink,
             "domain_height": self.Lz,
             "wall_height": self.wall_height,
+            "wall_top_half_width": self.wall_top_half_width,
+            "wall_top_z_tol": self.wall_top_z_tol,
+            "theta_adv_su8": self.theta_adv_su8,
             "ink_initial_fraction": self.ink_initial_fraction,
             # 电润湿 EW 力参数
             "lambda_debye": self.lambda_debye,
