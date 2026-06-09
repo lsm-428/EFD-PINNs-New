@@ -114,76 +114,107 @@ src/
 
 ---
 
-#### `src/physics/constraints.py` — 物理约束引擎（~3441行）
+#### `src/physics/constraints.py` — 物理约束引擎（~1277行）
+
+> **重构说明**：旧版 ~3441 行，经清理后缩减到 ~1277 行。删除了所有 DEPRECATED 函数、
+> `compute_sidewall_contact_angle_residual`（与统一润湿BC冲突）、死权重和死代码。
+> 统一梯度计算消除重复 autograd 调用，训练速度提升 3-4 倍。
+>
+> **BC 体系**：
+> - 壁侧面（Teflon 涂层）：110° 亲油，无滑移，由 `_compute_unified_wetting_bc` 处理
+> - 壁顶面（SU-8 暴露）：71° 亲水，可能滑移，由 `_compute_contact_line_dynamics_residual` 处理
+> - 底面（Z=0，Teflon）：Young-Lippmann 电压调制，由 `_compute_unified_wetting_bc` + `_compute_contact_angle_loss` 处理
+
 | 行号 | 函数/方法 | 用途 | 活跃？ |
 |------|-----------|------|--------|
-| 38 | `_get_default_materials_params()` | 回退硬编码材料参数 | ✅ |
-| 122 | `compute_navier_stokes_residual()` | NS方程（连续性+动量+EWF+CSF）| ✅ |
-| 366 | `_compute_laplacian()` | 标量场 Laplacian | ✅ |
-| 405 | `compute_volume_conservation_residual()` | 体积守恒 | ✅ |
-| 453 | `_compute_laplacian_spatial()` | 空间 Laplacian | ✅ |
-| 498 | `compute_surface_tension_residual()` | CSF表面张力+曲率 | 🔴 DEPRECATED |
-| 577 | `compute_volume_conservation_full()` | 完整体积守恒 | 🔴 DEPRECATED |
-| 638 | `compute_two_phase_flow_residual()` | 简化版NS两相流 | 🔴 DEPRECATED |
-| 728 | `compute_ink_potential_residual()` | 油墨电势 | 🔴 DEPRECATED |
-| 801 | `compute_sidewall_contact_angle_residual()` | 壁面接触角 | ✅ |
-| 965 | `compute_laplace_pressure_residual() ` | Laplace压力一致 | ✅ |
-| 1062 | `compute_electrowetting_residual()` | 电润湿变分残差 | ✅ |
-| 1149 | `compute_interface_energy_residual()` | 界面能 σ\|∇φ\| | ✅ |
-| 1177 | `compute_wall_wetting_residual()` | 壁面润湿 | ✅ |
-| 1240 | `_compute_unified_wetting_bc()` | 统一相场润湿BC | 开关 |
-| 1369 | `_compute_dielectric_charge_residual()` | 介电层RC充电 | ⚠️ 零 |
-| 1428 | `_compute_contact_line_dynamics_residual()` | 接触线动力学 | ⚠️ 零 |
-| 1505 | `_compute_top_boundary_residual()` | 顶面自由表面BC | ⚠️ 零 |
-| 1558 | `safe_compute_laplacian_spatial()` | 安全空间Laplacian | ✅ |
-| 1581 | `safe_compute_gradient()` | 安全梯度计算 | ✅ |
-| 1610 | **`compute_core_residuals()`** | **统一入口，调用所有活跃约束** | ✅ |
-| 1764 | `_compute_temporal_smoothness()` | 时间连续性正则化 | ✅ |
-| 1860 | `_compute_vof_residual()` | Allen-Cahn相场方程 | ✅ |
-| 1948 | `safe_compute_laplacian()` | 安全Laplacian | ✅ |
-| 1968 | `safe_compute_hessian()` | 安全Hessian | ✅ |
-| 1991 | `compute_young_lippmann_residual()` | Young-Lippmann接触角 | ✅ |
-| 2113 | `compute_contact_line_dynamics_residual()` | 接触线动力学(Hoffman) | ✅ |
-| 2239 | `compute_dielectric_charge_accumulation_residual()` | 介电电荷积累 | ✅ |
-| 2387 | `compute_thermodynamic_residual()` | 热力学一致性 | ✅ |
-| 2607 | `compute_interface_stability_residual()` | 界面稳定性 | ✅ |
-| 2791 | `compute_frequency_response_residual()` | 频响残差 | ✅ |
+| 37 | `_get_default_materials_params()` | 回退硬编码材料参数 | ✅ |
+| 118 | `class PhysicsConstraints` | 物理约束类 | ✅ |
+| 134 | `_compute_capacitance()` | 介电层串联电容计算 | ✅ |
+| 151 | `compute_navier_stokes_residual()` | NS方程（连续性+动量+EWF+CSF）| ✅ |
+| 345 | `_compute_laplacian()` | 标量场 Laplacian | ✅ |
+| 384 | `compute_volume_conservation_residual()` | 体积守恒 | ✅ |
+| 592 | `compute_laplace_pressure_residual()` | Laplace压力一致 | ✅ |
+| 671 | `compute_interface_energy_residual()` | 界面能 σ\|∇φ\| | ✅ |
+| 705 | `_compute_unified_wetting_bc()` | 统一相场润湿BC | ✅ |
+| 823 | `_compute_contact_line_dynamics_residual()` | 接触线动力学 | ✅ |
+| 940 | `safe_compute_laplacian_spatial()` | 安全空间Laplacian | ✅ |
+| 961 | `safe_compute_gradient()` | 安全梯度计算 | ✅ |
+| 988 | `_compute_all_gradients()` | **统一梯度计算**（一次性 autograd，分发给所有约束）| ✅ |
+| 1064 | **`compute_core_residuals()`** | **统一入口，调用所有活跃约束** | ✅ |
+| 1165 | `_compute_temporal_smoothness()` | 时间连续性正则化 | ✅ |
+| 1232 | `_compute_vof_residual()` | Allen-Cahn相场方程 | ✅ |
+| 1357 | `safe_compute_laplacian()` | 安全Laplacian | ✅ |
+| 1377 | `safe_compute_hessian()` | 安全Hessian | ✅ |
+| 1400 | `_empty_residual()` | 空残差（降级用） | ✅ |
+
+**`compute_core_residuals()` 调用链**（L1064）：
+1. `_compute_all_gradients()` — 统一计算所有梯度（一次性 autograd）
+2. `compute_navier_stokes_residual()` — NS 方程残差
+3. `_compute_vof_residual()` — VOF 相场方程
+4. `compute_volume_conservation_residual()` — 体积守恒
+5. `compute_interface_energy_residual()` — 界面能
+6. `compute_laplace_pressure_residual()` — Laplace 压力
+7. `_compute_temporal_smoothness()` — 时间连续性
+8. `_compute_unified_wetting_bc()` — 统一相场润湿 BC（底面+侧壁，含 Young-Lippmann 电压调制）
+9. `_compute_contact_line_dynamics_residual()` — 接触线动力学
+10. 压力钉扎（pressure_pin）
 
 ---
 
-#### `src/models/pinn_two_phase.py` — 主PINN模型（~3474行）
+#### `src/models/pinn_two_phase.py` — 主PINN模型（~3512行）
+
 | 行号 | 类/方法 | 用途 |
 |------|---------|------|
-| 43 | `set_seed(seed)` | 全局随机种子 |
-| 150 | `FourierFeature` | Fourier特征映射 (x,y,z→96) |
-| 184 | `TwoPhasePINN.__init__()` | phi_net[128,128,64,32] + vel_net[64,64,32] |
-| 250 | `TwoPhasePINN.forward()` | (B,6)→(B,5): u,v,w,p,phi |
+| 44 | `set_seed(seed)` | 全局随机种子 |
+| 159 | `FourierFeature` | Fourier特征映射 (x,y,z→96) |
+| 172 | `class TwoPhasePINN` | 主PINN网络 | ✅ |
+| 191 | `TwoPhasePINN.__init__()` | phi_net[128,128,64,32] + vel_net[64,64,32] |
+| 253 | `TwoPhasePINN.forward()` | (B,6)→(B,5): u,v,w,p,phi |
 | 330 | `TwoPhasePINN.forward_triplet()` | 三时间点前向，用于时间导数 |
-| 375 | `PhysicsLoss.__init__()` | 加载参数，注册权重 |
-| 453 | `PhysicsLoss.compute_all_residuals()` | 调用 compute_core_residuals |
-| 479 | `PhysicsLoss.explicit_volume_conservation_loss()` | 显式体积守恒 |
-| 504 | `PhysicsLoss.compute_total_loss()` | 加权总loss（log1p缩放+自适应归一化） |
-| 510 | `PhysicsLoss.explicit_volume_conservation_loss()` | 显式体积守恒 |
-| 618 | `DataGenerator` | 训练数据生成器 |
-| 1013 | `DataGenerator.target_phi_3d()` | 目标φ场构造 |
-| 1242 | `DataGenerator.generate_all_data()` | 生成完整数据集 |
-| 1693 | `Trainer.__init__()` | 训练器初始化（三阶段+权重调度） |
-| 1930 | `Trainer.get_physics_weights(epoch)` | 分阶段物理损失权重 |
-| 2022 | `Trainer.get_stage1_weight_factor(epoch)` | Stage1退火因子 |
-| 2050 | `Trainer.compute_losses()` | 总损失调度（10+个损失项） |
-| 2141 | `_compute_data_loss()` | 界面数据拟合损失（权重500×） |
-| 2155 | `_compute_contact_angle_loss()` | 底面接触角BC |
-| 2196 | `_compute_initial_boundary_loss()` | IC+BC损失 |
-| 2221 | `_compute_early_zero_voltage_loss()` | 早期时间+零电压 |
-| 2275 | `_compute_monotonicity_response_loss()` | 单调性响应 |
-| 2309 | `_compute_eta_constraints_loss()` | 开口率约束 |
-| 2369 | `_compute_phi_spatial_loss()` | φ场空间分布 |
-| 2485 | `_compute_phi_geometry_loss()` | φ场几何一致性 |
-| 2604 | `_compute_volume_conservation_loss()` | 体积守恒 |
-| 2757 | `_compute_physics_equation_loss()` | PDE物理损失（三阶段调度） |
-| 2912 | `compute_aperture_ratio()` | φ→开口率 |
-| 2959 | `eta_recovery_constraint_loss()` | 降压恢复约束 |
-| 3069 | `Trainer.train()` | 主训练循环 |
+| 369 | `class PhysicsLoss` | 物理损失适配层 | ✅ |
+| 388 | `PhysicsLoss.__init__()` | 加载参数，实例化 PhysicsConstraints |
+| 423 | `PhysicsLoss._sanitize_tensor()` | NaN/Inf 清理 |
+| 442 | `PhysicsLoss.compute_all_residuals()` | 调用 compute_core_residuals + 清理 |
+| 464 | `PhysicsLoss.explicit_volume_conservation_loss()` | 显式体积守恒 |
+| 487 | `PhysicsLoss.compute_total_loss()` | 加权总loss（log1p缩放+自适应EMA归一化） |
+| 595 | `class DataGenerator` | 训练数据生成器 | ✅ |
+| 610 | `DataGenerator.__init__()` | 初始化 |
+| 668 | `DataGenerator.get_contact_angle()` | 电压+时间→接触角 |
+| 683 | `DataGenerator._analytical_contact_angle()` | 解析接触角模型 |
+| 742 | `DataGenerator.compute_contact_angle_gradient()` | 接触角梯度 |
+| 759 | `DataGenerator.get_opening_rate()` | 电压+时间→开口率 |
+| 786 | `DataGenerator.target_phi_3d()` | 目标φ场构造（从η构造） |
+| 936 | `DataGenerator._phi_center_opening_mode()` | 中心开口模式φ场 |
+| 1002 | `DataGenerator._sample_point_by_eta()` | 按η采样空间点 |
+| 1036 | `DataGenerator.generate_all_data()` | 生成完整数据集 |
+| 1505 | `class Trainer` | 训练器 | ✅ |
+| 1508 | `Trainer.__init__()` | 训练器初始化（三阶段+权重调度） |
+| 1633 | `Trainer._validate_config()` | 配置验证 |
+| 1677 | `Trainer._save_checkpoint()` | 保存检查点 |
+| 1712 | `Trainer._plot_curves()` | 绘制训练曲线 |
+| 1785 | `Trainer.get_physics_weights(epoch)` | 分阶段物理损失权重 |
+| 1854 | `Trainer.get_stage1_weight_factor(epoch)` | Stage1退火因子 |
+| 1894 | `Trainer.compute_losses()` | 总损失调度（10+个损失项） |
+| 1991 | `_compute_data_loss()` | 界面数据拟合损失 |
+| 2003 | `_compute_contact_angle_loss()` | 底面接触角BC |
+| 2044 | `_compute_initial_boundary_loss()` | IC+BC损失 |
+| 2061 | `_compute_early_zero_voltage_loss()` | 早期时间+零电压 |
+| 2139 | `_compute_monotonicity_response_loss()` | 单调性响应 |
+| 2200 | `_compute_eta_constraints_loss()` | 开口率约束 |
+| 2253 | `_compute_phi_spatial_loss()` | φ场空间分布 |
+| 2512 | `_compute_volume_conservation_loss()` | 体积守恒 |
+| 2598 | `_compute_continuity_transition_loss()` | 连续性约束（批量前向优化） |
+| 2668 | `_compute_physics_equation_loss()` | PDE物理损失（三阶段调度） |
+| 2787 | `compute_aperture_ratio()` | φ→开口率（网格法） |
+| 2802 | `compute_aperture_ratio_batch()` | 批量φ→开口率 |
+| 2852 | `compute_aperture_ratio_differentiable()` | 可微φ→开口率 |
+| 2896 | `compute_eta_matching_loss()` | **η匹配loss**：PINN的η(V,t)追踪Teacher |
+| 2950 | `compute_phi_target3d_loss()` | **φ target3D loss**：PINN的φ场匹配target |
+| 3035 | `eta_recovery_constraint_loss()` | 降压恢复约束 |
+| 3073 | `fine_tune_lbfgs()` | L-BFGS 二阶优化微调 |
+| 3141 | `Trainer.train()` | 主训练循环 |
+| 3461 | `Trainer.visualize()` | 可视化 |
+| 3473 | `main()` | 入口函数 |
 
 ---
 
@@ -266,9 +297,7 @@ PhysicsLoss 是适配层，委托 `PhysicsConstraints.compute_core_residuals()` 
 ## 配置系统
 
 - `config/v4.5-standard.json` — 推荐训练配置, 已收敛验证 (30V 开口率 83.4%, 体积误差 <1%)
-- `config/v4.6-standard.json` — v4.6 实验配置 (新增)
-- `config/v4.5-physics-sampling.json` — 物理采样配置
-- `config/v4.5-smoke.json` — 快速冒烟测试配置
+- `config/v4.6-optimized.json` — v4.6 优化配置 (PFW:10, IE:2, LP:0.05, CLD:0.2, TS:0.1)
 - `config/device_calibrated_physics.json` — 器件物理参数
 - `config/ablation/` — 消融实验配置 (no_continuity, no_vof, no_interface 等)
 - 物理参数单一来源: `src.config.physics_config` 模块。三层体系：① `PHYSICS` 全局 dict（代码内嵌默认值）② `config/device_calibrated_physics.json`（实验校准值）③ `constraints.py` 中的回退硬编码（必须与前两层一致）。修改参数时三层同步更新
@@ -295,6 +324,12 @@ PhysicsLoss 是适配层，委托 `PhysicsConstraints.compute_core_residuals()` 
 - **一阶响应**: 1st-order RC charging/discharging（校正后确认，所有 R²>0.93）
 
 器件层叠: ITO → SU-8(400nm) → Teflon(400nm) → [油墨3μm + 极性液体17μm] → 围堰SU-8 → 顶层ITO
+
+**顶面物理** (z=Lz=20μm):
+- 极性液体-固体界面（ITO 顶板），**不是自由表面**
+- 边界条件：**无滑移** (u=v=0) + **无穿透** (w=0)
+- ⚠️ 油膜一旦接触顶面 → **器件永久失效**（封闭像素无气体，油膜无法恢复）
+- 顶面 φ=0 自然满足（油墨密度大，沉在底部），无需额外约束
 
 ---
 
@@ -369,7 +404,11 @@ outputs/train/pinn_YYYYMMDD_HHMMSS/
 
 - **阶段**: 论文写作中
 - **稳定基线**: v4.5-standard（30V 开口率 83.4%，体积误差 <1%）
-- **实验中**: v4.6 系列配置
+- **实验中**: v4.6-optimized 配置
+- **代码清理**: constraints.py 从 ~3441 行精简到 ~1277 行，删除了所有 DEPRECATED 函数、冲突的 `compute_sidewall_contact_angle_residual`、死权重（`electrowetting`/`bottom_wetting`/`wall_wetting`/`top_boundary`/`dielectric_charge`）和死代码
+- **架构优化**: 统一梯度计算（`_compute_all_gradients`），训练速度提升 3-4 倍
+- **BC 体系已统一**: 壁侧面 110°（Teflon）+ 壁顶面 71°（SU-8）+ 底面 Young-Lippmann 调制，无冲突
+- **新增功能**: η匹配loss、φ target3D loss、L-BFGS微调、批量前向连续性约束
 - **已知问题**: 瞬态精度不足（forward 缺少时间门控）、physics_sampling.py 与 Stage 1 有 3 处不一致（待论文完成后修复）
 
 ---

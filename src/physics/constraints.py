@@ -453,142 +453,6 @@ class PhysicsConstraints:
                 "ink_potential_min": torch.zeros(batch_size, device=device, requires_grad=True),
             }
 
-    def compute_sidewall_contact_angle_residual(self, x_phys: torch.Tensor, predictions: torch.Tensor, grads=None):
-        """
-        壁面接触角约束: n̂·n̂_wall = cos(θ_wall)
-
-        物理: 极性液体在像素壁上的接触角 θ_wall=71°。
-        在壁面处，油墨-极性液体界面的法向 n̂ = ∇φ/|∇φ| 与壁面法向 n̂_wall
-        的夹角必须等于 θ_wall。此约束打破 PINN 的 1D 退化解，
-        迫使界面在壁面处倾斜（油墨沿壁面爬升）。
-
-        Args:
-            x_phys: (batch, 6) 物理点坐标
-            predictions: (batch, 5) 模型预测 (u,v,w,p,phi)
-        """
-        try:
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
-            batch_size = x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
-            zero = torch.zeros(batch_size, device=device, requires_grad=True)
-            residuals = {"sidewall_contact_angle": zero}
-
-            if not (isinstance(x_phys, torch.Tensor) and isinstance(predictions, torch.Tensor)):
-                return residuals
-            if x_phys.dim() != 2 or x_phys.size(1) < 3:
-                return residuals
-            if predictions.dim() < 2 or predictions.size(1) < 5:
-                return residuals
-
-            phi = predictions[:, 4]
-            coords = x_phys.detach()
-            x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
-
-            # 域边界
-            Lx = self.materials_params.get("Lx", 174e-6)
-            Ly = self.materials_params.get("Ly", 174e-6)
-            margin = 0.08 * min(Lx, Ly)
-
-            # 壁面检测
-            near_left = x < margin
-            near_right = x > Lx - margin
-            near_front = y < margin
-            near_back = y > Ly - margin
-            near_wall = near_left | near_right | near_front | near_back
-
-            # 仅界面附近 (φ≈0.5) 有效
-            interface_weight = torch.exp(-100.0 * (phi - 0.5) ** 2)
-            mask = near_wall & (interface_weight > 0.01)
-
-            if mask.sum() < 3:
-                return residuals
-
-            # 从统一梯度计算结果读取 phi 梯度
-            if grads is not None:
-                grad_x = grads["phi_x"]
-                grad_y = grads["phi_y"]
-                grad_z = grads["phi_z"]
-            else:
-                try:
-                    grad_all = torch.autograd.grad(phi.sum(), x_phys, create_graph=True, retain_graph=True)[0]
-                except Exception:
-                    return residuals
-                if grad_all is None:
-                    return residuals
-                grad_x = grad_all[:, 0]
-                grad_y = grad_all[:, 1]
-                grad_z = grad_all[:, 2]
-
-            grad_mag = torch.sqrt(grad_x**2 + grad_y**2 + grad_z**2) + 1e-10
-
-            # 壁面法向分量
-            n_x = grad_x / grad_mag
-            n_y = grad_y / grad_mag
-
-            # 壁面法向: x=0 → (1,0), x=Lx → (-1,0), y=0 → (0,1), y=Ly → (0,-1)
-            wall_nx = torch.where(
-                x < margin,
-                torch.ones_like(n_x),
-                torch.where(x > Lx - margin, -torch.ones_like(n_x), torch.zeros_like(n_x)),
-            )
-            wall_ny = torch.where(
-                y < margin,
-                torch.ones_like(n_y),
-                torch.where(y > Ly - margin, -torch.ones_like(n_y), torch.zeros_like(n_y)),
-            )
-
-            dot = n_x * wall_nx + n_y * wall_ny
-
-            # 接触角滞后 (CAH): 接触线沿围堰壁顶移动时的动态接触角
-            # 物理位置: 围堰壁顶部(z≈3.5μm)与顶面交界处
-            # u·n̂_wall > 0 → 油墨被推向壁外 → 前进角 θ_A (更大)
-            # u·n̂_wall < 0 → 油墨被拉回壁内 → 后退角 θ_R (更小)
-            u_vel = predictions[:, 0]
-            v_vel = predictions[:, 1]
-            u_dot_n = u_vel * wall_nx + v_vel * wall_ny
-
-            theta_wall = self.materials_params.get("theta_wall", 71.0)
-            delta_cah = self.materials_params.get("cah_hysteresis", 4.0)
-            theta_A = theta_wall + delta_cah  # 75°
-            theta_R = theta_wall - delta_cah  # 67°
-
-            cos_A = np.cos(np.radians(theta_A))
-            cos_R = np.cos(np.radians(theta_R))
-            cos_eq = np.cos(np.radians(theta_wall))
-
-            # 死区: |u·n̂| 很小时用平衡角，避免零速度时的错误分类
-            deadband = 1e-4
-            target_cos = torch.where(
-                u_dot_n > deadband,
-                torch.full_like(dot, cos_A),
-                torch.where(
-                    u_dot_n < -deadband,
-                    torch.full_like(dot, cos_R),
-                    torch.full_like(dot, cos_eq),
-                ),
-            )
-
-            # 接触线位置: 围堰壁顶部与顶面交界处 (z ≈ wall_height)
-            wall_height = self.materials_params.get("wall_height", 3.5e-6)
-            is_wall_top = (z > wall_height - 1e-6) & (z < wall_height + 1e-6)
-            contact_line_mask = is_wall_top & near_wall & (interface_weight > 0.01)
-
-            # 接触线约束: 在壁顶接触线区域施加约束
-            if contact_line_mask.any():
-                residual = ((dot - target_cos) ** 2) * contact_line_mask.float() * interface_weight
-                n_active = contact_line_mask.float().sum().clamp(min=1)
-            else:
-                residual = ((dot - target_cos) ** 2) * mask.float() * interface_weight
-                n_active = mask.float().sum().clamp(min=1)
-
-            residuals["sidewall_contact_angle"] = residual.sum() / n_active
-
-            return residuals
-        except Exception as e:
-            logger.warning(f"壁面接触角残差计算失败: {e}")
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
-            batch_size = x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
-            return {"sidewall_contact_angle": torch.zeros(batch_size, device=device, requires_grad=True)}
-
     def compute_laplace_pressure_residual(self, x_phys: torch.Tensor, predictions: torch.Tensor, grads=None):
         """
         Laplace 压力一致约束: 沿界面 κ = 常数
@@ -702,47 +566,7 @@ class PhysicsConstraints:
             device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
             return {"interface_energy": torch.zeros(x_phys.shape[0], device=device, requires_grad=True)}
 
-    def compute_wall_wetting_residual(self, x_phys: torch.Tensor, predictions: torch.Tensor, grads=None):
-        try:
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
-            batch_size = predictions.shape[0] if isinstance(predictions, torch.Tensor) else 1
-            residuals = {"wall_wetting": torch.zeros(batch_size, device=device, requires_grad=True)}
-            if not (isinstance(x_phys, torch.Tensor) and isinstance(predictions, torch.Tensor)):
-                return residuals
-            if x_phys.dim() != 2 or x_phys.size(1) < 3:
-                return residuals
-            if predictions.dim() < 2 or predictions.size(1) < 5:
-                return residuals
-            alpha = predictions[:, 4]
-            alpha_clamped = torch.clamp(alpha, 0.0, 1.0)
-            coords = x_phys.detach()
-            x = coords[:, 0]
-            y = coords[:, 1]
-            z = coords[:, 2]
-            x_min, x_max = torch.min(x), torch.max(x)
-            y_min, y_max = torch.min(y), torch.max(y)
-            Lx = (x_max - x_min).clamp(min=1e-9)
-            Ly = (y_max - y_min).clamp(min=1e-9)
-            margin_x = 0.1 * Lx
-            margin_y = 0.1 * Ly
-            near_left = (x - x_min).abs() < margin_x
-            near_right = (x_max - x).abs() < margin_x
-            near_front = (y - y_min).abs() < margin_y
-            near_back = (y_max - y).abs() < margin_y
-            near_wall = near_left | near_right | near_front | near_back
-            domain_height = self.materials_params.get("domain_height", 20e-6)
-            dh = max(domain_height, 1e-9)
-            z_norm = (z / dh).clamp(0.0, 1.0)
-            penalty = alpha_clamped * z_norm * near_wall.float()
-            residuals["wall_wetting"] = penalty
-            return residuals
-        except Exception as e:
-            logger.error(f"计算墙润湿残差失败: {e!s}")
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
-            batch_size = x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
-            return {"wall_wetting": torch.zeros(batch_size, device=device, requires_grad=True)}
-
-    def _compute_unified_wetting_bc(self, x_phys, predictions):
+    def _compute_unified_wetting_bc(self, x_phys, predictions, grads=None):
         """
         统一相场润湿边界条件 — 基于能量泛函 F[φ] 的自然 BC
 
@@ -860,65 +684,6 @@ class PhysicsConstraints:
             device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
             return {"phase_field_wetting": torch.tensor(0.0, device=device)}
 
-    def _compute_dielectric_charge_residual(self, x_phys, predictions, grads=None):
-        """介电层RC充电约束 — z=0底面
-
-        物理: 介电层电荷积累遵循RC电路模型
-          σ(t) = C_dielectric × V × (1 - exp(-t/τ_RC))
-          电润湿力在介电层充电完成后才完全建立
-          τ_RC = ε₀ε_r / σ_conduct ≈ 25μs (远快于机械响应)
-
-        约束: 在t < 3τ_RC的早期时刻，底面电润湿能应遵循充电曲线
-          G_ew(t) = G_ew_steady × (1 - exp(-t/τ_RC))²
-        """
-        try:
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
-            zero = torch.zeros(1, device=device, requires_grad=True)
-            res = {"dielectric_charge": zero}
-            if not (isinstance(x_phys, torch.Tensor) and predictions.dim() >= 2):
-                return res
-            if x_phys.shape[1] < 6:
-                return res
-            phi = predictions[:, 4]
-            z = x_phys[:, 2]
-            V_to = x_phys[:, 4]
-            t_since = x_phys[:, 5]
-            is_bottom = z < 1e-6
-            if not is_bottom.any():
-                return res
-
-            phi_b = phi[is_bottom]
-            V_b = V_to[is_bottom]
-            t_b = t_since[is_bottom]
-            V_T = self.materials_params.get("V_T_base", 3.0)
-            V_eff = torch.clamp(V_b - V_T, min=0.0)
-
-            # τ_RC: 介电层RC时间常数 (SU-8电阻率≈10¹⁴Ω·cm → τ_RC≈25μs)
-            tau_rc = self.materials_params.get("charge_relaxation_time", 2.5e-5)
-
-            # RC充电曲线: (1-exp(-t/τ_RC))²
-            charge_factor = (1.0 - torch.exp(-t_b / tau_rc)) ** 2
-            # 稳态电润湿能: ½·C·V²
-            # 双层串联电容 (SU-8 + Teflon)，含有效面积校正因子 A_eff
-            C_ew = self._compute_capacitance()
-            G_steady = 0.5 * C_ew * V_eff**2
-            G_expected = G_steady * charge_factor
-
-            # 约束: φ_b × G_steady (电润湿推动力) 不应超过 RC 充电水平
-            # 即: φ_b × G_steady ≤ (1 - φ_b) × G_expected
-            # 残差: relu(φ_b × G_steady - (1 - φ_b) × G_expected)
-            ew_driving = phi_b * G_steady
-            ew_available = (1.0 - phi_b) * G_expected
-            residual = torch.relu(ew_driving - ew_available)
-
-            n_bottom = is_bottom.float().sum().clamp(min=1)
-            res["dielectric_charge"] = residual.sum() / n_bottom
-            return res
-        except Exception as e:
-            logger.warning(f"介电电荷残差失败: {e}")
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
-            return {"dielectric_charge": torch.zeros(1, device=device, requires_grad=True)}
-
     def _compute_contact_line_dynamics_residual(self, x_phys, predictions, grads=None):
         """接触线动力学约束 — Hoffman-Voinov-Tanner 模型适配
 
@@ -943,10 +708,27 @@ class PhysicsConstraints:
             phi = predictions[:, 4]
             z = x_phys[:, 2]
             V_to = x_phys[:, 4]
-            # 接触线区域: z=0 且 φ≈0.5
-            is_bottom = z < 1e-6
+
+            # 界面掩码: φ≈0.5（相场过渡区）
             is_interface = (phi > 0.2) & (phi < 0.8)
-            mask = is_bottom & is_interface
+
+            # ===== 第一接触线: SU-8 围堰顶面 (z ≈ 3.5μm) =====
+            # 物理: SU-8 亲水 → 水被壁吸引 → 推油不翻墙
+            # 接触角: 油膜在 SU-8 上的前进角 θ_adv ≈ 125° (估计值)
+            # 注意: 不受电压影响（几何润湿约束，非 EW 驱动）
+            wall_height = self.materials_params.get("wall_height", 3.5e-6)
+            tol_wall = max(1e-6, 0.1 * wall_height)  # 容差 = 10% 壁高，最小 1μm
+            is_top_wall = (z > wall_height - tol_wall) & (z < wall_height + tol_wall)
+            mask_top = is_top_wall & is_interface
+
+            # ===== 第二接触线: 底面疏水层 (z ≈ 0) =====
+            # 物理: 水在 Teflon 上疏水(θ=120°)，加电后 EW 变亲水 → 推油走
+            # 符合 Young-Lippmann 方程: cos(θ_eq) = cos(120°) + C·V²/(2σ)
+            is_bottom = z < 1e-6
+            mask_bottom = is_bottom & is_interface
+
+            # 合并掩码
+            mask = mask_top | mask_bottom
             if mask.sum() < 3:
                 return res
 
@@ -972,20 +754,41 @@ class PhysicsConstraints:
             v_cl = phi_t[mask] / grad_mag[mask]
             cos_local = phi_z[mask] / grad_mag[mask]
 
-            # cos(θ_eq) from Young-Lippmann
-            theta0_deg = self.materials_params.get("contact_angle_theta0", 120.0)
+            # ===== cos(θ_eq) 按接触面材质分支 =====
+            # 核心物理:
+            # - 第二接触线 (Z=0 Teflon): 水在 Teflon 上 EW 变亲水 → 推油走
+            #   → 符合 Young-Lippmann: cos(θ_eq) = cos(120°) + C·V²/(2σ)
+            # - 第一接触线 (SU-8 壁顶): 水亲 SU-8 → 推油不翻墙
+            #   → 不受电压影响，固定前进角 θ_adv ≈ 125°
             sigma_po = self.materials_params.get(
                 "surface_tension_polar_ink", self.materials_params.get("sigma", 0.02505)
             )
-            # 双层串联电容 (SU-8 + Teflon)，含有效面积校正因子 A_eff
-            C_yl = self._compute_capacitance()
 
-            cos_theta0 = np.cos(np.radians(theta0_deg))
+            # --- 第二接触线 (Z=0): Young-Lippmann EW 调制 ---
+            theta0_teflon = self.materials_params.get("contact_angle_theta0", 120.0)  # 水在 Teflon 上的本征接触角
+            C_yl = self._compute_capacitance()
             V_m = V_to[mask]
             V_T = self.materials_params.get("V_T_base", 3.0)
             V_eff = torch.clamp(V_m - V_T, min=0.0)
-            ew_term = C_yl * V_eff**2 / (2 * sigma_po)
-            cos_eq = torch.clamp(torch.tensor(cos_theta0, device=device) + ew_term, -1.0, 1.0)
+            ew_term = C_yl * V_eff**2 / (2.0 * sigma_po)
+            cos_theta_tew = np.cos(np.radians(theta0_teflon)) + ew_term  # 水 EW 调制后的 cos
+
+            # --- 第一接触线 (SU-8 壁顶): 固定前进角，不受 EW 影响 ---
+            # SU-8 亲水 → 水被壁吸引 → 推油不翻墙
+            # θ_adv ≈ 125° (油膜在 SU-8 上的前进角，水中环境)
+            theta_adv_su8 = self.materials_params.get("theta_adv_su8", 125.0)
+            cos_theta_su8 = torch.tensor(np.cos(np.radians(theta_adv_su8)), device=device)
+
+            # 从合并 mask 中提取 SU-8 顶面子集（用于分支 cos_eq）
+            mask_top_combined = mask_top[mask]
+
+            # 分支 cos_eq: SU-8 用固定前进角，Teflon 用 EW 调制角
+            cos_eq = torch.where(
+                mask_top_combined,
+                cos_theta_su8,  # 第一接触线：固定，不受电压影响
+                cos_theta_tew,  # 第二接触线：Young-Lippmann EW 调制
+            )
+            cos_eq = torch.clamp(cos_eq, -1.0, 1.0)
 
             # HVT: v_cl ∝ cos_eq - cos_local
             k_cl = self.materials_params.get("contact_line_friction", 1e-3)
@@ -997,63 +800,6 @@ class PhysicsConstraints:
             logger.warning(f"接触线动力学残差失败: {e}")
             device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
             return {"contact_line_dynamics": torch.zeros(1, device=device, requires_grad=True)}
-
-    def _compute_top_boundary_residual(self, x_phys, predictions, grads=None):
-        """顶面自由表面边界条件 (z≈Lz)
-
-        物理: 极性液体-气界面
-        - 零剪切: du/dz≈0, dv/dz≈0 (无表面应力)
-        - 无穿透: w=0 (界面不移动)
-        - φ=0 (纯极性液体在顶部, 油墨在下层)
-        """
-        try:
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
-            zero = torch.zeros(1, device=device, requires_grad=True)
-            res = {"top_boundary": zero}
-            if not (isinstance(x_phys, torch.Tensor) and predictions.dim() >= 2):
-                return res
-            if x_phys.shape[1] < 3:
-                return res
-            Lz = self.materials_params.get("domain_height", 20e-6)
-            z = x_phys[:, 2]
-            is_top = z > (Lz - 1e-6)
-            if not is_top.any():
-                return res
-
-            predictions[is_top, 0]
-            predictions[is_top, 1]
-            w_t = predictions[is_top, 2]
-            phi_t = predictions[is_top, 4]
-
-            # 从统一梯度计算结果读取 u_z, v_z
-            if grads is not None:
-                du_dz = grads["u_z"][is_top]
-                dv_dz = grads["v_z"][is_top]
-            else:
-                try:
-                    grad_u = torch.autograd.grad(predictions[:, 0].sum(), x_phys, create_graph=True, retain_graph=True)[
-                        0
-                    ]
-                    grad_v = torch.autograd.grad(predictions[:, 1].sum(), x_phys, create_graph=True, retain_graph=True)[
-                        0
-                    ]
-                except Exception:
-                    return res
-                if grad_u is None or grad_v is None:
-                    return res
-                du_dz = grad_u[is_top, 2]
-                dv_dz = grad_v[is_top, 2]
-
-            shear = (du_dz**2 + dv_dz**2).mean()
-            normal = (w_t**2).mean()
-            phi_ok = (phi_t**2).mean()
-
-            res["top_boundary"] = shear + normal + 0.5 * phi_ok
-            return res
-        except Exception as e:
-            logger.warning(f"顶面BC失败: {e}")
-            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
-            return {"top_boundary": torch.zeros(1, device=device, requires_grad=True)}
 
     def safe_compute_laplacian_spatial(self, scalar_field: torch.Tensor, coords: torch.Tensor, spatial_dims: int = 3):
         try:
@@ -1233,22 +979,14 @@ class PhysicsConstraints:
         except Exception as e:
             logger.warning(f"界面能约束计算失败: {e}")
 
-        # 6. Laplace 压力一致约束
+        # 5. Laplace 压力一致约束
         try:
             lp_residuals = self.compute_laplace_pressure_residual(x_phys, predictions, grads=grads)
             residuals.update(lp_residuals)
         except Exception as e:
             logger.warning(f"Laplace 压力残差计算失败: {e}")
 
-        # 7. 壁面接触角约束
-        if not self.materials_params.get("use_unified_wetting", False):
-            try:
-                sw_residuals = self.compute_sidewall_contact_angle_residual(x_phys, predictions, grads=grads)
-                residuals.update(sw_residuals)
-            except Exception as e:
-                logger.warning(f"壁面接触角残差计算失败: {e}")
-
-        # 8. 时间连续性正则化（需要 model 做三时间点前向）
+        # 6. 时间连续性正则化（需要 model 做三时间点前向）
         try:
             temporal_residual = self._compute_temporal_smoothness(x_phys, predictions, model=model)
             residuals["temporal_smoothness"] = temporal_residual
@@ -1256,44 +994,21 @@ class PhysicsConstraints:
             logger.warning(f"时间连续性残差计算失败: {e}")
             residuals["temporal_smoothness"] = torch.zeros(batch_size, device=device)
 
-        # 9. 壁面润湿约束
-        if not self.materials_params.get("use_unified_wetting", False):
-            try:
-                ww_residuals = self.compute_wall_wetting_residual(x_phys, predictions, grads=grads)
-                residuals.update(ww_residuals)
-            except Exception as e:
-                logger.warning(f"壁面润湿残差计算失败: {e}")
-
-        # 10. 统一相场润湿 BC
-        if self.materials_params.get("use_unified_wetting", False):
-            try:
-                pfw_residuals = self._compute_unified_wetting_bc(x_phys, predictions, grads=grads)
-                residuals.update(pfw_residuals)
-            except Exception as e:
-                logger.warning(f"统一润湿 BC 计算失败: {e}")
-
-        # 11. 介电层RC充电约束
+        # 7. 统一相场润湿 BC（底面 + 侧壁，含 Young-Lippmann 电压调制）
         try:
-            dc_residuals = self._compute_dielectric_charge_residual(x_phys, predictions, grads=grads)
-            residuals.update(dc_residuals)
+            pfw_residuals = self._compute_unified_wetting_bc(x_phys, predictions, grads=grads)
+            residuals.update(pfw_residuals)
         except Exception as e:
-            logger.warning(f"介电电荷残差计算失败: {e}")
+            logger.warning(f"统一润湿 BC 计算失败: {e}")
 
-        # 12. 接触线动力学约束
+        # 8. 接触线动力学约束
         try:
             cld_residuals = self._compute_contact_line_dynamics_residual(x_phys, predictions, grads=grads)
             residuals.update(cld_residuals)
         except Exception as e:
             logger.warning(f"接触线动力学残差计算失败: {e}")
 
-        # 13. 顶面自由表面边界条件
-        try:
-            tbc_residuals = self._compute_top_boundary_residual(x_phys, predictions, grads=grads)
-            residuals.update(tbc_residuals)
-        except Exception as e:
-            logger.warning(f"顶面BC残差计算失败: {e}")
-
-        # 14. 压力钉扎
+        # 13. 压力钉扎
         try:
             p = predictions[:, 3] if predictions.shape[1] >= 4 else None
             if p is not None:
