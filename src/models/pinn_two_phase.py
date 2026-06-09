@@ -1517,12 +1517,6 @@ class Trainer:
         self.physics_loss = PhysicsLoss(self.device)
         self.physics_constraints = PhysicsConstraints()
 
-        # 统一相场润湿模式: 用自然BC替代碎片化壁面约束
-        if self.config.get("physics", {}).get("use_unified_wetting", False):
-            self.physics_loss.materials_params["use_unified_wetting"] = True
-            self.physics_loss.physics_constraints.materials_params["use_unified_wetting"] = True
-            logger.info("✅ 启用统一相场润湿BC (use_unified_wetting=True)")
-
         # Stage 1 模型 - 使用统一配置路径
         if HAS_APERTURE:
             from src.config import CONFIG_PATH

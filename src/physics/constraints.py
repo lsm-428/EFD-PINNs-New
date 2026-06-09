@@ -103,7 +103,6 @@ def _get_default_materials_params() -> dict:
         "lambda_debye": _get("lambda_debye"),
         # 物理模型配置开关
         "use_convection": _get("use_convection"),
-        "use_unified_wetting": _get("use_unified_wetting", False),
         "use_legacy_ac": False,
         "use_adaptive_loss_scale": False,
         # Allen-Cahn 相场参数

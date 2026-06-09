@@ -114,7 +114,6 @@ PHYSICS: dict[str, Any] = {
     "lambda_debye": 50e-9,  # 德拜屏蔽长度 [m] ~50nm，EW 力 z 方向衰减尺度
     # ========== 物理模型开关 ==========
     "use_convection": False,  # Re≈1-5, 默认关闭对流项
-    "use_unified_wetting": False,  # 统一相场润湿 BC (替代旧版 BW/WW/SW)
     # ========== 开口率映射参数（用真实材料参数后需重新标定）==========
     "aperture_k": 3.0,  # 映射陡度（提高以补偿 Δθ 缩小）
     "aperture_theta_scale": 19.0,  # 角度缩放因子（降低使 tanh 更早饱和）
@@ -210,7 +209,6 @@ class PhysicsConfig:
 
     # 物理模型开关
     use_convection: bool = False  # Re≈1-5, 默认关闭对流项
-    use_unified_wetting: bool = False  # 统一相场润湿 BC (替代旧版 BW/WW/SW)
 
     # 侧壁 Teflon 污染接触角 (°)
     theta_wall_teflon: float = 110.0
@@ -382,7 +380,6 @@ class PhysicsConfig:
             "lambda_debye": self.lambda_debye,
             # 物理模型开关
             "use_convection": self.use_convection,
-            "use_unified_wetting": getattr(self, "use_unified_wetting", False),
             "theta_wall_teflon": getattr(self, "theta_wall_teflon", 110.0),
             # Allen-Cahn 相场参数 (v7.2 校准)
             "ac_interface_width": getattr(self, "ac_interface_width", 5e-07),
