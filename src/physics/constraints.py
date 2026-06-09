@@ -632,16 +632,19 @@ class PhysicsConstraints:
 
             # 几何参数
             wall_height = self.materials_params.get("wall_height", 3.5e-6)
+            # 壁顶实际宽度 10μm（本像素 5μm + 隔壁 5μm），半宽 5μm
+            # 不用 wall_height(3.5μm) 作为半宽，那会导致壁顶 mask 覆盖 (0, 7μm) 吞没整个壁面
+            wall_top_half_width = self.materials_params.get("wall_top_half_width", 5e-6)
 
-            # 侧壁 BC 作用尺度：毛细半径 ≈ wall_height（油膜沿壁面爬升的特征高度）
+            # 侧壁水平方向作用尺度：壁顶宽度（壁面材质突变尺度）
             # 不用 0.1*Lx（17.4μm），那会覆盖太多内部区域
-            side_margin = wall_height  # ≈ 3.5μm，与壁面材质突变尺度一致
+            side_margin = 2 * wall_top_half_width  # ≈ 10μm，壁顶全宽
 
             f_wall = 6.0 * phi * (1.0 - phi)
 
             # 区域划分（互斥，避免角落重复）：
-            #   1. 侧壁区：靠近壁面 + z < wall_height - side_margin → 侧壁 BC (Teflon 110°)
-            #   2. 壁顶接触线区：z ≈ wall_height + 靠近壁面 → 壁顶 BC (SU-8 125°)
+            #   1. 侧壁区：靠近壁面(xy) + z 在壁顶以下 → 侧壁 BC (Teflon 110°)
+            #   2. 壁顶接触线区：z ≈ wall_height ± wall_top_half_width + 靠近壁面 → 壁顶 BC (SU-8 125°)
             #   3. 底面区 (z=0)：由 _compute_contact_angle_loss 负责（此处不处理）
 
             near_x0 = (x_coord < side_margin).float()
@@ -650,7 +653,9 @@ class PhysicsConstraints:
             near_yY = (y_coord > Ly - side_margin).float()
             near_wall_xy = near_x0 | near_xX | near_y0 | near_yY
 
-            near_wall_top = ((z_coord > wall_height - side_margin) & (z_coord < wall_height + side_margin)).float()
+            near_wall_top = (
+                (z_coord > wall_height - wall_top_half_width) & (z_coord < wall_height + wall_top_half_width)
+            ).float()
 
             # ---- 侧壁 BC: ε·n·∇φ - cos(θ_wall_teflon)·6φ(1-φ) = 0 ----
             # 有效区：靠近壁面 + 在壁顶接触线以下
@@ -724,7 +729,8 @@ class PhysicsConstraints:
             is_interface = (phi > 0.2) & (phi < 0.8)
 
             wall_height = self.materials_params.get("wall_height", 3.5e-6)
-            side_margin = wall_height
+            wall_top_half_width = self.materials_params.get("wall_top_half_width", 5e-6)
+            side_margin = 2 * wall_top_half_width  # 壁顶全宽 ≈ 10μm
             X = self.materials_params.get("Lx", 174e-6)
             Ly = self.materials_params.get("Ly", 174e-6)
             x_coord = x_phys[:, 0]
@@ -737,7 +743,9 @@ class PhysicsConstraints:
                 | (y_coord < side_margin)
                 | (y_coord > Ly - side_margin)
             )
-            is_top_wall = (z > wall_height - side_margin) & (z < wall_height + side_margin) & near_wall_xy
+            is_top_wall = (
+                (z > wall_height - wall_top_half_width) & (z < wall_height + wall_top_half_width) & near_wall_xy
+            )
             mask_top = is_top_wall & is_interface
 
             # ===== 第二接触线: 底面疏水层 (z ≈ 0, 远离侧壁角落) =====
