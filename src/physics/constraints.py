@@ -568,20 +568,21 @@ class PhysicsConstraints:
 
     def _compute_unified_wetting_bc(self, x_phys, predictions, grads=None):
         """
-        统一相场润湿边界条件 — 基于能量泛函 F[φ] 的自然 BC
+        统一相场润湿边界条件 — 基于能量泛函 F[φ] 的自然 BC（侧壁 + 壁顶）
 
         Bulk: F[φ] = ∫[σ/ε·f(φ) + σ·ε/2·|∇φ|²]dV + ∫f_w(φ)dS
         Wall: f_w(φ) = +σ·cos(θ_eq)·φ²(3-2φ)
-           θ_eq > 90° (亲油): cos < 0 → φ=1 能量低
-           θ_eq < 90° (亲水): cos > 0 → φ=0 能量低
 
         变分得到自然 BC: ε·n·∇φ + cos(θ_eq)·6φ(1-φ) = 0
-          底面 (z=0, n=(0,0,-1)): ε·φ_z - cos(θ_eq)·6φ(1-φ) = 0
-          侧壁: ε·n_wall·∇φ - cos(θ_wall)·6φ(1-φ) = 0
 
-        cos(θ_eq) 通过 Young-Lippmann: cos(θ_eq) = cos(θ₀) + C_yl·V_eff²/(2σ)
+        区域划分（互斥，避免角落重复）：
+          侧壁区：靠近壁面 + z ∈ (h_ink, wall_height - side_margin)
+                  → θ = 110° (Teflon，亲油，无滑移)
+          壁顶接触线区：z ≈ wall_height + 靠近壁面
+                  → θ = 125° (SU-8 前进角，固定不受 EW 影响)
+          底面区 (z=0)：由 _compute_contact_angle_loss 负责，此处不处理
 
-        与 bulk AC 方程共享 σ, ε 系数，确保量级一致。
+        侧壁作用尺度 = wall_height（毛细半径），不用 0.1*Lx 避免覆盖内部区域。
         界面加权: exp(-100*(φ-0.5)²) — 体相连续消失。
         归一化: sum(w·R²)/sum(w)，不对全 batch 平均。
         """
@@ -596,21 +597,14 @@ class PhysicsConstraints:
             if predictions.dim() < 2 or predictions.size(1) < 5:
                 return {"phase_field_wetting": torch.tensor(0.0, device=device)}
 
-            # 物理参数
-            sigma = self.materials_params.get("surface_tension_polar_ink", 0.02505)
+            # 物理参数（侧壁 + 壁顶）
             eps = self.materials_params.get("ac_interface_width", 5e-07)
-            theta0 = self.materials_params.get("contact_angle_theta0", 120.0)
-            V_T_base = self.materials_params.get("V_T_base", 3.0)
             theta_wall_teflon = self.materials_params.get("theta_wall_teflon", 110.0)
-
-            # 双层串联电容 (SU-8 + Teflon)，含有效面积校正因子 A_eff
-            C_yl = self._compute_capacitance()
 
             # 提取坐标和 φ
             x_coord = x_phys[:, 0]
             y_coord = x_phys[:, 1]
             z_coord = x_phys[:, 2]
-            V_to = x_phys[:, 4] if x_phys.shape[1] >= 5 else torch.zeros_like(x_coord)
             phi = predictions[:, 4]
 
             # 界面加权: w = exp(-100*(φ-0.5)²)
@@ -619,7 +613,7 @@ class PhysicsConstraints:
             X = self.materials_params.get("Lx", 174e-6)
             Ly = self.materials_params.get("Ly", 174e-6)
 
-            # 安全梯度计算
+            # 安全梯度计算（仅 x,y 分量，侧壁 BC 不需要 φ_z）
             x_grad = x_phys.clone().detach().requires_grad_(True) if not x_phys.requires_grad else x_phys
 
             g_phi = torch.autograd.grad(
@@ -634,47 +628,76 @@ class PhysicsConstraints:
 
             phi_x = g_phi[:, 0]
             phi_y = g_phi[:, 1]
-            phi_z = g_phi[:, 2]
 
-            # ---- 底面 BC (z=0): ε·φ_z - cos(θ_eq)·6φ(1-φ) = 0 ----
-            # 注意减号: n=(0,0,-1) → n·∇φ = -φ_z
-            # Young-Lippmann: cos(θ_eq) = cos(θ₀) + C_yl·V_eff²/(2σ)
-            V_eff = torch.clamp(V_to - V_T_base, min=0.0)
-            cos_theta0 = np.cos(np.radians(theta0))
-            cos_theta_eq = cos_theta0 + C_yl * V_eff**2 / (2.0 * sigma)
-            cos_theta_eq = torch.clamp(cos_theta_eq, -1.0, 1.0)
+            # 几何参数
+            h_ink = self.materials_params.get("ink_thickness", 3e-6)
+            wall_height = self.materials_params.get("wall_height", 3.5e-6)
+
+            # 侧壁 BC 作用尺度：毛细半径 ≈ wall_height（油膜沿壁面爬升的特征高度）
+            # 不用 0.1*Lx（17.4μm），那会覆盖太多内部区域
+            side_margin = wall_height  # ≈ 3.5μm，与壁面材质突变尺度一致
 
             f_wall = 6.0 * phi * (1.0 - phi)
-            bc_bottom = eps * phi_z - cos_theta_eq * f_wall
 
-            # 底面 mask: z < 0.5 * h_ink
-            h_ink = self.materials_params.get("ink_thickness", 3e-6)
-            near_bottom = (z_coord < 0.5 * h_ink).float()
-            w_bottom = interface_w * near_bottom
+            # 区域划分（互斥，避免角落重复）：
+            #   1. 侧壁区：靠近壁面 + z 在 (h_ink, wall_height - side_margin) → 侧壁 BC
+            #   2. 壁顶接触线区：z ≈ wall_height + 靠近壁面 → 壁顶 BC
+            #   3. 底面区：z=0 接触线 → 由 _compute_contact_angle_loss 负责（此处不处理）
+
+            near_x0 = (x_coord < side_margin).float()
+            near_xX = (x_coord > X - side_margin).float()
+            near_y0 = (y_coord < side_margin).float()
+            near_yY = (y_coord > Ly - side_margin).float()
+            near_wall_xy = near_x0 | near_xX | near_y0 | near_yY
+
+            above_ink = (z_coord > h_ink).float()
+            near_wall_top = ((z_coord > wall_height - side_margin) & (z_coord < wall_height + side_margin)).float()
 
             # ---- 侧壁 BC: ε·n·∇φ - cos(θ_wall_teflon)·6φ(1-φ) = 0 ----
+            # 有效区：靠近壁面 + 在壁高以下 + 远离壁顶接触线
             cos_theta_wall = np.cos(np.radians(theta_wall_teflon))
-
-            near_x0 = (x_coord < 0.1 * X).float()
-            near_xX = (x_coord > 0.9 * X).float()
-            near_y0 = (y_coord < 0.1 * Ly).float()
-            near_yY = (y_coord > 0.9 * Ly).float()
+            side_valid = near_wall_xy * above_ink * (1.0 - near_wall_top)
 
             bc_x0 = -eps * phi_x - cos_theta_wall * f_wall
             bc_xX = eps * phi_x - cos_theta_wall * f_wall
             bc_y0 = -eps * phi_y - cos_theta_wall * f_wall
             bc_yY = eps * phi_y - cos_theta_wall * f_wall
 
-            w_x0 = interface_w * near_x0
-            w_xX = interface_w * near_xX
-            w_y0 = interface_w * near_y0
-            w_yY = interface_w * near_yY
+            w_x0 = interface_w * near_x0 * side_valid
+            w_xX = interface_w * near_xX * side_valid
+            w_y0 = interface_w * near_y0 * side_valid
+            w_yY = interface_w * near_yY * side_valid
+
+            # ---- 壁顶接触线 BC (第一接触线) ----
+            # z ≈ wall_height 且靠近壁面 → SU-8 前进角（固定，不受 EW 影响）
+            wall_top_only = near_wall_top * near_wall_xy
+            theta_adv_su8 = self.materials_params.get("theta_adv_su8", 125.0)
+            cos_theta_su8 = np.cos(np.radians(theta_adv_su8))
+
+            bc_wall_top_x0 = -eps * phi_x - cos_theta_su8 * f_wall
+            bc_wall_top_xX = eps * phi_x - cos_theta_su8 * f_wall
+            bc_wall_top_y0 = -eps * phi_y - cos_theta_su8 * f_wall
+            bc_wall_top_yY = eps * phi_y - cos_theta_su8 * f_wall
+
+            w_wall_top_x0 = interface_w * near_x0 * wall_top_only
+            w_wall_top_xX = interface_w * near_xX * wall_top_only
+            w_wall_top_y0 = interface_w * near_y0 * wall_top_only
+            w_wall_top_yY = interface_w * near_yY * wall_top_only
 
             # ---- 加权损失 ----
-            total_w = w_bottom + w_x0 + w_xX + w_y0 + w_yY
+            total_w = w_x0 + w_xX + w_y0 + w_yY + w_wall_top_x0 + w_wall_top_xX + w_wall_top_y0 + w_wall_top_yY
             total_w_sum = total_w.sum().clamp(min=1e-12)
 
-            loss = w_bottom * bc_bottom**2 + w_x0 * bc_x0**2 + w_xX * bc_xX**2 + w_y0 * bc_y0**2 + w_yY * bc_yY**2
+            loss = (
+                w_x0 * bc_x0**2
+                + w_xX * bc_xX**2
+                + w_y0 * bc_y0**2
+                + w_yY * bc_yY**2
+                + w_wall_top_x0 * bc_wall_top_x0**2
+                + w_wall_top_xX * bc_wall_top_xX**2
+                + w_wall_top_y0 * bc_wall_top_y0**2
+                + w_wall_top_yY * bc_wall_top_yY**2
+            )
             scalar_loss = loss.sum() / total_w_sum
 
             return {"phase_field_wetting": scalar_loss}
@@ -685,17 +708,20 @@ class PhysicsConstraints:
             return {"phase_field_wetting": torch.tensor(0.0, device=device)}
 
     def _compute_contact_line_dynamics_residual(self, x_phys, predictions, grads=None):
-        """接触线动力学约束 — Hoffman-Voinov-Tanner 模型适配
+        """接触线动力学约束 — Hoffman-Voinov-Tanner 模型适配（仅底面第二接触线）
 
-        物理: 接触线滑移速度与接触角偏差的关系
-          v_cl = k_cl × (cos(θ_eq) - cos(θ_local)) × sign(cos(θ_eq) - cos(θ_local))
+        物理: 底面(Z=0) Teflon 上的接触线滑移速度
+          v_cl = k_cl × (cos(θ_eq) - cos(θ_local))
 
-        在相场中: v_cl ≈ (∂φ/∂t) / |∇φ|  (在 φ≈0.5, z=0 处)
-        接触角信息: cos(θ_local) = (∂φ/∂z) / |∇φ|  (在底面)
+        θ_eq 由 Young-Lippmann EW 调制:
+          cos(θ_eq) = cos(120°) + C_yl·V_eff²/(2σ)
 
-        Young-Laplace 决定界面平衡形状:
-          ΔP = σ·κ = const (由 Laplace 压力约束保证)
-          接触线处的 θ_local 需满足 cos(θ_eq) = cos(θ₀) + C×V²/(2σ)
+        在相场中:
+          v_cl ≈ φ_t / |∇φ|  (在 φ≈0.5, z=0 处)
+          cos(θ_local) = φ_z / |∇φ|
+
+        壁顶第一接触线(z≈3.5μm)的静态 BC 已由 _compute_unified_wetting_bc 负责，
+        此处仅处理底面第二接触线的动力学。
         """
         try:
             device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
@@ -712,23 +738,21 @@ class PhysicsConstraints:
             # 界面掩码: φ≈0.5（相场过渡区）
             is_interface = (phi > 0.2) & (phi < 0.8)
 
-            # ===== 第一接触线: SU-8 围堰顶面 (z ≈ 3.5μm) =====
-            # 物理: SU-8 亲水 → 水被壁吸引 → 推油不翻墙
-            # 接触角: 油膜在 SU-8 上的前进角 θ_adv ≈ 125° (估计值)
-            # 注意: 不受电压影响（几何润湿约束，非 EW 驱动）
+            # 底面第二接触线 mask: z ≈ 0（排除侧壁角落 tol_wall 范围）
             wall_height = self.materials_params.get("wall_height", 3.5e-6)
-            tol_wall = max(1e-6, 0.1 * wall_height)  # 容差 = 10% 壁高，最小 1μm
-            is_top_wall = (z > wall_height - tol_wall) & (z < wall_height + tol_wall)
-            mask_top = is_top_wall & is_interface
-
-            # ===== 第二接触线: 底面疏水层 (z ≈ 0) =====
-            # 物理: 水在 Teflon 上疏水(θ=120°)，加电后 EW 变亲水 → 推油走
-            # 符合 Young-Lippmann 方程: cos(θ_eq) = cos(120°) + C·V²/(2σ)
-            is_bottom = z < 1e-6
-            mask_bottom = is_bottom & is_interface
-
-            # 合并掩码
-            mask = mask_top | mask_bottom
+            side_margin = wall_height
+            X = self.materials_params.get("Lx", 174e-6)
+            Ly = self.materials_params.get("Ly", 174e-6)
+            x_coord = x_phys[:, 0]
+            y_coord = x_phys[:, 1]
+            near_wall_xy = (
+                (x_coord < side_margin)
+                | (x_coord > X - side_margin)
+                | (y_coord < side_margin)
+                | (y_coord > Ly - side_margin)
+            )
+            is_bottom = (z < 1e-6) & ~near_wall_xy
+            mask = is_bottom & is_interface
             if mask.sum() < 3:
                 return res
 
@@ -748,46 +772,20 @@ class PhysicsConstraints:
                 g_x, g_y, g_z = g[:, 0], g[:, 1], g[:, 2]
                 phi_t = g[:, 5] if g.shape[1] >= 6 else torch.zeros_like(phi)
 
-            phi_z = g_z
             grad_mag = torch.sqrt(g_x**2 + g_y**2 + g_z**2) + 1e-10
 
             v_cl = phi_t[mask] / grad_mag[mask]
-            cos_local = phi_z[mask] / grad_mag[mask]
+            cos_local = g_z[mask] / grad_mag[mask]
 
-            # ===== cos(θ_eq) 按接触面材质分支 =====
-            # 核心物理:
-            # - 第二接触线 (Z=0 Teflon): 水在 Teflon 上 EW 变亲水 → 推油走
-            #   → 符合 Young-Lippmann: cos(θ_eq) = cos(120°) + C·V²/(2σ)
-            # - 第一接触线 (SU-8 壁顶): 水亲 SU-8 → 推油不翻墙
-            #   → 不受电压影响，固定前进角 θ_adv ≈ 125°
+            # cos(θ_eq): Young-Lippmann EW 调制
             sigma_po = self.materials_params.get(
                 "surface_tension_polar_ink", self.materials_params.get("sigma", 0.02505)
             )
-
-            # --- 第二接触线 (Z=0): Young-Lippmann EW 调制 ---
-            theta0_teflon = self.materials_params.get("contact_angle_theta0", 120.0)  # 水在 Teflon 上的本征接触角
+            theta0_teflon = self.materials_params.get("contact_angle_theta0", 120.0)
             C_yl = self._compute_capacitance()
-            V_m = V_to[mask]
             V_T = self.materials_params.get("V_T_base", 3.0)
-            V_eff = torch.clamp(V_m - V_T, min=0.0)
-            ew_term = C_yl * V_eff**2 / (2.0 * sigma_po)
-            cos_theta_tew = np.cos(np.radians(theta0_teflon)) + ew_term  # 水 EW 调制后的 cos
-
-            # --- 第一接触线 (SU-8 壁顶): 固定前进角，不受 EW 影响 ---
-            # SU-8 亲水 → 水被壁吸引 → 推油不翻墙
-            # θ_adv ≈ 125° (油膜在 SU-8 上的前进角，水中环境)
-            theta_adv_su8 = self.materials_params.get("theta_adv_su8", 125.0)
-            cos_theta_su8 = torch.tensor(np.cos(np.radians(theta_adv_su8)), device=device)
-
-            # 从合并 mask 中提取 SU-8 顶面子集（用于分支 cos_eq）
-            mask_top_combined = mask_top[mask]
-
-            # 分支 cos_eq: SU-8 用固定前进角，Teflon 用 EW 调制角
-            cos_eq = torch.where(
-                mask_top_combined,
-                cos_theta_su8,  # 第一接触线：固定，不受电压影响
-                cos_theta_tew,  # 第二接触线：Young-Lippmann EW 调制
-            )
+            V_eff = torch.clamp(V_to[mask] - V_T, min=0.0)
+            cos_eq = np.cos(np.radians(theta0_teflon)) + C_yl * V_eff**2 / (2.0 * sigma_po)
             cos_eq = torch.clamp(cos_eq, -1.0, 1.0)
 
             # HVT: v_cl ∝ cos_eq - cos_local
