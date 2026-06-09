@@ -575,6 +575,7 @@ class PhysicsConstraints:
         Wall: f_w(φ) = +σ·cos(θ_eq)·φ²(3-2φ)
 
         变分得到自然 BC: ε·n·∇φ + cos(θ_eq)·6φ(1-φ) = 0
+        其中 n 为流体域外法向，f = 6φ(1-φ)
 
         区域划分（互斥，避免角落重复）：
           侧壁区：靠近壁面 + z 在壁顶以下 → θ = 110° (Teflon，亲油，无滑移)
@@ -656,15 +657,20 @@ class PhysicsConstraints:
                 (z_coord > wall_height - wall_top_z_tol) & (z_coord < wall_height + wall_top_z_tol)
             ).float()
 
-            # ---- 侧壁 BC: ε·n·∇φ - cos(θ_wall_teflon)·6φ(1-φ) = 0 ----
+            # ---- 侧壁 BC: ε·n·∇φ + cos(θ_wall_teflon)·6φ(1-φ) = 0 ----
             # 有效区：靠近壁面 + 在壁顶接触线以下
             cos_theta_wall = np.cos(np.radians(theta_wall_teflon))
             side_valid = near_wall_xy * (1.0 - near_wall_top)
 
-            bc_x0 = -eps * phi_x - cos_theta_wall * f_wall
-            bc_xX = eps * phi_x - cos_theta_wall * f_wall
-            bc_y0 = -eps * phi_y - cos_theta_wall * f_wall
-            bc_yY = eps * phi_y - cos_theta_wall * f_wall
+            # 自然 BC: ε·n·∇φ + cos(θ)·6φ(1-φ) = 0
+            # x=0: n=(-1,0,0) → R = -ε·φ_x + cos(θ)·f
+            # x=Lx: n=(+1,0,0) → R = +ε·φ_x + cos(θ)·f
+            # y=0: n=(0,-1,0) → R = -ε·φ_y + cos(θ)·f
+            # y=Ly: n=(0,+1,0) → R = +ε·φ_y + cos(θ)·f
+            bc_x0 = -eps * phi_x + cos_theta_wall * f_wall
+            bc_xX = eps * phi_x + cos_theta_wall * f_wall
+            bc_y0 = -eps * phi_y + cos_theta_wall * f_wall
+            bc_yY = eps * phi_y + cos_theta_wall * f_wall
 
             w_x0 = interface_w * near_x0 * side_valid
             w_xX = interface_w * near_xX * side_valid
@@ -673,12 +679,14 @@ class PhysicsConstraints:
 
             # ---- 壁顶接触线 BC (第一接触线) ----
             # z ≈ wall_height 且靠近壁面 → SU-8 前进角（固定，不受 EW 影响）
-            # 壁顶是水平面，法向 n = (0,0,-1)，自然 BC: -ε·φ_z + cos(θ)·6φ(1-φ) = 0
+            # 壁顶是水平面，法向 n = (0,0,+1)（流体域外法向，指向上方）
+            # 自然 BC: ε·φ_z + cos(θ)·6φ(1-φ) = 0
             wall_top_only = near_wall_top * near_wall_xy
             theta_adv_su8 = self.materials_params.get("theta_adv_su8", 125.0)
             cos_theta_su8 = np.cos(np.radians(theta_adv_su8))
 
-            bc_wall_top = -eps * phi_z - cos_theta_su8 * f_wall
+            # n=(0,0,+1), R = ε·φ_z + cos(θ)·f
+            bc_wall_top = eps * phi_z + cos_theta_su8 * f_wall
             w_wall_top = interface_w * wall_top_only
 
             # ---- 加权损失 ----
