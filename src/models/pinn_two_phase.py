@@ -823,205 +823,196 @@ class DataGenerator:
             t_step = 0.0
         t_since = max(0.0, t - t_step)
         eta = None
-        theta = None  # 接触角（用于倾斜界面）
         if HAS_APERTURE:
             try:
                 if not hasattr(self, "_aperture_model"):
                     from src.config import CONFIG_PATH
 
                     self._aperture_model = EnhancedApertureModel(config_path=str(CONFIG_PATH))
-                theta_stage1, eta_stage1 = self._aperture_model.theta_eta_from_triad(V_prev, V, t_since)
-                theta = float(theta_stage1)
+                _, eta_stage1 = self._aperture_model.theta_eta_from_triad(V_prev, V, t_since)
                 eta = float(eta_stage1)
             except Exception as e:
                 logger.warning(f"EnhancedApertureModel 在 target_phi_3d 中失败: {e}")
         if eta is None:
             eta = self.get_opening_rate(V, t)
-            # 计算 θ（如果上面没有设置）
-            if theta is None:
-                theta = self.get_contact_angle(V, t)
 
         # 界面宽度
         interface_width = PHYSICS["ac_interface_width"]
 
-        # 倾斜界面：法向与 z 轴成 θ 角
-        # z_eff = z - (r - r_open) * cot(θ)
-        # cot(120°) = -0.577 (疏油，界面内凹)
-        # cot(60°) = 0.577 (亲油，界面外凸)
-        theta_rad = np.radians(theta) if theta is not None else np.radians(120.0)
-        tan_theta = np.tan(theta_rad)
+        # 注意：倾斜界面公式（z_tilt）在像素尺度（Lx/Lz≈8.7）下不适用
+        # r_open→0 时全域偏移 >> Lz，导致 φ 全为 0 或 1
+        # 接触角信息已通过 η 体现，target3D 只需把 η 转化为 3D 形状
         r_open = np.sqrt(eta * self.Lx * self.Ly / np.pi) if eta > 0.01 else 0.0
 
-        # 开口率阈值：超过此值从中心开口切换到单角墨滴
-        # 物理上 η≈50% 是环形分布→角落汇聚的质变点
-        # 取 0.45 让过渡更平缓，减少 PINN 训练难度
-        eta_threshold = 0.45
+        # 开口率过渡区间：[eta_lo, eta_hi] 线性插值平滑过渡
+        # 物理上 η≈40-50% 是环形分布→角落汇聚的渐变过程
+        eta_lo, eta_hi = 0.40, 0.50
 
         if eta < 0.01:
-            # 无开口：初始状态，油墨均匀铺在底部（界面倾斜由 θ 决定）
+            # 无开口：初始状态，油墨均匀铺在底部
             # φ=1 在底部（油），φ=0 在顶部（水）
-            r = np.sqrt((x - self.cx) ** 2 + (y - self.cy) ** 2)
-            z_tilt = z + (r - r_open) * tan_theta
-            phi_z = 0.5 * (1 + np.tanh((h_ink - z_tilt) / (interface_width / 3)))
+            # 注意：倾斜界面公式在 η→0 时不适用（r_open→0 导致全域偏移 >> Lz）
+            # 退化为简单的垂直分层，接触角信息已通过 η 体现
+            phi_z = 0.5 * (1 + np.tanh((h_ink - z) / (interface_width / 3)))
 
-        elif eta < eta_threshold:
+        elif eta <= eta_lo:
             # ============================================================
-            # 中心开口模式 (η < 50%)：油墨环形分布
+            # 纯中心开口模式 (η ≤ 0.40)：油墨环形分布
             # ============================================================
-            r = np.sqrt((x - self.cx) ** 2 + (y - self.cy) ** 2)
-            h_edge = h_ink / max(1.0 - eta, PHYSICS["ink_initial_fraction"])
+            phi_z = self._center_opening_phi(x, y, z, eta, h_ink, r_open, interface_width)
 
-            if r < r_open - interface_width:
-                # 中心开口区：全是极性液体
-                phi_z = 0.0
-            elif r > r_open + interface_width:
-                # 边缘油墨区：Z 方向有分布
-                if z < h_edge - interface_width:
-                    phi_z = 1.0  # 底部：油
-                elif z > h_edge + interface_width:
-                    phi_z = 0.0  # 顶部：水
-                else:
-                    # 界面过渡区
-                    phi_z = 0.5 * (1 + np.tanh((h_edge - z) / (interface_width / 2)))
-            else:
-                # 径向过渡区
-                radial_factor = (r - (r_open - interface_width)) / (2 * interface_width)
-                # 中心是极性液体，边缘是油（带 Z 分布）
-                phi_center = 0.0
-                if z < h_edge - interface_width:
-                    phi_edge = 1.0
-                elif z > h_edge + interface_width:
-                    phi_edge = 0.0
-                else:
-                    phi_edge = 0.5 * (1 + np.tanh((h_edge - z) / (interface_width / 2)))
-                phi_z = phi_center * (1 - radial_factor) + phi_edge * radial_factor
+        elif eta >= eta_hi:
+            # ============================================================
+            # 纯单角墨滴模式 (η ≥ 0.50)：油墨汇聚到最近角落
+            # ============================================================
+            phi_z = self._corner_blob_phi(x, y, z, eta, h_ink, interface_width)
 
         else:
             # ============================================================
-            # 单角墨滴模式 (η ≥ 50%)：油墨汇聚到 (0,0) 角落
-            #
-            # 物理：底面疏油 + 侧壁亲油 → 油墨沿壁面流动
-            #       单 blob 表面能 < 多 blob → 汇聚到单角落
-            #       角落三面夹持（底面+两面壁）→ 最深毛细势阱
-            #
-            # 模型：以角落为中心的 1/4 超椭球 blob
-            #       ink_volume = Lx * Ly * h_ink（守恒）
-            #       等效半径 r_blob = sqrt(4 * V_ink / (π * h_edge))
+            # 过渡区间 (0.40 < η < 0.50)：线性插值混合两种模式
             # ============================================================
-            corner_x, corner_y = 0.0, 0.0  # 固定 (0,0) 角落
-
-            # 油墨堆高（体积守恒，可超过围堰形成凸面）
-            h_edge = h_ink / max(1.0 - eta, PHYSICS["ink_initial_fraction"])
-
-            # blob 等效半径：1/4 圆柱近似
-            ink_volume = self.Lx * self.Ly * h_ink
-            r_blob = np.sqrt(4.0 * ink_volume / (np.pi * h_edge))
-
-            # 到角落的距离
-            r_c = np.sqrt((x - corner_x) ** 2 + (y - corner_y) ** 2)
-
-            # 径向分布：角落处 φ=1，远离角落 φ=0
-            radial = 0.5 * (1 - np.tanh((r_c - r_blob) / interface_width))
-
-            # z 分布：堆高 h_edge 以下 φ=1，以上 φ=0
-            phi_z = radial * 0.5 * (1 - np.tanh((z - h_edge) / (interface_width / 2)))
-
-            # 不截断 z：油墨可堆高到围堰以上（凸面），由 PINN 物理约束决定最终形貌
+            w = (eta - eta_lo) / (eta_hi - eta_lo)  # 0→1
+            phi_center = self._center_opening_phi(x, y, z, eta, h_ink, r_open, interface_width)
+            phi_corner = self._corner_blob_phi(x, y, z, eta, h_ink, interface_width)
+            phi_z = (1.0 - w) * phi_center + w * phi_corner
 
         return np.clip(phi_z, 0, 1)
 
-    def _phi_center_opening_mode(
-        self, x: float, y: float, z: float, eta: float, h_ink: float, theta: float = 120.0
-    ) -> float:
-        """
-        中心开口模式的 φ 分布（用于升压和降压）
-
-        物理模型：
-        - 中心区域透明（φ=0），油墨在边缘形成环形分布
-        - 开口半径 r_open = sqrt(η × Lx × Ly / π)
-        - 油墨堆高满足体积守恒
-        - 界面倾斜角度由接触角 θ 决定
-
-        Args:
-            x, y, z: 空间坐标 (m)
-            eta: 开口率 ∈ [0, 1]
-            h_ink: 初始油墨厚度 (m)
-            theta: 接触角 (度)
-
-        Returns:
-            φ ∈ [0, 1]
-        """
-        interface_width = PHYSICS["ac_interface_width"]
-
-        # 倾斜界面：法向与 z 轴成 θ 角
-        theta_rad = np.radians(theta)
-        tan_theta = np.tan(theta_rad)
-        r_open = np.sqrt(eta * self.Lx * self.Ly / np.pi) if eta > 0.01 else 0.0
+    def _center_opening_phi(self, x, y, z, eta, h_ink, r_open, interface_width):
+        """中心开口模式的 φ 分布（油墨环形分布），含接触线堆高、壁面爬升、接触角倾斜"""
         r = np.sqrt((x - self.cx) ** 2 + (y - self.cy) ** 2)
-        z_tilt = z + (r - r_open) * tan_theta  # 注意：界面倾斜由接触角决定
+        h_edge = h_ink / max(1.0 - eta, PHYSICS["ink_initial_fraction"])
 
-        if eta < 0.01:
-            # 无开口：初始状态，油墨均匀铺在底部（倾斜界面）
-            # φ=1 在底部（油），φ=0 在顶部（水）
-            return 0.5 * (1 + np.tanh((h_ink - z_tilt) / (interface_width / 3)))
+        # 非平凡结构参数（v2 默认值已调大）
+        kappa = PHYSICS.get("meniscus_kappa", 0.8)
+        z_climb_max = PHYSICS.get("wall_climb_max", 1.5e-6)
+        wall_climb_decay = PHYSICS.get("wall_climb_decay", 3e-6)
 
-        if eta > 0.99:
-            # 完全开口：几乎没有油墨
-            return 0.0
+        # 壁面爬升效应：d_wall 为到最近壁面的距离
+        d_wall = min(x, self.Lx - x, y, self.Ly - y)
+        h_climb = z_climb_max * np.exp(-d_wall / wall_climb_decay)
 
-        # 开口半径
-        r_open = np.sqrt(eta * self.Lx * self.Ly / np.pi)
+        # 接触线处油墨堆高：h_eff(r) = h_edge + κ·(r - r_open)（边缘更高）
+        h_eff = h_edge + kappa * (r - r_open) + h_climb
+        h_eff = min(h_eff, self.Lz * 0.95)  # 不超过域顶
 
-        # 油墨堆高（体积守恒）
-        # 修复: 限制最大开口率以保持体积守恒
-        max_eta = PHYSICS["eta_max"]
-        eta = min(eta, max_eta)
-        r_open = np.sqrt(eta * self.Lx * self.Ly / np.pi)
-        ink_area = self.Lx * self.Ly - np.pi * r_open**2
-        h_ink_edge = self.Lx * self.Ly * h_ink / max(ink_area, 1e-12)
-        # 移除了: min(h_ink_edge, self.Lz * 0.8) - 破坏体积守恒
-
-        # 径向分布
-        radial_factor = 0.5 * (1 + np.tanh((r - r_open) / interface_width))
+        # 接触角倾斜：界面在 r=r_open 处沿径向倾斜
+        # 用 0.1 缩放因子避免像素尺度(Lx/Lz≈8.7)下过度倾斜
+        theta = PHYSICS.get("theta0", 120.0)
+        tan_theta = np.tan(np.radians(theta))
+        z_tilt = z + (r - r_open) * tan_theta * 0.1
 
         if r < r_open - interface_width:
-            phi_z = 0.0  # 中心透明
-        elif r > r_open + interface_width:
-            # φ=1 在底部（油），φ=0 在顶部（水）
-            phi_z = 0.5 * (1 + np.tanh((h_ink_edge - z_tilt) / (interface_width / 2)))
+            return 0.0  # 中心开口区：全是极性液体
+        if r > r_open + interface_width:
+            # 边缘油墨区：用 z_tilt 产生倾斜界面
+            if z_tilt < h_eff - interface_width:
+                return 1.0
+            if z_tilt > h_eff + interface_width:
+                return 0.0
+            return 0.5 * (1 + np.tanh((h_eff - z_tilt) / (interface_width / 2)))
+        # 径向过渡区：用 z_tilt 产生倾斜界面
+        radial_factor = (r - (r_open - interface_width)) / (2 * interface_width)
+        if z_tilt < h_eff - interface_width:
+            phi_edge = 1.0
+        elif z_tilt > h_eff + interface_width:
+            phi_edge = 0.0
         else:
-            phi_center = 0.0
-            phi_edge = 0.5 * (1 + np.tanh((z_tilt - h_ink_edge) / (interface_width / 2)))
-            phi_z = phi_center * (1 - radial_factor) + phi_edge * radial_factor
+            phi_edge = 0.5 * (1 + np.tanh((h_eff - z_tilt) / (interface_width / 2)))
+        return phi_edge * radial_factor
 
-        return np.clip(phi_z, 0, 1)
+    def _corner_blob_phi(self, x, y, z, eta, h_ink, interface_width):
+        """单角墨滴模式的 φ 分布（油墨汇聚到最近角落），含弯月面和壁面爬升"""
+        h_edge = h_ink / max(1.0 - eta, PHYSICS["ink_initial_fraction"])
+
+        # blob 等效半径：1/4 圆柱近似
+        ink_volume = self.Lx * self.Ly * h_ink
+        r_blob = np.sqrt(4.0 * ink_volume / (np.pi * h_edge))
+
+        # 自动检测最近角落
+        corners = [(0.0, 0.0), (self.Lx, 0.0), (0.0, self.Ly), (self.Lx, self.Ly)]
+        dists = [np.sqrt((x - cx) ** 2 + (y - cy) ** 2) for cx, cy in corners]
+        corner_x, corner_y = corners[np.argmin(dists)]
+
+        # 到最近角落的距离
+        r_c = np.sqrt((x - corner_x) ** 2 + (y - corner_y) ** 2)
+
+        # 径向分布：角落处 φ=1，远离角落 φ=0
+        radial = 0.5 * (1 - np.tanh((r_c - r_blob) / interface_width))
+
+        # 非平凡结构参数（v2 默认值已调大）
+        delta_h = PHYSICS.get("meniscus_delta_h", 1.5e-6)
+        lam = PHYSICS.get("meniscus_lambda", 5e-6)
+        z_climb_max = PHYSICS.get("wall_climb_max", 1.5e-6)
+        wall_climb_decay = PHYSICS.get("wall_climb_decay", 3e-6)
+
+        # 壁面爬升效应
+        d_wall = min(x, self.Lx - x, y, self.Ly - y)
+        h_climb = z_climb_max * np.exp(-d_wall / wall_climb_decay)
+
+        # 弯月面形状：z_meniscus = h_edge + Δh·exp(-(r_c - r_blob)/λ) + h_climb
+        z_meniscus = h_edge + delta_h * np.exp(-(r_c - r_blob) / lam) + h_climb
+        z_meniscus = min(z_meniscus, self.Lz * 0.95)
+
+        # z 分布：弯月面以下 φ=1，以上 φ=0
+        return radial * 0.5 * (1 - np.tanh((z - z_meniscus) / (interface_width / 2)))
 
     def _sample_point_by_eta(self, eta: float) -> tuple:
-        """根据开口率采样空间点"""
-        eta_threshold = 0.50
+        """根据开口率采样空间点，XY 方向界面加密
 
-        if eta < eta_threshold and np.random.rand() < 0.4 and eta > 0.01:
-            # 中心开口模式：在界面附近采样
-            r_open = np.sqrt(eta * self.Lx * self.Ly / np.pi)
-            r = r_open + np.random.randn() * PHYSICS["sample_spread_small"]
-            r = max(0, min(r, self.r_max))
-            theta_angle = np.random.rand() * 2 * np.pi
-            x = self.cx + r * np.cos(theta_angle)
-            y = self.cy + r * np.sin(theta_angle)
-            x = np.clip(x, 0, self.Lx)
-            y = np.clip(y, 0, self.Ly)
-        elif eta >= eta_threshold and np.random.rand() < 0.4:
-            # 四角/单角模式：在角落附近采样
-            corners = [(0, 0), (self.Lx, 0), (0, self.Ly), (self.Lx, self.Ly)]
-            cx, cy = corners[np.random.randint(4)]
-            r = np.abs(np.random.randn()) * PHYSICS["sample_spread_large"]
-            theta_angle = np.random.rand() * np.pi / 2
-            x = cx + r * np.cos(theta_angle) * (1 if cx == 0 else -1)
-            y = cy + r * np.sin(theta_angle) * (1 if cy == 0 else -1)
-            x = np.clip(x, 0, self.Lx)
-            y = np.clip(y, 0, self.Ly)
+        与 target_phi_3d 过渡区间 [0.40, 0.50] 对齐：
+          - η < eta_lo: 环状加密（纯中心开口模式）
+          - eta_lo ≤ η ≤ eta_hi: 50%环状 + 50%角落（匹配混合标签）
+          - η > eta_hi: 角落加密（纯单角墨滴模式）
+        """
+        eta_lo, eta_hi = 0.40, 0.50  # 与 target_phi_3d 过渡区间一致
+
+        if eta > 0.01 and np.random.rand() < 0.4:
+            # 过渡区间：随机选择环状或角落采样，匹配混合标签
+            if eta <= eta_lo:
+                use_center = True
+            elif eta >= eta_hi:
+                use_center = False
+            else:
+                # 过渡区间：50% 概率各用一种
+                use_center = np.random.rand() < 0.5
+
+            if use_center:
+                # ============================================================
+                # 中心开口模式：r ≈ r_open 环状加密
+                # ============================================================
+                r_open = np.sqrt(eta * self.Lx * self.Ly / np.pi)
+                n_angles = 8
+                angle_idx = np.random.randint(n_angles)
+                theta_angle = angle_idx * 2 * np.pi / n_angles + np.random.uniform(-0.2, 0.2)
+                # 径向：在 r_open 附近高斯分布
+                r = r_open + np.random.randn() * PHYSICS.get("sample_spread_small", 2e-6)
+                r = max(0, min(r, self.r_max))
+                x = self.cx + r * np.cos(theta_angle)
+                y = self.cy + r * np.sin(theta_angle)
+                x = np.clip(x, 0, self.Lx)
+                y = np.clip(y, 0, self.Ly)
+            else:
+                # ============================================================
+                # 单角墨滴模式：4 个角落径向×角度网格加密
+                # ============================================================
+                corners = [(0, 0), (self.Lx, 0), (0, self.Ly), (self.Lx, self.Ly)]
+                corner_idx = np.random.randint(4)
+                cx, cy = corners[corner_idx]
+                # 5×5 径向×角度网格中随机选一个
+                r_grid = np.linspace(0, PHYSICS.get("sample_spread_large", 15e-6), 5)
+                theta_grid = np.linspace(0, np.pi / 2, 5)
+                r = r_grid[np.random.randint(5)]
+                theta_angle = theta_grid[np.random.randint(5)]
+                # 根据角落方向调整符号
+                sign_x = 1 if cx == 0 else -1
+                sign_y = 1 if cy == 0 else -1
+                x = cx + r * np.cos(theta_angle) * sign_x + np.random.randn() * 1e-6
+                y = cy + r * np.sin(theta_angle) * sign_y + np.random.randn() * 1e-6
+                x = np.clip(x, 0, self.Lx)
+                y = np.clip(y, 0, self.Ly)
         else:
-            # 均匀采样
+            # 均匀随机采样（覆盖全域）
             x = np.random.rand() * self.Lx
             y = np.random.rand() * self.Ly
 
@@ -1120,6 +1111,17 @@ class DataGenerator:
                     phi = self.target_phi_3d(x[0], y[0], z[0], t, 0.0, V_prev=float(Vf))
                     interface_points.append([x[0], y[0], z[0], float(Vf), 0.0, t])
                     interface_targets.append(phi)
+
+            # 1.4 中间电压跳变 (10%) — 覆盖非零起点/终点的电压转换
+            n_jump = int(n_interface * 0.1)
+            jump_pairs = [(10, 25), (25, 10), (10, 20), (20, 10)]
+            for _ in range(n_jump):
+                V_from, V_to = jump_pairs[np.random.randint(len(jump_pairs))]
+                t = sampler.sample_time_adaptive(1, float(V_to), float(V_from))[0]
+                x, y, z = sampler.sample_spatial_physics_based(1, float(V_to), t)
+                phi = self.target_phi_3d(x[0], y[0], z[0], t, float(V_to), V_prev=float(V_from))
+                interface_points.append([x[0], y[0], z[0], float(V_from), float(V_to), t])
+                interface_targets.append(phi)
         else:
             # 原有均匀采样逻辑
             # 1.1 稳态数据 (40%) - V_from = V_to
@@ -1162,6 +1164,18 @@ class DataGenerator:
                 interface_points.append([x, y, z, V, 0.0, t])
                 interface_targets.append(phi)
 
+            # 1.4 中间电压跳变 (10%) — 覆盖非零起点/终点的电压转换
+            n_jump = int(n_interface * 0.1)
+            jump_pairs = [(10, 25), (25, 10), (10, 20), (20, 10)]
+            for _ in range(n_jump):
+                V_from, V_to = jump_pairs[np.random.randint(len(jump_pairs))]
+                t = sample_continuous_times(1)[0]
+                eta = self.get_opening_rate(V_to, t)
+                x, y, z = self._sample_point_by_eta(eta)
+                phi = self.target_phi_3d(x, y, z, t, V_to, V_prev=V_from)
+                interface_points.append([x, y, z, V_from, V_to, t])
+                interface_targets.append(phi)
+
         logger.info(f"  界面数据点: {len(interface_points)}")
 
         # ============================================================
@@ -1177,8 +1191,12 @@ class DataGenerator:
             V_to = np.random.uniform(0, 30.0)
             # 偏向稳态 (80%稳态, 20%瞬态)
             if np.random.random() < 0.8:
-                V_to = V_from  # 稳态
-            t = sample_continuous_times(1)[0]
+                V_to = V_from  # 稳态: V_from=V_to, t=任意
+                t = sample_continuous_times(1)[0]
+            else:
+                # 瞬态: 确保 V_prev=V_from, t 为跳变后时间
+                # V_from 是跳变前电压，V_to 是跳变后电压
+                t = sample_continuous_times(1)[0]  # 跳变后时间
             phi = self.target_phi_3d(x, y, z, t, V_to, V_prev=V_from)
             interface_points.append([x, y, z, V_from, V_to, t])
             interface_targets.append(phi)
@@ -1827,45 +1845,67 @@ class Trainer:
             "sharpening": physics_cfg.get("sharpening_weight", 0.0) * smooth_factor,
         }
 
-    def get_stage1_weight_factor(self, epoch: int) -> float:
+    def _get_phase_mult(self, epoch: int) -> dict[str, float]:
         """
-        获取 Stage1 约束的退火权重（控制 Interface loss）。
+        统一退火调度器 — 所有损失乘子同向变化，避免此消彼长。
 
-        S1 (0 ~ stage1_epochs):              factor = 1.0    (interface_weight = 500)
-        S2 (stage1_epochs ~ stage2_epochs):   factor 退火 1.0 → 0.1  (500 → 50)
-        S3 (stage2_epochs ~ end):             factor 退火 0.1 → 0.05 (50 → 25)
+        三个阶段：
+          early (S1): 数据拟合主导，物理权重=0
+          mid   (S2): 逐渐引入物理约束，数据权重衰减
+          late  (S3): 物理约束主导，数据权重保持底线
 
-        S3 后期保留适度数据锚定（min_factor=0.05），防止物理约束权重过大时
-        梯度在接触线高阶项处爆炸（NaN 崩溃，见 pinn_20260528_192413 复盘）。
+        返回 dict，包含所有乘子：
+          interface, ic_phi, eta_match, contact_angle, phi_target3d, physics
         """
-        training_cfg = self.config.get("training", {}) if isinstance(self.config.get("training", {}), dict) else {}
-
-        # S2 退火: stage1_epochs → stage2_epochs, factor 1.0 → 0.1
-        s2_start = self.stage1_epochs
+        s1_end = self.stage1_epochs
         s2_end = self.stage2_epochs
-        s2_span = max(1, s2_end - s2_start)
 
-        # S3 退火: stage2_epochs → stage2_epochs + anneal_span, factor 0.1 → 0.0
-        s3_start = self.stage2_epochs
-        s3_anneal_epochs = int(training_cfg.get("s3_anneal_span", 15000))
-        s3_end = s3_start + s3_anneal_epochs
-        s3_span = max(1, s3_end - s3_start)
+        if epoch < s1_end:
+            # === early: 纯数据拟合 ===
+            return {
+                "interface": 1.0,
+                "ic_phi": 1.0,
+                "eta_match": 1.0,
+                "contact_angle": 1.0,
+                "phi_target3d": 300.0,  # 原基础权重 300
+                "physics": 0.0,
+            }
 
-        # S3 后期 Interface loss 权重极低，让物理方程主导
-        # interface_weight=10, min_factor=0.01 → 最终权重 0.1
-        min_factor = 0.01
-
-        if epoch < s2_start:
-            return 1.0
         if epoch < s2_end:
-            # S2: 余弦退火 1.0 → 0.1
-            progress = (epoch - s2_start) / s2_span
-            return 0.1 + 0.9 * 0.5 * (1 + np.cos(np.pi * progress))
-        if epoch < s3_end:
-            # S3: 余弦退火 0.1 → min_factor
-            progress = (epoch - s3_start) / s3_span
-            return min_factor + (0.1 - min_factor) * 0.5 * (1 + np.cos(np.pi * progress))
-        return min_factor
+            # === mid: 数据→物理过渡 ===
+            p = (epoch - s1_end) / max(s2_end - s1_end, 1)  # 0→1
+            # 数据权重：1→0.3（保持底线）
+            data_w = 1.0 - 0.7 * p
+            # 物理权重：0→0.5
+            phys_w = 0.5 * p
+            return {
+                "interface": data_w,
+                "ic_phi": 1.0 - 0.5 * p,  # 1→0.5
+                "eta_match": 1.0 - 0.5 * p,  # 1→0.5
+                "contact_angle": 0.5 + 0.5 * p,  # 0.5→1.0
+                "phi_target3d": 300.0 * (1.0 - p * 0.33),  # 300→200
+                "physics": phys_w,
+            }
+
+        # === late: 物理主导 ===
+        s3_anneal_epochs = int(self.config.get("training", {}).get("s3_anneal_span", 15000))
+        p = min(1.0, (epoch - s2_end) / max(s3_anneal_epochs, 1))  # 0→1
+        # 数据权重：0.3→0.1（保持底线，防止遗忘）
+        data_w = 0.3 - 0.2 * p
+        # 物理权重：0.5→1.0
+        phys_w = 0.5 + 0.5 * p
+        return {
+            "interface": max(0.05, data_w),  # 最低 0.05
+            "ic_phi": 0.5 - 0.2 * p,  # 0.5→0.3
+            "eta_match": 0.5 - 0.4 * p,  # 0.5→0.1
+            "contact_angle": 1.0 + 0.5 * p,  # 1.0→1.5（不超过 1.5）
+            "phi_target3d": max(50.0, 200.0 * (1.0 - p * 0.75)),  # 200→50（保持底线 50）
+            "physics": phys_w,
+        }
+
+    def get_stage1_weight_factor(self, epoch: int) -> float:
+        """兼容旧接口，返回 interface 乘子"""
+        return self._get_phase_mult(epoch)["interface"]
 
     def compute_losses(self, data: dict[str, torch.Tensor], epoch: int) -> dict[str, torch.Tensor]:
         """
@@ -1876,7 +1916,10 @@ class Trainer:
         losses = {}
         physics_cfg = self.config.get("physics", {})
         physics_weights = self.get_physics_weights(epoch)
-        stage1_factor = self.get_stage1_weight_factor(epoch)  # Stage1 约束退火
+
+        # 统一退火调度器 — 所有乘子来自同一来源，避免此消彼长
+        mult = self._get_phase_mult(epoch)
+        stage1_factor = mult["interface"]  # 兼容旧变量名，减少 diff
 
         # 记录当前 epoch，供各子损失方法读取（用于 S3 权重退火）
         self._current_epoch = epoch
@@ -1886,31 +1929,22 @@ class Trainer:
         # 1. 界面数据拟合损失 (核心)
         losses["interface"], data_fit_loss = self._compute_data_loss(data, physics_cfg, stage1_factor)
 
-        # 2. 接触角边界条件损失 + Phase调度
-        losses["contact_angle"] = self._compute_contact_angle_loss(data)
-        s3_start = self.stage2_epochs
-        s3_prog = max(0.0, (epoch - s3_start) / max(self.epochs - s3_start, 1))
-        if s3_prog < 0.2:
-            contact_mult = 0.5
-        elif s3_prog < 0.6:
-            contact_mult = 1.0
-        else:
-            contact_mult = 1.0 + 1.5 * min(1.0, (s3_prog - 0.6) / 0.1)  # max 2.5
-        losses["contact_angle"] *= contact_mult
+        # 2. 接触角边界条件损失（乘子来自统一调度器）
+        losses["contact_angle"] = self._compute_contact_angle_loss(data) * mult["contact_angle"]
 
         # 3. 初始条件 & 壁面边界条件损失
-        ib_losses = self._compute_initial_boundary_loss(data, physics_cfg)
+        ib_losses = self._compute_initial_boundary_loss(data, physics_cfg, mult["ic_phi"])
         losses.update(ib_losses)
 
-        # 4. 早期时间 & 零电压约束
-        ez_losses = self._compute_early_zero_voltage_loss()
+        # 4. 低能态约束（合并 early_time / zero_voltage / low_voltage）
+        ez_losses = self._compute_low_voltage_regime_loss()
         losses.update(ez_losses)
 
         # 5. 单调性 & 电压响应约束
         mr_losses = self._compute_monotonicity_response_loss()
         losses.update(mr_losses)
 
-        # 6. 开口率相关约束 (eta_ceiling, eta_stage1_early, eta_stage1_late, eta_monotonic)
+        # 6. 开口率相关约束 (eta_ceiling, eta_monotonic)
         eta_losses = self._compute_eta_constraints_loss(stage1_factor)
         losses.update(eta_losses)
 
@@ -1922,24 +1956,18 @@ class Trainer:
         # 7. 体积守恒约束
         losses["volume_conservation"] = self._compute_volume_conservation_loss(stage1_factor)
 
-        # 7.5 η 匹配 loss（Two-Stage 核心锚定，不退火）
-        losses["eta_matching"] = self.compute_eta_matching_loss(epoch) * 500.0
+        # 7.5 η 匹配 loss（Two-Stage 核心锚定，乘子来自统一调度器）
+        losses["eta_matching"] = self.compute_eta_matching_loss(epoch) * mult["eta_match"]
 
-        # 7.6 φ target3D loss（从 η 构造 φ target，遵守 target3D）
-        # S1/S2 高权重，S3 渐降但不归零
-        if epoch < self.stage1_epochs:
-            phi_target3d_weight = 300.0
-        elif epoch < self.stage2_epochs:
-            phi_target3d_weight = 200.0
-        else:
-            s3_progress = (epoch - self.stage2_epochs) / max(self.epochs - self.stage2_epochs, 1)
-            phi_target3d_weight = max(50.0, 200.0 * (1.0 - s3_progress * 0.75))
-        losses["phi_target3d"] = self.compute_phi_target3d_loss(epoch) * phi_target3d_weight
+        # 7.6 φ target3D loss（乘子来自统一调度器，已内含阶段衰减，无需双层退火）
+        losses["phi_target3d"] = self.compute_phi_target3d_loss(epoch) * mult["phi_target3d"]
 
-        # 8. 物理方程损失
+        # 8. 物理方程损失（整体乘子来自统一调度器）
         if any(w > 0 for w in physics_weights.values()):
+            # 将 physics 乘子注入 weights，使 _compute_physics_equation_loss 无需改动
+            scaled_weights = {k: v * mult["physics"] for k, v in physics_weights.items()}
             phys_losses = self._compute_physics_equation_loss(
-                physics_weights, data_fit_loss, epoch, current_stage, data=data
+                scaled_weights, data_fit_loss, epoch, current_stage, data=data
             )
             losses.update(phys_losses)
 
@@ -1964,7 +1992,7 @@ class Trainer:
         losses["total"] = total_loss
         return losses
 
-    def _compute_data_loss(self, data: dict[str, torch.Tensor], physics_cfg: dict, stage1_factor: float):
+    def _compute_data_loss(self, data: dict[str, torch.Tensor], physics_cfg: dict, interface_mult: float):
         """1. 界面数据拟合损失"""
         idx = torch.randperm(len(data["interface_points"]))[: self.batch_size]
         interface_pts = data["interface_points"][idx]
@@ -1974,7 +2002,7 @@ class Trainer:
         interface_loss = F.mse_loss(phi_pred, interface_tgt)
 
         base_weight = physics_cfg.get("interface_weight", 500.0)
-        return interface_loss * base_weight * stage1_factor, interface_loss
+        return interface_loss * base_weight * interface_mult, interface_loss
 
     def _compute_contact_angle_loss(self, data: dict[str, torch.Tensor]):
         """2. 接触角边界条件损失 + 接触线滑移动态
@@ -2003,11 +2031,13 @@ class Trainer:
 
         # 移除界面加权：接触角 BC 已在接触线采样点处计算
         # 界面加权 exp(-100*(φ-0.5)²) 在锐利界面处失效
-        # 静态接触角损失
-        loss_static = torch.mean((actual_cos - target_cos) ** 2) * 100.0
+        # 静态接触角损失（权重从 100 降至 50，避免 S2/S3 阶段梯度爆炸）
+        loss_static = torch.mean((actual_cos - target_cos) ** 2) * 50.0
 
         # 接触线滑移损失 (CAH 动态)
         # v_slip = φ_t / (|∇φ| + ε), Δcos = cos_θ_eq - cos_θ_local
+        # grad_phi[:, 5] = ∂φ/∂t_since（对 6D 输入第 6 列 t_since 的梯度），即相场时间导数
+        # 注意：这不是空间梯度，是相场随时间的变化率，用于驱动接触线滑移
         phi_t = grad_phi[:, 5] if grad_phi.shape[1] >= 6 else torch.zeros_like(phi)
         v_slip = phi_t / (grad_mag + 1e-10)
         delta_cos = target_cos - actual_cos
@@ -2017,7 +2047,43 @@ class Trainer:
 
         return loss_static + loss_slip
 
-    def _compute_initial_boundary_loss(self, data: dict[str, torch.Tensor], physics_cfg: dict):
+    def _get_ic_annealed_weight(self, epoch: int, base_weight: float) -> float:
+        """
+        IC loss φ 部分退火策略（速度部分固定 50.0 不退火）
+
+        S1 (0 ~ stage1_epochs):  base_weight (300)  — 建立正确的初始状态认知
+        S2 (stage1 ~ stage2):    300→100             — 逐步放松 IC 锚定，允许变形
+        S3 (stage2 ~ end):       100→30              — 让出空间给物理约束引导变形
+
+        公式:
+          S2: base_weight * (1 - 0.67*p)   — p=0→300, p=1→100
+          S3: 30 + 70*(1-p)                — p=0→100, p=1→30
+        """
+        if epoch < self.stage1_epochs:
+            return base_weight
+        if epoch < self.stage2_epochs:
+            p = (epoch - self.stage1_epochs) / max(self.stage2_epochs - self.stage1_epochs, 1)
+            return base_weight * (1.0 - 0.67 * p)
+        p = min(1.0, (epoch - self.stage2_epochs) / max(self.epochs - self.stage2_epochs, 1))
+        return 30.0 + 70.0 * (1.0 - p)
+
+    def _get_eta_matching_weight(self, epoch: int) -> float:
+        """
+        η_matching 权重退火
+
+        S1 (0 ~ stage1_epochs):  200.0 — 强约束底面开口率
+        S2 (stage1 ~ stage2):    200→50  — 逐步放松
+        S3 (stage2 ~ end):       50→10   — 让物理约束主导
+        """
+        if epoch < self.stage1_epochs:
+            return 200.0
+        if epoch < self.stage2_epochs:
+            p = (epoch - self.stage1_epochs) / max(self.stage2_epochs - self.stage1_epochs, 1)
+            return 200.0 * (1.0 - 0.75 * p)  # 200→50
+        p = min(1.0, (epoch - self.stage2_epochs) / max(self.epochs - self.stage2_epochs, 1))
+        return max(10.0, 50.0 * (1.0 - 0.8 * p))  # 50→10
+
+    def _compute_initial_boundary_loss(self, data: dict[str, torch.Tensor], physics_cfg: dict, ic_phi_mult: float):
         """3. 初始条件 & 壁面边界条件损失"""
         res = {}
         # IC
@@ -2025,7 +2091,9 @@ class Trainer:
         pred_ic = self.model(data["ic_points"][idx_ic])
         ic_phi_loss = F.mse_loss(pred_ic[:, 4:5], data["ic_values"][idx_ic][:, 4:5])
         ic_vel_loss = F.mse_loss(pred_ic[:, :4], data["ic_values"][idx_ic][:, :4])
-        res["ic"] = ic_phi_loss * physics_cfg.get("ic_weight", 100.0) + ic_vel_loss * 50.0
+        # IC φ 部分退火：基础权重 * 统一调度乘子
+        ic_phi_weight = physics_cfg.get("ic_weight", 300.0) * ic_phi_mult
+        res["ic"] = ic_phi_loss * ic_phi_weight + ic_vel_loss * 50.0
 
         # BC
         idx_bc = torch.randperm(len(data["bc_points"]))[: self.batch_size // 4]
@@ -2034,9 +2102,15 @@ class Trainer:
         res["bc"] += F.mse_loss(pred_bc[:, 4:5], data["bc_values"][idx_bc][:, 4:5]) * 80.0
         return res
 
-    def _compute_early_zero_voltage_loss(self):
-        """4. 早期时间 & 零电压约束 — 批量前向版本（3次→1次）。"""
-        res = {}
+    def _compute_low_voltage_regime_loss(self):
+        """4. 低能态约束 — 合并 early_time / zero_voltage / low_voltage。
+
+        物理：低电压或早期时间下，φ 应回归初始状态 φ_IC(z)。
+        按 V 和 t 分档加权：
+          - early_time (t<2ms, 任意V): 权重 1.0（最强，初始状态必须满足）
+          - zero_voltage (V=0, 任意t): 权重 1.0→0.3（S3 后半段退火）
+          - low_voltage (V<5V, t∈[5ms,20ms]): 权重 0.5→0.1（S3 后半段退火）
+        """
         n = self.batch_size // 4
         Lx, Ly, Lz = PHYSICS["Lx"], PHYSICS["Ly"], PHYSICS["Lz"]
         h_ink = PHYSICS["h_ink"]
@@ -2058,13 +2132,7 @@ class Trainer:
         pts_all = torch.cat(
             [
                 torch.cat(
-                    [
-                        xyz,
-                        torch.zeros(n, 1, device=self.device),
-                        v_early.unsqueeze(1),
-                        t_early.unsqueeze(1),
-                    ],
-                    dim=1,
+                    [xyz, torch.zeros(n, 1, device=self.device), v_early.unsqueeze(1), t_early.unsqueeze(1)], dim=1
                 ),
                 torch.cat(
                     [
@@ -2075,15 +2143,7 @@ class Trainer:
                     ],
                     dim=1,
                 ),
-                torch.cat(
-                    [
-                        xyz,
-                        torch.zeros(n, 1, device=self.device),
-                        v_low.unsqueeze(1),
-                        t_low.unsqueeze(1),
-                    ],
-                    dim=1,
-                ),
+                torch.cat([xyz, torch.zeros(n, 1, device=self.device), v_low.unsqueeze(1), t_low.unsqueeze(1)], dim=1),
             ],
             dim=0,
         )  # (3n, 6)
@@ -2093,24 +2153,23 @@ class Trainer:
         phi_0v = phi_all[n : 2 * n]
         phi_low = phi_all[2 * n :]
 
-        # early_time target: phi_IC(z)
+        # target: phi_IC(z)
         phi_ic_target = 0.5 * (1.0 + torch.tanh((h_ink - z) / delta_ic))
 
-        # S3 退火：zero_voltage 和 low_voltage 在 S3 后半段退火到 0.3（不完全归零）
-        # 保留弱锚定防止梯度在接触线高阶项处爆炸（NaN 崩溃复盘，20260529）
+        # S3 退火：zero_voltage 和 low_voltage 在 S3 后半段退火
         _epoch = getattr(self, "_current_epoch", 0)
         if _epoch > self.stage2_epochs:
             _s3_total = max(1, self.epochs - self.stage2_epochs)
             _s3_prog = (_epoch - self.stage2_epochs) / _s3_total
-            # S3 前半段权重=1.0，后半段线性退火到 0.3
             _volt_anneal = 1.0 if _s3_prog < 0.5 else max(0.1, 1.0 - 0.9 * ((_s3_prog - 0.5) / 0.5))
         else:
             _volt_anneal = 1.0
 
-        res["early_time"] = F.mse_loss(phi_early, phi_ic_target) * 100.0
-        res["zero_voltage"] = F.mse_loss(phi_0v, phi_ic_target) * 100.0 * _volt_anneal
-        res["low_voltage"] = F.mse_loss(phi_low, phi_ic_target) * 100.0 * _volt_anneal
-        return res
+        return {
+            "early_time": F.mse_loss(phi_early, phi_ic_target) * 100.0,
+            "zero_voltage": F.mse_loss(phi_0v, phi_ic_target) * 100.0 * _volt_anneal,
+            "low_voltage": F.mse_loss(phi_low, phi_ic_target) * 50.0 * _volt_anneal,
+        }
 
     def _compute_monotonicity_response_loss(self):
         """5. 单调性 & 电压响应约束 — 批量前向版本（4次→1次）。"""
@@ -2173,7 +2232,7 @@ class Trainer:
         res["voltage_response"] = torch.mean(F.relu(phiv2 - phiv1 + 0.02) ** 2) * 100.0
         return res
 
-    def _compute_eta_constraints_loss(self, stage1_factor: float):
+    def _compute_eta_constraints_loss(self, interface_mult: float):
         """6. 开口率相关约束 - 批量 aperture 前向版本。
 
         eta_ceiling + eta_monotonic 收集所有 triplet 后一次性批量计算，
@@ -2226,7 +2285,7 @@ class Trainer:
 
         return res
 
-    def _compute_phi_spatial_loss(self, stage1_factor: float):
+    def _compute_phi_spatial_loss(self, interface_mult: float):
         """6.5+6.6 φ 场空间分布 + 几何一致性约束（批量前向版本）。
 
         合并原 _compute_phi_spatial_loss + _compute_phi_geometry_loss：
@@ -2351,7 +2410,7 @@ class Trainer:
         if spatial_count == 0:
             spatial_loss = torch.tensor(0.0, device=self.device)
         else:
-            spatial_loss = spatial_loss * 500.0 * stage1_factor / spatial_count
+            spatial_loss = spatial_loss * 500.0 * interface_mult / spatial_count
 
         # geom_loss 已在下方计算，此处不返回
 
@@ -2476,7 +2535,7 @@ class Trainer:
                     geom_loss = geom_loss + torch.mean(torch.relu(phi_polar - 0.2) ** 2)
                 geom_count += n_regions
             if geom_count > 0:
-                keep_factor = 0.2 + 0.8 * stage1_factor
+                keep_factor = 0.2 + 0.8 * interface_mult
                 geom_loss = geom_loss * 200.0 * keep_factor / geom_count
             else:
                 geom_loss = torch.tensor(0.0, device=self.device)
@@ -2485,7 +2544,7 @@ class Trainer:
 
         return spatial_loss, geom_loss
 
-    def _compute_volume_conservation_loss(self, stage1_factor: float):
+    def _compute_volume_conservation_loss(self, interface_mult: float):
         """体积守恒约束 — 批量前向版本。
 
         将 N 个 (V_from, V_to, t_since) 场景的空间点与坐标拼接为一次大前向，
@@ -2556,7 +2615,7 @@ class Trainer:
         loss_vol = torch.mean(rel_errors**2)
 
         base_weight = float(training_cfg.get("volume_base_weight", 1000.0))  # 2000→1000
-        stage_weight = 0.2 + (1.0 - float(stage1_factor))
+        stage_weight = 0.2 + (1.0 - float(interface_mult))
 
         # S3 退火：S3 前期（油墨运动阶段）弱化体积约束，后期恢复
         # 避免油墨动态变形中体积守恒与电润湿驱动冲突
@@ -2693,34 +2752,17 @@ class Trainer:
         pts = torch.cat(pts_list, dim=0)
 
         try:
-            # 分阶段权重调度: 相对于S3物理训练窗口
-            s3_start = self.stage2_epochs
-            s3_end = self.epochs
-            s3_progress = max(0.0, (epoch - s3_start) / max(s3_end - s3_start, 1))
-            if s3_progress < 0.2:  # S3早期: 拓扑成型
-                ac_mult, ns_mult, contact_mult = 8.0, 0.2, 0.5
-                lp_mult = 0.1  # Laplace 压力弱化，避免曲率震荡
-            elif s3_progress < 0.6:  # S3中期: NS驱动
-                ac_mult, ns_mult, contact_mult = 1.0, 1.0, 1.0
-                lp_mult = 0.5
-            else:  # S3后期: 接触线精修
-                ramp = min(1.0, (s3_progress - 0.6) / 0.1)
-                ac_mult = 1.0 - 0.5 * ramp
-                ns_mult = 1.0 + 0.3 * ramp
-                contact_mult = 1.0 + 1.5 * ramp
-                lp_mult = 0.3 + 0.2 * ramp  # 0.3→0.5，降低LP权重防止NaN
-
             phys_weights = {
-                "continuity": float(weights.get("continuity", 0.0)) * ns_mult,
-                "vof": float(weights.get("vof", 0.0)) * ac_mult,
-                "momentum_u": float(weights.get("ns", 0.0)) * ns_mult,
-                "momentum_v": float(weights.get("ns", 0.0)) * ns_mult,
-                "momentum_w": float(weights.get("ns", 0.0)) * ns_mult,
-                "laplace_pressure": float(weights.get("laplace_pressure", 0.05)) * lp_mult,
-                "interface_energy": float(weights.get("interface_energy", 2.0)) * ac_mult,
-                "phase_field_wetting": float(weights.get("phase_field_wetting", 10.0)) * contact_mult,
-                "temporal_smoothness": float(weights.get("temporal_smoothness", 0.1)) * ns_mult,
-                "contact_line_dynamics": float(weights.get("contact_line_dynamics", 0.1)) * contact_mult,
+                "continuity": float(weights.get("continuity", 0.0)),
+                "vof": float(weights.get("vof", 0.0)),
+                "momentum_u": float(weights.get("ns", 0.0)),
+                "momentum_v": float(weights.get("ns", 0.0)),
+                "momentum_w": float(weights.get("ns", 0.0)),
+                "laplace_pressure": float(weights.get("laplace_pressure", 0.05)),
+                "interface_energy": float(weights.get("interface_energy", 2.0)),
+                "phase_field_wetting": float(weights.get("phase_field_wetting", 10.0)),
+                "temporal_smoothness": float(weights.get("temporal_smoothness", 0.1)),
+                "contact_line_dynamics": float(weights.get("contact_line_dynamics", 0.1)),
                 "volume_conservation": float(self.config.get("physics", {}).get("volume_conservation_weight", 0.0)),
                 "explicit_volume": float(weights.get("explicit_volume", 0.0)),
                 "sharpening": float(weights.get("sharpening", 0.0)),
@@ -2869,7 +2911,7 @@ class Trainer:
 
         特点：
         - 使用可微的 compute_aperture_ratio_differentiable
-        - **不退火**：η 匹配始终保留，是锚不是辅助项
+        - **退火**：S1=200 → S2:200→50 → S3:50→10（Fix-5）
         - 覆盖多电压多时刻，确保 η(V,t) 全局匹配
         """
         if not HAS_APERTURE:
@@ -2942,22 +2984,31 @@ class Trainer:
                 logger.warning(f"Teacher 模型初始化失败: {e}")
                 return torch.tensor(0.0, device=self.device)
 
-        torch.tensor(0.0, device=self.device)
-
-        # 选取典型工况（减少到 4 个，每 epoch 随机选 2-3 个）
+        # 选取典型工况（12 个，覆盖稳态/升压/降压/瞬态）
         test_cases = [
-            (0.0, 0.0, 0.040),  # V=0V 稳态：油膜平铺底部
-            (0.0, 15.0, 0.020),  # V=15V：中等开口
-            (0.0, 30.0, 0.020),  # V=30V：大开口
-            (20.0, 0.0, 0.020),  # 降压
+            # 稳态工况
+            (0.0, 0.0, 0.040),  # V=0V 稳态
+            (0.0, 10.0, 0.020),  # V=10V 小开口
+            (0.0, 15.0, 0.020),  # V=15V 中等开口
+            (0.0, 20.0, 0.020),  # V=20V 较大开口
+            (0.0, 25.0, 0.020),  # V=25V 接近饱和
+            (0.0, 30.0, 0.020),  # V=30V 大开口
+            # 降压工况
+            (15.0, 0.0, 0.020),  # 15V→0V
+            (20.0, 0.0, 0.020),  # 20V→0V
+            (30.0, 0.0, 0.020),  # 30V→0V
+            # 瞬态过程
+            (0.0, 30.0, 0.005),  # 5ms
+            (0.0, 30.0, 0.010),  # 10ms
+            (0.0, 30.0, 0.040),  # 40ms
         ]
 
-        # 每 epoch 随机选 2 个工况
+        # 每 epoch 随机选 4 个工况
         import random
 
-        selected_cases = random.sample(test_cases, min(2, len(test_cases)))
+        selected_cases = random.sample(test_cases, min(4, len(test_cases)))
 
-        n_pts_per_case = 25  # 每个工况采样 25 个空间点
+        n_pts_per_case = 50  # 每个工况采样 50 个空间点 → 总计 200 点/epoch
 
         all_points = []
         all_phi_targets = []
