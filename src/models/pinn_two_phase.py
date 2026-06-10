@@ -297,25 +297,31 @@ class TwoPhasePINN(nn.Module):
 
         # --- 硬约束编码 ---
         if getattr(self, "use_hard_constraints", False):
-            # 1. 顶面 BC: φ(z=Lz) = 0 (纯极性液体)
-            phi = phi_learned * (1.0 - z_norm)
-
-            # 2. 初始条件: φ(t=0) = φ_IC(z)
-            #    φ_IC: tanh 平滑台阶, 油墨(z<h_ink)→1, 极性液体(z>h_ink)→0
             z_phys = z_coord  # 物理单位 (m)
             h_ink = getattr(self, "h_ink", PHYSICS["h_ink"])
+            wall_height = getattr(self, "wall_height", PHYSICS["wall_height"])
+            wall_top_z_tol = getattr(self, "wall_top_z_tol", PHYSICS["wall_top_z_tol"])
             delta_ic = getattr(self, "hard_ic_width", PHYSICS["ic_width"])
+
+            # 1. 顶面 BC: φ(z=Lz) = 0 (ITO 玻璃，纯极性液体)
+            phi = phi_learned * (1.0 - z_norm)
+
+            # 2. 壁顶 BC: φ(z=wall_height) = 0 (SU-8 暴露面，极性液体接触)
+            #    在壁顶 ±z_tol 范围内线性衰减到 0
+            wall_top_mask = torch.clamp(
+                1.0 - (z_phys - wall_height + wall_top_z_tol).clamp(min=0) / wall_top_z_tol, 0.0, 1.0
+            )
+            phi = phi * wall_top_mask
+
+            # 3. 初始条件: φ(t=0) = φ_IC(z)
+            #    φ_IC: tanh 平滑台阶, 油墨(z<h_ink)→1, 极性液体(z>h_ink)→0
             phi_ic = 0.5 * (1.0 + torch.tanh((h_ink - z_phys) / delta_ic))
 
-            #    Blend: 混合 phi_ic（初始条件）和 phi（模型预测+顶面BC）
-            #      公式：phi = (1 - blend) * phi_ic + blend * phi
-            #      blend = 0 → phi = phi_ic（完全约束到初始条件）
-            #      blend = 1 → phi = phi（完全自由）
-            #      设计：
-            #        z=0 底面：blend ≡ 1（永远自由，不约束 xy 径向分布）
-            #        z>0：blend = t_norm（t=0→0 完全IC，t>0→逐渐自由）
-            z_mask = (z_norm > 1e-6).float()  # z=0→0, z>0→1
-            blend = 1.0 - z_mask * (1.0 - t_norm)  # z=0→1, z>0→t_norm
+            #    Blend: 混合 phi_ic（初始条件）和 phi（模型预测+顶面/壁顶BC）
+            #      z=0 底面：blend ≡ 1（永远自由，不约束 xy 径向分布）
+            #      z>0：blend = t_norm（t=0→0 完全IC，t>0→逐渐自由）
+            z_mask = (z_norm > 1e-6).float()
+            blend = 1.0 - z_mask * (1.0 - t_norm)
             phi = (1.0 - blend) * phi_ic + blend * phi
         else:
             phi = phi_learned
@@ -584,6 +590,29 @@ class PhysicsLoss:
 # ============================================================================
 # 数据生成器
 # ============================================================================
+
+
+def _sample_bc_z(rand: float, h_ink: float, Lz: float) -> float:
+    """壁面 BC 的 z 坐标分层采样。
+
+    物理：侧壁必须覆盖全壁高 [0, Lz]，不能只采油墨层附近。
+    但油墨层附近需要更高采样密度。
+
+    分层策略（rand ∈ [0,1) 均匀随机数）：
+      - rand < 0.50: 油墨层及界面区 [0, h_ink*3]（最密）
+      - rand < 0.80: 壁面上部 [h_ink*3, Lz]（稀疏但覆盖）
+      - else:        过渡区 [h_ink*2, h_ink*4]（界面过渡加密）
+    """
+    if rand < 0.50:
+        # 油墨层及界面区：占 50% 采样
+        return rand / 0.50 * h_ink * 3
+    if rand < 0.80:
+        # 壁面上部：占 30% 采样
+        z_lo = h_ink * 3
+        return z_lo + (rand - 0.50) / 0.30 * (Lz - z_lo)
+    # 过渡区：占 20% 采样
+    z_lo = h_ink * 2
+    return z_lo + (rand - 0.80) / 0.20 * h_ink * 2
 
 
 class DataGenerator:
@@ -1270,16 +1299,99 @@ class DataGenerator:
             else:  # y=Ly
                 x, y = np.random.rand() * self.Lx, self.Ly
 
-            z = np.random.rand() * self.h_ink * 2
+            # z 采样：全壁高 [0, Lz]，但在油墨层附近加密
+            # 50% 在油墨层及界面区，30% 在壁面上部，20% 在过渡区
+            z = _sample_bc_z(np.random.rand(), self.h_ink, self.Lz)
 
             # 计算目标 phi
             phi = self.target_phi_3d(x, y, z, t, V_to, V_prev=V_from)
+
+            # 壁顶区域强制 φ=0（极性液体接触，油墨突破=失效）
+            if z > self.wall_height - self.wall_top_z_tol:
+                phi = 0.0
+
+            # 夹角区域强制 φ=1（油墨堆积）
+            d_wall = min(x, self.Lx - x, y, self.Ly - y)
+            if d_wall < self.wall_top_half_width and z < self.wall_height:
+                phi = 1.0
 
             # 三元组格式: (x, y, z, V_from, V_to, t_since)
             bc_points.append([x, y, z, V_from, V_to, t])
             bc_values.append([0.0, 0.0, 0.0, 0.0, phi])
 
         logger.info(f"  壁面边界条件点: {len(bc_points)}")
+
+        # ============================================================
+        # 3b. 壁顶接触线过采样（z ≈ wall_height, 靠近壁面）
+        # ============================================================
+        # 壁顶是极性液体接触面，φ=0 必须严格满足
+        # 油墨突破壁顶接触线 = 器件失效
+        n_wall_top = n_bc // 4
+        wt_added = 0
+        for _ in range(n_wall_top):
+            V_from = np.random.uniform(0, 30.0)
+            V_to = np.random.uniform(0, 30.0)
+            t = sample_continuous_times(1)[0]
+
+            # 随机选择一个壁面方向
+            boundary_type = np.random.randint(0, 4)
+            if boundary_type == 0:  # x=0 壁
+                x = 0
+                y = np.random.uniform(self.wall_height, self.Ly - self.wall_height)
+            elif boundary_type == 1:  # x=Lx 壁
+                x = self.Lx
+                y = np.random.uniform(self.wall_height, self.Ly - self.wall_height)
+            elif boundary_type == 2:  # y=0 壁
+                x = np.random.uniform(self.wall_height, self.Lx - self.wall_height)
+                y = 0
+            else:  # y=Ly 壁
+                x = np.random.uniform(self.wall_height, self.Lx - self.wall_height)
+                y = self.Ly
+
+            # z 在壁顶附近 ±z_tol 范围
+            z = self.wall_height + np.random.uniform(-self.wall_top_z_tol, self.wall_top_z_tol)
+
+            # 壁顶始终 φ=0
+            bc_points.append([x, y, z, V_from, V_to, t])
+            bc_values.append([0.0, 0.0, 0.0, 0.0, 0.0])
+            wt_added += 1
+
+        logger.info(f"  壁顶接触线过采样: +{wt_added} 点 (z≈{self.wall_height*1e6:.1f}μm, φ=0)")
+
+        # ============================================================
+        # 3c. 侧壁夹角区域过采样（z=0 四周角落）
+        # ============================================================
+        # 夹角区域始终 φ=1（油墨堆积区）
+        n_corner = n_bc // 4
+        corner_added = 0
+        for _ in range(n_corner):
+            V_from = np.random.uniform(0, 30.0)
+            V_to = np.random.uniform(0, 30.0)
+            t = sample_continuous_times(1)[0]
+
+            # 随机选择一个角落
+            corner = np.random.randint(0, 4)
+            if corner == 0:  # (0, 0)
+                x = np.random.uniform(0, self.wall_top_half_width)
+                y = np.random.uniform(0, self.wall_top_half_width)
+            elif corner == 1:  # (Lx, 0)
+                x = np.random.uniform(self.Lx - self.wall_top_half_width, self.Lx)
+                y = np.random.uniform(0, self.wall_top_half_width)
+            elif corner == 2:  # (0, Ly)
+                x = np.random.uniform(0, self.wall_top_half_width)
+                y = np.random.uniform(self.Ly - self.wall_top_half_width, self.Ly)
+            else:  # (Lx, Ly)
+                x = np.random.uniform(self.Lx - self.wall_top_half_width, self.Lx)
+                y = np.random.uniform(self.Ly - self.wall_top_half_width, self.Ly)
+
+            z = 0.0  # 底面
+
+            # 夹角区域始终 φ=1
+            bc_points.append([x, y, z, V_from, V_to, t])
+            bc_values.append([0.0, 0.0, 0.0, 0.0, 1.0])
+            corner_added += 1
+
+        logger.info(f"  侧壁夹角过采样: +{corner_added} 点 (z=0, 角落, φ=1)")
 
         # ============================================================
         # 4. 域内配点
