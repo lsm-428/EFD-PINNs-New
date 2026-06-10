@@ -741,7 +741,6 @@ class PhysicsConstraints:
             logger.warning(f"Laplace 压力残差计算失败: {e}")
 
         # 6. 时间连续性正则化（需要 model 做三时间点前向）
-        # 注：原 #7 PFW 已删除，原 #8 CLD 已删除
         try:
             temporal_residual = self._compute_temporal_smoothness(x_phys, predictions, model=model)
             residuals["temporal_smoothness"] = temporal_residual

@@ -169,7 +169,7 @@ class PhysicsConfig:
 
     # 界面张力
     sigma: float = 0.02505
-    gamma: float = 0.048
+    gamma: float = 0.015
 
     # 电学参数
     epsilon_0: float = 8.854e-12

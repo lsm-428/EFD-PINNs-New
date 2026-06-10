@@ -667,6 +667,9 @@ class DataGenerator:
                 logger.warning(f"EnhancedApertureModel 初始化失败: {e}")
 
         self.theta0 = PHYSICS["theta0"]
+        self.wall_height = PHYSICS["wall_height"]
+        self.wall_top_z_tol = PHYSICS["wall_top_z_tol"]
+        self.wall_top_half_width = PHYSICS["wall_top_half_width"]
         self.use_stage1_eta = self.config.get("stage1_eta_from_model", False)
 
         # 采样策略：uniform（默认）或 physics_based

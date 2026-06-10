@@ -143,10 +143,14 @@ src/
 > `compute_sidewall_contact_angle_residual`（与统一润湿BC冲突）、死权重和死代码。
 > 统一梯度计算消除重复 autograd 调用，训练速度提升 3-4 倍。
 >
-> **BC 体系**：
-> - 壁侧面（Teflon 涂层）：110° 亲油，无滑移，由 `_compute_unified_wetting_bc` 处理
-> - 壁顶面（SU-8 暴露）：71° 亲水，可能滑移，由 `_compute_contact_line_dynamics_residual` 处理
-> - 底面（Z=0，Teflon）：Young-Lippmann 电压调制，由 `_compute_unified_wetting_bc` + `_compute_contact_angle_loss` 处理
+> **BC 体系**（2026-06-11 重构后）：
+> - 顶面（z=Lz，ITO 玻璃）：φ=0 硬约束，φ=1=器件失效
+> - 壁顶（z≈wall_height，SU-8）：φ=0 硬约束 + bc 过采样，突破=失效
+> - 侧壁（x=0/Lx, y=0/Ly，Teflon）：无滑移 + φ 匹配，z 采样到 [0, Lz]
+> - 夹角区域（z=0 角落）：φ=1 bc 过采样（油墨堆积）
+> - 底面（z=0，Teflon）：`_compute_contact_angle_loss`，Young-Lippmann 调制
+> - ~~`_compute_unified_wetting_bc`~~ 已删除（与 bc 重叠）
+> - ~~`_compute_contact_line_dynamics_residual`~~ 已删除（与 contact_angle 重叠）
 
 | 行号 | 函数/方法 | 用途 | 活跃？ |
 |------|-----------|------|--------|
@@ -156,21 +160,19 @@ src/
 | 151 | `compute_navier_stokes_residual()` | NS方程（连续性+动量+EWF+CSF）| ✅ |
 | 345 | `_compute_laplacian()` | 标量场 Laplacian | ✅ |
 | 384 | `compute_volume_conservation_residual()` | 体积守恒 | ✅ |
+| 528 | `compute_interface_energy_residual()` | 界面能 σ\|∇φ\| | ✅ |
+| 546 | `safe_compute_laplacian_spatial()` | 安全空间Laplacian | ✅ |
+| 567 | `safe_compute_gradient()` | 安全梯度计算 | ✅ |
 | 592 | `compute_laplace_pressure_residual()` | Laplace压力一致 | ✅ |
-| 671 | `compute_interface_energy_residual()` | 界面能 σ\|∇φ\| | ✅ |
-| 705 | `_compute_unified_wetting_bc()` | 统一相场润湿BC | ✅ |
-| 823 | `_compute_contact_line_dynamics_residual()` | 接触线动力学 | ✅ |
-| 940 | `safe_compute_laplacian_spatial()` | 安全空间Laplacian | ✅ |
-| 961 | `safe_compute_gradient()` | 安全梯度计算 | ✅ |
-| 988 | `_compute_all_gradients()` | **统一梯度计算**（一次性 autograd，分发给所有约束）| ✅ |
-| 1064 | **`compute_core_residuals()`** | **统一入口，调用所有活跃约束** | ✅ |
-| 1165 | `_compute_temporal_smoothness()` | 时间连续性正则化 | ✅ |
-| 1232 | `_compute_vof_residual()` | Allen-Cahn相场方程 | ✅ |
-| 1357 | `safe_compute_laplacian()` | 安全Laplacian | ✅ |
-| 1377 | `safe_compute_hessian()` | 安全Hessian | ✅ |
-| 1400 | `_empty_residual()` | 空残差（降级用） | ✅ |
+| 648 | `_compute_all_gradients()` | **统一梯度计算**（一次性 autograd，分发给所有约束）| ✅ |
+| 689 | **`compute_core_residuals()`** | **统一入口，调用所有活跃约束** | ✅ |
+| 748 | `_compute_temporal_smoothness()` | 时间连续性正则化 | ✅ |
+| 789 | `_compute_vof_residual()` | Allen-Cahn相场方程 | ✅ |
+| 855 | `safe_compute_laplacian()` | 安全Laplacian | ✅ |
+| 875 | `safe_compute_hessian()` | 安全Hessian | ✅ |
+| 898 | `_empty_residual()` | 空残差（降级用） | ✅ |
 
-**`compute_core_residuals()` 调用链**（L1064）：
+**`compute_core_residuals()` 调用链**（L689）：
 1. `_compute_all_gradients()` — 统一计算所有梯度（一次性 autograd）
 2. `compute_navier_stokes_residual()` — NS 方程残差
 3. `_compute_vof_residual()` — VOF 相场方程
