@@ -521,6 +521,40 @@ class PhysicsConstraints:
             device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
             return {"laplace_pressure": torch.zeros(1, device=device, requires_grad=True)}
 
+    def compute_interface_energy_residual(self, x_phys, predictions, grads=None):
+        """界面能 — 纯 sigma*|grad(phi)|, 塑造圆润液滴
+
+        注意：电润湿力已作为体积力加入 NS 方程（f_ew_x, f_ew_y）。
+        AC 方程中不再有独立的 EW 源项。
+        此项只做表面张力最小化(最小界面面积 = 圆润形状)。
+        """
+        try:
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            zero = torch.zeros(x_phys.shape[0], device=device, requires_grad=True)
+            res = {"interface_energy": zero}
+            if not (isinstance(x_phys, torch.Tensor) and predictions.dim() >= 2):
+                return res
+            phi = predictions[:, 4]
+            # 从统一梯度计算结果读取 phi 梯度
+            if grads is not None:
+                grad_mag = torch.sqrt(grads["phi_x"] ** 2 + grads["phi_y"] ** 2 + grads["phi_z"] ** 2)
+            else:
+                try:
+                    g = torch.autograd.grad(phi.sum(), x_phys, create_graph=True, retain_graph=True)[0]
+                except Exception:
+                    return res
+                if g is None:
+                    return res
+                grad_mag = torch.norm(g[:, :3], dim=1)
+
+            sigma = self.materials_params.get("surface_tension_polar_ink", 0.02505)
+            res["interface_energy"] = sigma * grad_mag
+            return res
+        except Exception as e:
+            logger.warning(f"界面能失败: {e}")
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            return {"interface_energy": torch.zeros(x_phys.shape[0], device=device, requires_grad=True)}
+
     def safe_compute_laplacian_spatial(self, scalar_field: torch.Tensor, coords: torch.Tensor, spatial_dims: int = 3):
         try:
             grad = self.safe_compute_gradient(scalar_field, coords)
@@ -692,6 +726,13 @@ class PhysicsConstraints:
         except Exception as e:
             logger.warning(f"体积守恒残差计算失败: {e}")
 
+        # 4. 界面能
+        try:
+            ie_residuals = self.compute_interface_energy_residual(x_phys, predictions, grads=grads)
+            residuals.update(ie_residuals)
+        except Exception as e:
+            logger.warning(f"界面能约束计算失败: {e}")
+
         # 5. Laplace 压力一致约束
         try:
             lp_residuals = self.compute_laplace_pressure_residual(x_phys, predictions, grads=grads)
@@ -700,6 +741,7 @@ class PhysicsConstraints:
             logger.warning(f"Laplace 压力残差计算失败: {e}")
 
         # 6. 时间连续性正则化（需要 model 做三时间点前向）
+        # 注：原 #7 PFW 已删除，原 #8 CLD 已删除
         try:
             temporal_residual = self._compute_temporal_smoothness(x_phys, predictions, model=model)
             residuals["temporal_smoothness"] = temporal_residual
@@ -707,9 +749,7 @@ class PhysicsConstraints:
             logger.warning(f"时间连续性残差计算失败: {e}")
             residuals["temporal_smoothness"] = torch.zeros(batch_size, device=device)
 
-        # 8. 接触线动力学约束（已删除，由 contact_angle 损失替代）
-
-        # 13. 压力钉扎
+        # 7. 压力钉扎
         try:
             p = predictions[:, 3] if predictions.shape[1] >= 4 else None
             if p is not None:
