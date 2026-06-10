@@ -514,7 +514,6 @@ class PhysicsLoss:
             "sharpening": 1.0,
             "phase_field_wetting": 10.0,
             "temporal_smoothness": 0.1,
-            "contact_line_dynamics": 0.2,
             "pressure_pin": 0.01,
         }
         weights = weights or default_weights
@@ -1581,7 +1580,6 @@ class Trainer:
             "pinn_laplace_pressure": [],
             "pinn_interface_energy": [],
             "pinn_phase_field_wetting": [],
-            "pinn_contact_line_dynamics": [],
             "contact_angle": [],
             "volume": [],
         }
@@ -1737,7 +1735,6 @@ class Trainer:
                 ("pinn_laplace_pressure", "LP", 0.4, 0.5, "C8", ":"),
                 ("pinn_interface_energy", "IE", 0.3, 0.5, "C10", ":"),
                 ("pinn_phase_field_wetting", "PFW", 0.3, 0.5, "C13", "-"),
-                ("pinn_contact_line_dynamics", "CLD", 0.3, 0.4, "C14", "-."),
                 ("pinn_temporal_smoothness", "TS", 0.1, 0.3, "C15", ":"),
             ]
             for key, label, alpha, lw, color, ls in curve_specs:
@@ -1803,7 +1800,6 @@ class Trainer:
                 "interface_energy": 0.0,
                 "phase_field_wetting": 0.0,
                 "temporal_smoothness": 0.0,
-                "contact_line_dynamics": 0.0,
                 "explicit_volume": 0.0,
                 "sharpening": 0.0,
             }
@@ -1824,7 +1820,6 @@ class Trainer:
                 "interface_energy": 0.0,
                 "phase_field_wetting": 0.0,
                 "temporal_smoothness": 0.0,
-                "contact_line_dynamics": 0.0,
                 "explicit_volume": physics_cfg.get("explicit_volume_weight", 0.0) * smooth_factor * 0.1,
                 "sharpening": physics_cfg.get("sharpening_weight", 0.0) * smooth_factor * 0.1,
             }
@@ -1840,7 +1835,6 @@ class Trainer:
             "interface_energy": physics_cfg.get("interface_energy_weight", 0.05) * smooth_factor,
             "phase_field_wetting": physics_cfg.get("phase_field_wetting_weight", 10.0) * smooth_factor,
             "temporal_smoothness": physics_cfg.get("temporal_smoothness_weight", 0.1) * smooth_factor,
-            "contact_line_dynamics": physics_cfg.get("contact_line_dynamics_weight", 0.1) * smooth_factor,
             "explicit_volume": physics_cfg.get("explicit_volume_weight", 0.0) * smooth_factor,
             "sharpening": physics_cfg.get("sharpening_weight", 0.0) * smooth_factor,
         }
@@ -2762,7 +2756,6 @@ class Trainer:
                 "interface_energy": float(weights.get("interface_energy", 2.0)),
                 "phase_field_wetting": float(weights.get("phase_field_wetting", 10.0)),
                 "temporal_smoothness": float(weights.get("temporal_smoothness", 0.1)),
-                "contact_line_dynamics": float(weights.get("contact_line_dynamics", 0.1)),
                 "volume_conservation": float(self.config.get("physics", {}).get("volume_conservation_weight", 0.0)),
                 "explicit_volume": float(weights.get("explicit_volume", 0.0)),
                 "sharpening": float(weights.get("sharpening", 0.0)),
@@ -2784,7 +2777,6 @@ class Trainer:
                     "laplace_pressure",
                     "interface_energy",
                     "phase_field_wetting",
-                    "contact_line_dynamics",
                 ]:
                     if k in losses and isinstance(losses[k], torch.Tensor) and torch.isfinite(losses[k]):
                         res[f"pinn_{k}"] = losses[k]
@@ -3272,7 +3264,6 @@ class Trainer:
                     ("Loss/laplace_pressure", "pinn_laplace_pressure"),
                     ("Loss/interface_energy", "pinn_interface_energy"),
                     ("Loss/phase_field_wetting", "pinn_phase_field_wetting"),
-                    ("Loss/contact_line_dynamics", "pinn_contact_line_dynamics"),
                     ("Loss/temporal_smoothness", "pinn_temporal_smoothness"),
                 ]:
                     w.add_scalar(tb_name, get_val(losses, loss_key), e)
@@ -3311,7 +3302,6 @@ class Trainer:
             self.history["pinn_laplace_pressure"].append(get_val(losses, "pinn_laplace_pressure"))
             self.history["pinn_interface_energy"].append(get_val(losses, "pinn_interface_energy"))
             self.history["pinn_phase_field_wetting"].append(get_val(losses, "pinn_phase_field_wetting"))
-            self.history["pinn_contact_line_dynamics"].append(get_val(losses, "pinn_contact_line_dynamics"))
             self.history["contact_angle"].append(get_val(losses, "contact_angle"))
             self.history["volume"].append(get_val(losses, "volume_conservation"))
 
@@ -3393,10 +3383,6 @@ class Trainer:
                 pfw_val = losses.get("pinn_phase_field_wetting")
                 if pfw_val is not None:
                     physics_str += f" | PFW: {pfw_val.item():.2e}"
-                cld_val = losses.get("pinn_contact_line_dynamics")
-                if cld_val is not None:
-                    physics_str += f" | CLD: {cld_val.item():.2e}"
-
                 # 显示当前阶段
                 stage_str = f"S{1 if epoch < self.stage1_epochs else (2 if epoch < self.stage2_epochs else 3)}"
 

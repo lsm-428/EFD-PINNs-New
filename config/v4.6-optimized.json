@@ -16,7 +16,9 @@
             64,
             32
         ],
-        "use_fourier": true
+        "use_fourier": true,
+        "fourier_mapping_size": 32,
+        "fourier_sigma": 5.0
     },
     "stage1_eta_tutor": true,
     "training": {
@@ -65,7 +67,6 @@
         "interface_energy_weight": 2.0,
         "phase_field_wetting_weight": 10.0,
         "temporal_smoothness_weight": 0.1,
-        "contact_line_dynamics_weight": 0.2,
         "ac_interface_width": 5e-07,
         "ac_mobility": 1e-10
     },

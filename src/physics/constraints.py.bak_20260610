@@ -696,6 +696,124 @@ class PhysicsConstraints:
             device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
             return {"phase_field_wetting": torch.tensor(0.0, device=device)}
 
+    def _compute_contact_line_dynamics_residual(self, x_phys, predictions, grads=None):
+        """接触线动力学约束 — Hoffman-Voinov-Tanner 模型适配（双接触线）
+
+        物理: 接触线滑移速度与接触角偏差的关系
+          v_cl = k_cl × (cos(θ_eq) - cos(θ_local))
+
+        在相场中:
+          v_cl ≈ φ_t / |∇φ|  (在 φ≈0.5 处)
+          cos(θ_local) = φ_z / |∇φ|
+
+        双接触线分支:
+          - 第二接触线 (Z=0, Teflon): cos(θ_eq) = cos(120°) + C_yl·V_eff²/(2σ)（EW 调制）
+          - 第一接触线 (Z≈wall_height, SU-8): cos(θ_eq) = cos(125°)（固定前进角，不受 EW 影响）
+
+        壁顶第一接触线的静态 BC（ε·n·∇φ + cos(θ)·6φ(1-φ) = 0）已由
+        _compute_unified_wetting_bc 负责，此处仅处理 HVT 滑移动力学。
+        """
+        try:
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            zero = torch.zeros(1, device=device, requires_grad=True)
+            res = {"contact_line_dynamics": zero}
+            if not (isinstance(x_phys, torch.Tensor) and predictions.dim() >= 2):
+                return res
+            if x_phys.shape[1] < 6:
+                return res
+            phi = predictions[:, 4]
+            z = x_phys[:, 2]
+            V_to = x_phys[:, 4]
+
+            # 界面掩码: φ≈0.5（相场过渡区）
+            is_interface = (phi > 0.2) & (phi < 0.8)
+
+            wall_height = self.materials_params.get("wall_height", 3.5e-6)
+            wall_top_half_width = self.materials_params.get("wall_top_half_width", 5e-6)
+            wall_top_z_tol = self.materials_params.get("wall_top_z_tol", 1e-6)
+            side_margin = 2 * wall_top_half_width  # 壁顶全宽 ≈ 10μm
+            X = self.materials_params.get("Lx", 174e-6)
+            Ly = self.materials_params.get("Ly", 174e-6)
+            x_coord = x_phys[:, 0]
+            y_coord = x_phys[:, 1]
+
+            # ===== 第一接触线: SU-8 围堰顶面 (z ≈ wall_height, 靠近壁面) =====
+            near_wall_xy = (
+                (x_coord < side_margin)
+                | (x_coord > X - side_margin)
+                | (y_coord < side_margin)
+                | (y_coord > Ly - side_margin)
+            )
+            is_top_wall = (z > wall_height - wall_top_z_tol) & (z < wall_height + wall_top_z_tol) & near_wall_xy
+            mask_top = is_top_wall & is_interface
+
+            # ===== 第二接触线: 底面疏水层 (z ≈ 0, 远离侧壁角落) =====
+            is_bottom = (z < 1e-6) & ~near_wall_xy
+            mask_bottom = is_bottom & is_interface
+
+            # 合并掩码
+            mask = mask_top | mask_bottom
+            if mask.sum() < 3:
+                return res
+
+            # 从统一梯度计算结果读取 phi 梯度
+            if grads is not None:
+                g_x = grads["phi_x"]
+                g_y = grads["phi_y"]
+                g_z = grads["phi_z"]
+                phi_t = grads["phi_t"]
+            else:
+                try:
+                    g = torch.autograd.grad(phi.sum(), x_phys, create_graph=True, retain_graph=True)[0]
+                except Exception:
+                    return res
+                if g is None:
+                    return res
+                g_x, g_y, g_z = g[:, 0], g[:, 1], g[:, 2]
+                phi_t = g[:, 5] if g.shape[1] >= 6 else torch.zeros_like(phi)
+
+            grad_mag = torch.sqrt(g_x**2 + g_y**2 + g_z**2) + 1e-10
+
+            v_cl = phi_t[mask] / grad_mag[mask]
+            cos_local = g_z[mask] / grad_mag[mask]
+
+            # ===== cos(θ_eq) 按接触面材质分支 =====
+            # 第二接触线 (Z=0, Teflon): Young-Lippmann EW 调制
+            sigma_po = self.materials_params.get(
+                "surface_tension_polar_ink", self.materials_params.get("sigma", 0.02505)
+            )
+            theta0_teflon = self.materials_params.get("contact_angle_theta0", 120.0)
+            C_yl = self._compute_capacitance()
+            V_T = self.materials_params.get("V_T_base", 3.0)
+            V_eff = torch.clamp(V_to[mask] - V_T, min=0.0)
+            cos_theta_tew = np.cos(np.radians(theta0_teflon)) + C_yl * V_eff**2 / (2.0 * sigma_po)
+
+            # 第一接触线 (SU-8 壁顶): 固定前进角，不受 EW 影响
+            theta_adv_su8 = self.materials_params.get("theta_adv_su8", 125.0)
+            cos_theta_su8 = torch.tensor(np.cos(np.radians(theta_adv_su8)), device=device)
+
+            # 从合并 mask 中提取壁顶子集
+            mask_top_combined = mask_top[mask]
+
+            # 分支 cos_eq
+            cos_eq = torch.where(
+                mask_top_combined,
+                cos_theta_su8,  # 第一接触线：固定，不受电压影响
+                cos_theta_tew,  # 第二接触线：Young-Lippmann EW 调制
+            )
+            cos_eq = torch.clamp(cos_eq, -1.0, 1.0)
+
+            # HVT: v_cl ∝ cos_eq - cos_local
+            k_cl = self.materials_params.get("contact_line_friction", 1e-3)
+            residual = v_cl - k_cl * (cos_eq - cos_local)
+
+            res["contact_line_dynamics"] = torch.mean(residual**2)
+            return res
+        except Exception as e:
+            logger.warning(f"接触线动力学残差失败: {e}")
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            return {"contact_line_dynamics": torch.zeros(1, device=device, requires_grad=True)}
+
     def safe_compute_laplacian_spatial(self, scalar_field: torch.Tensor, coords: torch.Tensor, spatial_dims: int = 3):
         try:
             grad = self.safe_compute_gradient(scalar_field, coords)
@@ -896,7 +1014,12 @@ class PhysicsConstraints:
         except Exception as e:
             logger.warning(f"统一润湿 BC 计算失败: {e}")
 
-        # 8. 接触线动力学约束（已删除，由 contact_angle 损失替代）
+        # 8. 接触线动力学约束
+        try:
+            cld_residuals = self._compute_contact_line_dynamics_residual(x_phys, predictions, grads=grads)
+            residuals.update(cld_residuals)
+        except Exception as e:
+            logger.warning(f"接触线动力学残差计算失败: {e}")
 
         # 13. 压力钉扎
         try:

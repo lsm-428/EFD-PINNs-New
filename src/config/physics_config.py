@@ -95,8 +95,8 @@ PHYSICS: dict[str, Any] = {
     "contact_angle_ink": 120.0,  # 别名
     # ========== 动力学参数 ==========
     "tau": 0.0119,  # 电润湿响应时间常数 (s) = 11.9ms（校正后，从 RT 数据一阶拟合）
-    "tau_onset": 0.0075,  # 低电压区 τ (s)
-    "tau_saturation": 0.003,  # 高电压区 τ (s)
+    "tau_onset": 0.015,  # 低电压区 τ (s) — 与 device_calibrated_physics.json 同步
+    "tau_saturation": 0.008,  # 高电压区 τ (s) — 与 device_calibrated_physics.json 同步
     "tau_recovery_factor": 0.85,  # 恢复因子（校正后）
     "tau_recovery": 0.010115,  # 恢复时间常数 = tau × factor = 11.9ms × 0.85 = 10.115ms
     "zeta": 1.0,  # 阻尼比（一阶系统，校正后确认）
@@ -121,6 +121,12 @@ PHYSICS: dict[str, Any] = {
     "aperture_k": 3.0,  # 映射陡度（提高以补偿 Δθ 缩小）
     "aperture_theta_scale": 19.0,  # 角度缩放因子（降低使 tanh 更早饱和）
     "aperture_alpha": 0.03,  # 电容反馈强度（稍增）
+    # ========== target3D 非平凡结构参数（P3 新增，v2: 参数调大使训练可感知）==========
+    "meniscus_kappa": 0.8,  # 接触线处油墨堆高曲率 (无量纲，0.5-1.5)，原 0.3 偏小
+    "meniscus_delta_h": 1.5e-6,  # 弯月面额外高度 (m)，单角墨滴模式，原 0.5μm 偏小
+    "meniscus_lambda": 5e-6,  # 弯月面衰减长度 (m)，原 3μm 偏小
+    "wall_climb_max": 1.5e-6,  # 壁面爬升最大高度 (m)，原 0.3μm 偏小
+    "wall_climb_decay": 3e-6,  # 壁面爬升衰减长度 (m)，原 2μm 偏小
     # ========== 数据生成与采样参数 (2026-06-06 新增) ==========
     "ic_width": 1e-6,  # 初始条件界面宽度 (m) = 1μm
     "sample_spread_small": 10e-6,  # 小范围采样扩展 (m) = 10μm

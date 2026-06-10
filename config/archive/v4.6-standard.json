@@ -93,8 +93,6 @@
       "optical_properties": 0.15,
       "energy_efficiency": 0.15,
       "volume_consistency": 0.05,
-      "ink_potential_min": 0.0,
-      "ink_energy_balance": 0.05,
       "data_fit": 1.0
     }
   },
