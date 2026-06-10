@@ -65,7 +65,6 @@
         "explicit_volume_weight": 100.0,
         "laplace_pressure_weight": 0.05,
         "interface_energy_weight": 2.0,
-        "phase_field_wetting_weight": 10.0,
         "temporal_smoothness_weight": 0.1,
         "ac_interface_width": 5e-07,
         "ac_mobility": 1e-10

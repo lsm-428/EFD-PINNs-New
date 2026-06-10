@@ -5,6 +5,7 @@ EWPINN 物理约束模块
 
 import logging
 
+import numpy as np
 import torch
 from torch import nn
 
@@ -123,6 +124,9 @@ class PhysicsConstraints:
         if materials_params is not None:
             default_params.update(materials_params)
         self.materials_params = default_params
+
+        # 预定义的边界条件权重
+        self.boundary_weights = {"dirichlet": 100.0, "neumann": 10.0, "interface": 50.0}
 
         # 全局步数计数器，用于控制日志输出频率
         self.global_step = 0
@@ -521,6 +525,177 @@ class PhysicsConstraints:
             device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
             return {"laplace_pressure": torch.zeros(1, device=device, requires_grad=True)}
 
+    def compute_interface_energy_residual(self, x_phys, predictions, grads=None):
+        """界面能 — 纯 sigma*|grad(phi)|, 塑造圆润液滴
+
+        注意：电润湿力已作为体积力加入 NS 方程（f_ew_x, f_ew_y）。
+        AC 方程中不再有独立的 EW 源项。
+        此项只做表面张力最小化(最小界面面积 = 圆润形状)。
+        """
+        try:
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            zero = torch.zeros(x_phys.shape[0], device=device, requires_grad=True)
+            res = {"interface_energy": zero}
+            if not (isinstance(x_phys, torch.Tensor) and predictions.dim() >= 2):
+                return res
+            phi = predictions[:, 4]
+            # 从统一梯度计算结果读取 phi 梯度
+            if grads is not None:
+                grad_mag = torch.sqrt(grads["phi_x"] ** 2 + grads["phi_y"] ** 2 + grads["phi_z"] ** 2)
+            else:
+                try:
+                    g = torch.autograd.grad(phi.sum(), x_phys, create_graph=True, retain_graph=True)[0]
+                except Exception:
+                    return res
+                if g is None:
+                    return res
+                grad_mag = torch.norm(g[:, :3], dim=1)
+
+            sigma = self.materials_params.get("surface_tension_polar_ink", 0.02505)
+            res["interface_energy"] = sigma * grad_mag
+            return res
+        except Exception as e:
+            logger.warning(f"界面能失败: {e}")
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            return {"interface_energy": torch.zeros(x_phys.shape[0], device=device, requires_grad=True)}
+
+    def _compute_unified_wetting_bc(self, x_phys, predictions, grads=None):
+        """
+        统一相场润湿边界条件 — 基于能量泛函 F[φ] 的自然 BC（侧壁 + 壁顶）
+
+        Bulk: F[φ] = ∫[σ/ε·f(φ) + σ·ε/2·|∇φ|²]dV + ∫f_w(φ)dS
+        Wall: f_w(φ) = +σ·cos(θ_eq)·φ²(3-2φ)
+
+        变分得到自然 BC: ε·n·∇φ + cos(θ_eq)·6φ(1-φ) = 0
+        其中 n 为流体域外法向，f = 6φ(1-φ)
+
+        区域划分（互斥，避免角落重复）：
+          侧壁区：靠近壁面 + z 在壁顶以下 → θ = 110° (Teflon，亲油，无滑移)
+          壁顶接触线区：z ≈ wall_height ± z_tol + 靠近壁面 → θ = 125° (SU-8 前进角)
+          底面区 (z=0)：由 _compute_contact_angle_loss 负责，此处不处理
+
+        利用传入的 grads（由 compute_core_residuals 统一计算），避免重复 autograd。
+        界面加权: exp(-100*(φ-0.5)²) — 体相连续消失。
+        归一化: sum(w·R²)/sum(w)，不对全 batch 平均。
+        """
+        try:
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
+
+            if not isinstance(x_phys, torch.Tensor) or not isinstance(predictions, torch.Tensor):
+                return {"phase_field_wetting": torch.tensor(0.0, device=device)}
+            if x_phys.dim() != 2 or x_phys.size(1) < 3:
+                return {"phase_field_wetting": torch.tensor(0.0, device=device)}
+            if predictions.dim() < 2 or predictions.size(1) < 5:
+                return {"phase_field_wetting": torch.tensor(0.0, device=device)}
+
+            # 物理参数（侧壁 + 壁顶）
+            eps = self.materials_params.get("ac_interface_width", 5e-07)
+            theta_wall_teflon = self.materials_params.get("theta_wall_teflon", 110.0)
+
+            # 提取坐标和 φ
+            x_coord = x_phys[:, 0]
+            y_coord = x_phys[:, 1]
+            z_coord = x_phys[:, 2]
+            phi = predictions[:, 4]
+
+            # 界面加权: w = exp(-100*(φ-0.5)²)
+            interface_w = torch.exp(-100.0 * (phi - 0.5) ** 2)
+
+            X = self.materials_params.get("Lx", 174e-6)
+            Ly = self.materials_params.get("Ly", 174e-6)
+
+            # 从统一梯度计算结果读取（避免重复 autograd）
+            if grads is not None:
+                phi_x = grads["phi_x"]
+                phi_y = grads["phi_y"]
+                phi_z = grads["phi_z"]
+            else:
+                # 回退：独立计算（兼容直接调用场景）
+                x_grad = x_phys.clone().detach().requires_grad_(True) if not x_phys.requires_grad else x_phys
+                g_phi = torch.autograd.grad(phi.sum(), x_grad, create_graph=True, retain_graph=True, allow_unused=True)[
+                    0
+                ]
+                if g_phi is None:
+                    return {"phase_field_wetting": torch.tensor(0.0, device=device)}
+                phi_x = g_phi[:, 0]
+                phi_y = g_phi[:, 1]
+                phi_z = g_phi[:, 2]
+
+            # 几何参数
+            wall_height = self.materials_params.get("wall_height", 3.5e-6)
+            # 壁顶 xy 宽度 10μm（本像素 5μm + 隔壁 5μm），半宽 5μm
+            wall_top_half_width = self.materials_params.get("wall_top_half_width", 5e-6)
+            # 壁顶 z 方向容差：界面过渡区厚度（远小于 wall_height，避免吞没壁面）
+            wall_top_z_tol = self.materials_params.get("wall_top_z_tol", 1e-6)
+
+            # 侧壁水平作用尺度：壁顶 xy 宽度（壁面材质突变尺度）
+            side_margin = 2 * wall_top_half_width  # ≈ 10μm
+
+            f_wall = 6.0 * phi * (1.0 - phi)
+
+            # 区域划分（互斥，避免角落重复）：
+            #   1. 侧壁区：靠近壁面(xy) + z 在壁顶以下 → 侧壁 BC (Teflon 110°)
+            #   2. 壁顶接触线区：z ≈ wall_height ± z_tol + 靠近壁面 → 壁顶 BC (SU-8 125°)
+            #   3. 底面区 (z=0)：由 _compute_contact_angle_loss 负责（此处不处理）
+
+            near_x0 = (x_coord < side_margin).float()
+            near_xX = (x_coord > X - side_margin).float()
+            near_y0 = (y_coord < side_margin).float()
+            near_yY = (y_coord > Ly - side_margin).float()
+            # 用 clamp 替代 bitwise_or（CUDA float 不支持 | 运算符）
+            near_wall_xy = torch.clamp(near_x0 + near_xX + near_y0 + near_yY, 0.0, 1.0)
+
+            near_wall_top = (
+                (z_coord > wall_height - wall_top_z_tol) & (z_coord < wall_height + wall_top_z_tol)
+            ).float()
+
+            # ---- 侧壁 BC: ε·n·∇φ + cos(θ_wall_teflon)·6φ(1-φ) = 0 ----
+            # 有效区：靠近壁面 + 在壁顶接触线以下
+            cos_theta_wall = np.cos(np.radians(theta_wall_teflon))
+            side_valid = near_wall_xy * (1.0 - near_wall_top)
+
+            # 自然 BC: ε·n·∇φ + cos(θ)·6φ(1-φ) = 0
+            # x=0: n=(-1,0,0) → R = -ε·φ_x + cos(θ)·f
+            # x=Lx: n=(+1,0,0) → R = +ε·φ_x + cos(θ)·f
+            # y=0: n=(0,-1,0) → R = -ε·φ_y + cos(θ)·f
+            # y=Ly: n=(0,+1,0) → R = +ε·φ_y + cos(θ)·f
+            bc_x0 = -eps * phi_x + cos_theta_wall * f_wall
+            bc_xX = eps * phi_x + cos_theta_wall * f_wall
+            bc_y0 = -eps * phi_y + cos_theta_wall * f_wall
+            bc_yY = eps * phi_y + cos_theta_wall * f_wall
+
+            w_x0 = interface_w * near_x0 * side_valid
+            w_xX = interface_w * near_xX * side_valid
+            w_y0 = interface_w * near_y0 * side_valid
+            w_yY = interface_w * near_yY * side_valid
+
+            # ---- 壁顶接触线 BC (第一接触线) ----
+            # z ≈ wall_height 且靠近壁面 → SU-8 前进角（固定，不受 EW 影响）
+            # 壁顶是水平面，法向 n = (0,0,+1)（流体域外法向，指向上方）
+            # 自然 BC: ε·φ_z + cos(θ)·6φ(1-φ) = 0
+            wall_top_only = near_wall_top * near_wall_xy
+            theta_adv_su8 = self.materials_params.get("theta_adv_su8", 125.0)
+            cos_theta_su8 = np.cos(np.radians(theta_adv_su8))
+
+            # n=(0,0,+1), R = ε·φ_z + cos(θ)·f
+            bc_wall_top = eps * phi_z + cos_theta_su8 * f_wall
+            w_wall_top = interface_w * wall_top_only
+
+            # ---- 加权损失 ----
+            total_w = w_x0 + w_xX + w_y0 + w_yY + w_wall_top
+            total_w_sum = total_w.sum().clamp(min=1e-12)
+
+            loss = w_x0 * bc_x0**2 + w_xX * bc_xX**2 + w_y0 * bc_y0**2 + w_yY * bc_yY**2 + w_wall_top * bc_wall_top**2
+            scalar_loss = loss.sum() / total_w_sum
+
+            return {"phase_field_wetting": scalar_loss}
+
+        except Exception as e:
+            logger.warning(f"统一润湿 BC 计算异常: {e}")
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            return {"phase_field_wetting": torch.tensor(0.0, device=device)}
+
     def safe_compute_laplacian_spatial(self, scalar_field: torch.Tensor, coords: torch.Tensor, spatial_dims: int = 3):
         try:
             grad = self.safe_compute_gradient(scalar_field, coords)
@@ -692,6 +867,13 @@ class PhysicsConstraints:
         except Exception as e:
             logger.warning(f"体积守恒残差计算失败: {e}")
 
+        # 4. 界面能
+        try:
+            ie_residuals = self.compute_interface_energy_residual(x_phys, predictions, grads=grads)
+            residuals.update(ie_residuals)
+        except Exception as e:
+            logger.warning(f"界面能约束计算失败: {e}")
+
         # 5. Laplace 压力一致约束
         try:
             lp_residuals = self.compute_laplace_pressure_residual(x_phys, predictions, grads=grads)
@@ -706,6 +888,13 @@ class PhysicsConstraints:
         except Exception as e:
             logger.warning(f"时间连续性残差计算失败: {e}")
             residuals["temporal_smoothness"] = torch.zeros(batch_size, device=device)
+
+        # 7. 统一相场润湿 BC（底面 + 侧壁，含 Young-Lippmann 电压调制）
+        try:
+            pfw_residuals = self._compute_unified_wetting_bc(x_phys, predictions, grads=grads)
+            residuals.update(pfw_residuals)
+        except Exception as e:
+            logger.warning(f"统一润湿 BC 计算失败: {e}")
 
         # 8. 接触线动力学约束（已删除，由 contact_angle 损失替代）
 
