@@ -2765,8 +2765,8 @@ class Trainer:
             dim=1,
         )  # (N*n_vol, 6)
 
-        with torch.no_grad():
-            phi = torch.clamp(self.model(pts)[:, 4], 0.0, 1.0)  # (N*n_vol,)
+        # 体积守恒需要梯度，不能用 torch.no_grad()
+        phi = torch.clamp(self.model(pts)[:, 4], 0.0, 1.0)  # (N*n_vol,)
 
         # reshape → (n_vol, N) → 按列（每个场景）计算均值
         phi_by_scene = phi.view(N, n_vol).mean(dim=1)  # (N,)
@@ -2844,9 +2844,9 @@ class Trainer:
             dim=1,
         )
 
-        with torch.no_grad():
-            pred_rise_all = self.model(pts_rise)  # (N*n, 5)
-            pred_fall_all = self.model(pts_fall)
+        # 连续性过渡损失需要梯度
+        pred_rise_all = self.model(pts_rise)  # (N*n, 5)
+        pred_fall_all = self.model(pts_fall)
 
         # reshape → (N, n, 5)
         pred_r = pred_rise_all.view(N, n, 5)
