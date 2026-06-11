@@ -2919,6 +2919,7 @@ class Trainer:
                 "momentum_v": float(weights.get("ns", 0.0)),
                 "momentum_w": float(weights.get("ns", 0.0)),
                 "laplace_pressure": float(weights.get("laplace_pressure", 0.05)),
+                "interface_energy": float(weights.get("interface_energy", 2.0)),
                 "temporal_smoothness": float(weights.get("temporal_smoothness", 0.1)),
                 "volume_conservation": float(self.config.get("physics", {}).get("volume_conservation_weight", 0.0)),
                 "explicit_volume": float(weights.get("explicit_volume", 0.0)),
@@ -2939,6 +2940,7 @@ class Trainer:
                     "momentum_w",
                     "temporal_smoothness",
                     "laplace_pressure",
+                    "interface_energy",
                 ]:
                     if k in losses and isinstance(losses[k], torch.Tensor) and torch.isfinite(losses[k]):
                         res[f"pinn_{k}"] = losses[k]
