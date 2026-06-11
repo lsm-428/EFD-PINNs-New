@@ -351,6 +351,12 @@ class TwoPhasePINN(nn.Module):
             # 壁顶面区域（z≈wall_height 但不在接触线）→ φ=0
             on_wall_top_face = on_wall_top_z & ~on_contact_line
 
+            # 夹角区域（z=0 角落毛细区）：强制 φ=1
+            # 夹角区域：x 或 y 在 [0, wall_top_half_width] 或 [L-wall_top_half_width, L]
+            on_corner_x = (x_phys < self.wall_top_half_width) | (x_phys > self.Lx - self.wall_top_half_width)
+            on_corner_y = (y_phys < self.wall_top_half_width) | (y_phys > self.Ly - self.wall_top_half_width)
+            on_corner_z0 = (z_norm < 1e-6) & (on_corner_x | on_corner_y)
+
             # 应用接触线 BC
             phi = torch.where(on_contact_line, torch.full_like(phi, 0.5), phi)
             phi = torch.where(on_wall_top_face, torch.zeros_like(phi), phi)
@@ -384,9 +390,10 @@ class TwoPhasePINN(nn.Module):
 
             # ============================================================
             # 4. Blend 因子：决定 IC 约束强度
-            #    z=0 底面：永远自由（不约束径向分布）
+            #    z=0 底面（非夹角区）：永远自由（不约束径向分布）
+            #    z=0 夹角区（毛细区）：强制 φ=1（油墨堆积）
             #    t<2ms 或 V<V_T：强制 IC（油墨未响应或电润湿力不足）
-            #    t>0, V>V_T, z>0：逐渐自由（电润湿驱动变形）
+            #    t>2ms, V>V_T, z>0：逐渐自由（电润湿驱动变形）
             # ============================================================
             z_mask = (z_norm > 1e-6).float()
             force_ic = ((t_since < t_early) | (V_eff < V_T)).float()
@@ -396,6 +403,8 @@ class TwoPhasePINN(nn.Module):
             phi = (1.0 - blend) * phi_ic + blend * phi
             # IC blend 后重新强制接触线 BC（防止 blend 覆盖接触线 φ=0.5）
             phi = torch.where(on_contact_line, torch.full_like(phi, 0.5), phi)
+            # z=0 夹角区域（毛细区）强制 φ=1
+            phi = torch.where(on_corner_z0, torch.ones_like(phi), phi)
         else:
             phi = phi_learned
 
