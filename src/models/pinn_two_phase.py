@@ -266,13 +266,25 @@ class TwoPhasePINN(nn.Module):
 
         Args:
             x: (batch, 6) - (x, y, z, V_from, V_to, t_since)
+              V_from=V_to: 恒压; V_from<V_to: 升压; V_from>V_to: 降压
 
         Returns:
-            (batch, 5) - (u, v, w, p, phi)
+            (batch, 5) - (u, v, w, p, phi), phi ∈ [0,1] (1=油墨, 0=水)
 
-        硬约束 (通过构造保证, 不需loss):
-          - 顶面 BC: φ(z=Lz) = 0  →  φ *= (1 - z/Lz)
-          - 初始条件: φ(t=0) = φ_IC(z)  →  φ = φ_IC + t/t_max * (φ_learned - φ_IC)
+        硬约束 (use_hard_constraints=True 时通过构造保证):
+          - 顶面 BC: z=Lz → φ=0 (ITO 玻璃)
+          - 壁顶面 BC: z≈wall_height, 非接触线区 → φ=0 (极性液体)
+          - 壁顶接触线 BC: z≈wall_height, 壁面边缘 → φ=0.5 (三相线)
+          - 夹角区 BC: z=0, x/y∈[0,wall_height]∪[L-wall_height,L] → φ=1 (油墨堆积)
+          - IC blend:
+            * z=0 非夹角区: 始终自由
+            * t<2ms 或 V<V_T: 强制 IC (blend=0, φ=phi_ic)
+            * t>2ms, V>V_T, z>0: 渐变自由 (blend=1-t_norm/t_early)
+          - IC 目标 phi_ic:
+            * z < h_ink=3μm: φ=1 (油墨)
+            * z ≈ wall_height=3.5μm: φ=0.5 (接触线)
+            * z > wall_height: φ=0 (水)
+            * h_ink < z < wall_height: tanh 过渡
         """
         if not torch.jit.is_tracing() and x.shape[1] != 6:
             msg = "TwoPhasePINN expects input of shape (batch, 6)."
