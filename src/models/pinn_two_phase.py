@@ -174,8 +174,11 @@ class TwoPhasePINN(nn.Module):
     两相流物理信息神经网络（6D Triad 输入）
 
     输入: (x, y, z, V_from, V_to, t_since) - 6维
-      * V_from: 跳变前电压，V_to: 当前电压，t_since: 跳变后时间
-      * V_from=V_to: 恒压；V_from<V_to: 升压；V_from>V_to: 降压
+      * V_from: 跳变前电压，V_to: 当前电压，t_since: 跳变后经过时间
+      * V_from=V_to: 恒压状态
+      * V_from<V_to: 升压过程（电润湿驱动，油墨向外收缩形成开口）
+      * V_from>V_to: 降压过程（表面张力恢复，油墨向中心铺展）
+      * 单个模型支持任意电压序列的时间连续仿真
 
     输出: (u, v, w, p, phi)，phi ∈ [0,1]（1=油墨，0=极性液体）
 
@@ -266,10 +269,13 @@ class TwoPhasePINN(nn.Module):
 
         Args:
             x: (batch, 6) - (x, y, z, V_from, V_to, t_since)
-              V_from=V_to: 恒压; V_from<V_to: 升压; V_from>V_to: 降压
+              V_from: 跳变前电压; V_to: 当前电压; t_since: 跳变后经过时间
+              V_from=V_to: 恒压状态
+              V_from<V_to: 升压过程（电润湿驱动，油墨向外收缩）
+              V_from>V_to: 降压过程（表面张力恢复，油墨向中心铺展）
 
         Returns:
-            (batch, 5) - (u, v, w, p, phi), phi ∈ [0,1] (1=油墨, 0=水)
+            (batch, 5) - (u, v, w, p, phi), phi ∈ [0,1] (1=油墨, 0=极性液体)
 
         硬约束 (use_hard_constraints=True 时通过构造保证):
           - 顶面 BC: z=Lz → φ=0 (ITO 玻璃)
