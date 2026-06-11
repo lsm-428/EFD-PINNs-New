@@ -225,10 +225,13 @@ class TwoPhasePINN(nn.Module):
 
         # 硬约束配置
         hard_cfg = config.get("hard_constraints", {})
-        self.use_hard_constraints = hard_cfg.get("enable", False)
+        self.use_hard_constraints = hard_cfg.get("enable", True)  # 默认启用
         self.h_ink = hard_cfg.get("h_ink", 3e-6)
         self.hard_ic_width = hard_cfg.get("ic_width", PHYSICS["ic_width"])
         self.sigmoid_temperature = hard_cfg.get("sigmoid_temperature", 1.0)
+        # 围堰几何（硬约束用）
+        self.wall_height = PHYSICS["wall_height"]
+        self.wall_top_z_tol = PHYSICS["wall_top_z_tol"]
 
         self.apply(self._init_weights)
 
@@ -302,43 +305,75 @@ class TwoPhasePINN(nn.Module):
             wall_height = getattr(self, "wall_height", PHYSICS["wall_height"])
             wall_top_z_tol = getattr(self, "wall_top_z_tol", PHYSICS["wall_top_z_tol"])
             delta_ic = getattr(self, "hard_ic_width", PHYSICS["ic_width"])
-            V_T = PHYSICS["V_T_base"]  # 阈值电压
-            t_early = 0.002  # 2ms 早期时间阈值
+            V_T = PHYSICS["V_T_base"]
+            t_early = 0.002  # 2ms
 
-            # 1. 顶面 BC: φ(z=Lz) = 0 (ITO 玻璃，纯极性液体)
+            # 输入坐标（用于判断位置）
+            x_phys = x[:, 0]  # x 物理坐标
+            y_phys = x[:, 1]  # y 物理坐标
+            V_eff = x[:, 4]  # V_to
+            t_since = x[:, 5]  # t_since
+
+            # ============================================================
+            # 1. 顶面 BC: φ(z=Lz) = 0 (ITO 玻璃)
+            # ============================================================
             phi = phi_learned * (1.0 - z_norm)
 
-            # 2. 壁顶 BC: φ(z=wall_height) = 0 (SU-8 暴露面，极性液体接触)
-            wall_top_mask = torch.clamp(
-                1.0 - (z_phys - wall_height + wall_top_z_tol).clamp(min=0) / wall_top_z_tol, 0.0, 1.0
+            # ============================================================
+            # 2. 围堰接触线 BC
+            #    物理：4 条壁顶接触线（z=wall_height, x/y 在 [wall_height, L-wall_height]）
+            #    接触线是油-水-固体三相线 → φ=0.5
+            #    接触线外侧（壁顶面）→ φ=0（极性液体）
+            #    接触线内侧（壁侧面）→ 由 IC/target3D 决定
+            # ============================================================
+
+            # 判断是否在壁顶接触线区域
+            # 接触线条件：z ≈ wall_height 且 (x 或 y 在 [wall_height, L-wall_height] 范围内)
+            on_wall_top_z = torch.abs(z_phys - wall_height) < wall_top_z_tol
+
+            # x 方向壁顶接触线：y 在范围内，x 靠近 0 或 Lx
+            on_x_wall = (
+                (y_phys >= wall_height)
+                & (y_phys <= self.Ly - wall_height)
+                & ((x_phys < wall_top_z_tol) | (x_phys > self.Lx - wall_top_z_tol))
             )
-            phi = phi * wall_top_mask
 
-            # 3. 初始条件: φ_IC(z) = tanh 平滑台阶
-            phi_ic = 0.5 * (1.0 + torch.tanh((h_ink - z_phys) / delta_ic))
+            # y 方向壁顶接触线：x 在范围内，y 靠近 0 或 Ly
+            on_y_wall = (
+                (x_phys >= wall_height)
+                & (x_phys <= self.Lx - wall_height)
+                & ((y_phys < wall_top_z_tol) | (y_phys > self.Ly - wall_top_z_tol))
+            )
 
-            # 4. Blend 因子：决定 IC 约束强度
-            #    物理规则：
-            #      - z=0 底面：blend ≡ 1（永远自由，不约束径向分布）
-            #      - t < 2ms 或 V < V_T：强制 IC（油墨未响应或电润湿力不足）
-            #      - t=0：完全 IC
-            #      - t>0 且 V>V_T：逐渐自由（电润湿驱动变形）
-            z_mask = (z_norm > 1e-6).float()  # z=0→0, z>0→1
+            # 接触线区域（z≈wall_height 且在壁顶边缘）
+            on_contact_line = on_wall_top_z & (on_x_wall | on_y_wall)
 
-            # 时间-电压联合判断：早期时间 + 低电压 → 强制 IC
-            # V_to < V_T：电压低于阈值，电润湿力不足以驱动油墨
-            # t_since < 2ms：早期时间，油墨尚未响应
-            V_eff = x[:, 4]  # V_to（6D 输入第 5 列）
-            t_since = x[:, 5]  # t_since（6D 输入第 6 列）
+            # 壁顶面区域（z≈wall_height 但不在接触线）→ φ=0
+            on_wall_top_face = on_wall_top_z & ~on_contact_line
 
-            # 强制 IC 条件：t < 2ms 或 V_to < V_T（宽松版）
-            # 物理：早期时间油墨未响应，或低电压电润湿力不足，都应收敛到初始状态
+            # 应用接触线 BC
+            phi = torch.where(on_contact_line, torch.full_like(phi, 0.5), phi)
+            phi = torch.where(on_wall_top_face, torch.zeros_like(phi), phi)
+
+            # ============================================================
+            # 3. 初始条件 IC(z)
+            #    壁顶区域（z > wall_height - z_tol）→ φ=0（极性液体接触面）
+            #    壁侧区域（z < wall_height - z_tol）→ φ_IC(z) = tanh 台阶
+            # ============================================================
+            # 壁顶区域强制 φ=0
+            above_wall = z_phys > wall_height - wall_top_z_tol
+            phi_ic = torch.where(
+                above_wall, torch.zeros_like(phi), 0.5 * (1.0 + torch.tanh((h_ink - z_phys) / delta_ic))
+            )
+
+            # ============================================================
+            # 4. Blend 因子
+            #    z=0 底面：blend=1（自由）
+            #    t<2ms 或 V<V_T：force_ic=1, blend=0（强制 IC）
+            #    t>0, V>V_T, z>0：blend=t_norm（逐渐自由）
+            # ============================================================
+            z_mask = (z_norm > 1e-6).float()
             force_ic = ((t_since < t_early) | (V_eff < V_T)).float()
-
-            # blend 计算：
-            #   force_ic=1 → blend=0（完全 IC）
-            #   force_ic=0, z=0 → blend=1（自由）
-            #   force_ic=0, z>0 → blend=t_norm（逐渐自由）
             blend = 1.0 - z_mask * (1.0 - t_norm) * (1.0 - force_ic)
 
             phi = (1.0 - blend) * phi_ic + blend * phi
@@ -886,40 +921,61 @@ class DataGenerator:
 
         # 界面宽度
         interface_width = PHYSICS["ac_interface_width"]
+        wall_height = self.wall_height
+        wall_top_z_tol = self.wall_top_z_tol
 
-        # 注意：倾斜界面公式（z_tilt）在像素尺度（Lx/Lz≈8.7）下不适用
-        # r_open→0 时全域偏移 >> Lz，导致 φ 全为 0 或 1
-        # 接触角信息已通过 η 体现，target3D 只需把 η 转化为 3D 形状
+        # 到最近壁面的距离（用于判断毛细区域）
+        d_wall = min(x, self.Lx - x, y, self.Ly - y)
+
+        # 壁顶接触线区域：z≈wall_height 且靠近壁面边缘
+        on_wall_top_z = abs(z - wall_height) < wall_top_z_tol
+        near_wall_edge = d_wall < wall_top_z_tol  # 靠近壁面边缘
+        on_contact_line = on_wall_top_z & near_wall_edge
+
+        # 壁顶面区域：z≈wall_height 但不在接触线
+        on_wall_top_face = on_wall_top_z & ~near_wall_edge
+
+        # 壁顶以上区域：z > wall_height
+        above_wall = z > wall_height - wall_top_z_tol
+
+        # 毛细区域：壁面附近 ~3μm 范围，target3D 不处理
+        in_capillary = d_wall < wall_top_z_tol
+
+        # r_open（开口半径）
         r_open = np.sqrt(eta * self.Lx * self.Ly / np.pi) if eta > 0.01 else 0.0
 
-        # 开口率过渡区间：[eta_lo, eta_hi] 线性插值平滑过渡
-        # 物理上 η≈40-50% 是环形分布→角落汇聚的渐变过程
+        # 开口率过渡区间
         eta_lo, eta_hi = 0.40, 0.50
 
+        # ============================================================
+        # 围堰接触线/面 BC（最高优先级）
+        # ============================================================
+        if on_contact_line:
+            # 接触线：油-水-固体三相线 → φ=0.5
+            return 0.5
+        if on_wall_top_face or above_wall:
+            # 壁顶面/以上：极性液体 → φ=0
+            return 0.0
+
+        # ============================================================
+        # 毛细区域：target3D 不处理（返回 NaN，由调用方跳过）
+        # ============================================================
+        if in_capillary and z < wall_height:
+            # 毛细区域由壁面爬升效应处理，target3D 不定义
+            return np.nan
+
+        # ============================================================
+        # 正常区域：根据 η 选择模式
+        # ============================================================
         if eta < 0.01:
-            # 无开口：初始状态，油墨均匀铺在底部
-            # φ=1 在底部（油），φ=0 在顶部（水）
-            # 注意：倾斜界面公式在 η→0 时不适用（r_open→0 导致全域偏移 >> Lz）
-            # 退化为简单的垂直分层，接触角信息已通过 η 体现
+            # 无开口：初始状态
             phi_z = 0.5 * (1 + np.tanh((h_ink - z) / (interface_width / 3)))
-
         elif eta <= eta_lo:
-            # ============================================================
-            # 纯中心开口模式 (η ≤ 0.40)：油墨环形分布
-            # ============================================================
             phi_z = self._center_opening_phi(x, y, z, eta, h_ink, r_open, interface_width)
-
         elif eta >= eta_hi:
-            # ============================================================
-            # 纯单角墨滴模式 (η ≥ 0.50)：油墨汇聚到最近角落
-            # ============================================================
             phi_z = self._corner_blob_phi(x, y, z, eta, h_ink, interface_width)
-
         else:
-            # ============================================================
-            # 过渡区间 (0.40 < η < 0.50)：线性插值混合两种模式
-            # ============================================================
-            w = (eta - eta_lo) / (eta_hi - eta_lo)  # 0→1
+            w = (eta - eta_lo) / (eta_hi - eta_lo)
             phi_center = self._center_opening_phi(x, y, z, eta, h_ink, r_open, interface_width)
             phi_corner = self._corner_blob_phi(x, y, z, eta, h_ink, interface_width)
             phi_z = (1.0 - w) * phi_center + w * phi_corner
@@ -1132,8 +1188,9 @@ class DataGenerator:
                 t = sampler.sample_time_adaptive(1, V, V)[0]
                 x, y, z = sampler.sample_spatial_physics_based(1, V, t)
                 phi = self.target_phi_3d(x[0], y[0], z[0], t, float(V), V_prev=float(V))
-                interface_points.append([x[0], y[0], z[0], float(V), float(V), t])
-                interface_targets.append(phi)
+                if not np.isnan(phi):
+                    interface_points.append([x[0], y[0], z[0], float(V), float(V), t])
+                    interface_targets.append(phi)
 
             # 1.2 升压 (30%)
             n_up = int(n_interface * 0.3)
@@ -1144,8 +1201,9 @@ class DataGenerator:
                 t = sampler.sample_time_adaptive(1, float(V), 0.0)[0]
                 x, y, z = sampler.sample_spatial_physics_based(1, float(V), t)
                 phi = self.target_phi_3d(x[0], y[0], z[0], t, float(V), V_prev=0.0)
-                interface_points.append([x[0], y[0], z[0], 0.0, float(V), t])
-                interface_targets.append(phi)
+                if not np.isnan(phi):
+                    interface_points.append([x[0], y[0], z[0], 0.0, float(V), t])
+                    interface_targets.append(phi)
 
             # 1.3 降压 (30%)
             n_down = n_interface - len(interface_points)
@@ -1157,10 +1215,11 @@ class DataGenerator:
                     t = sampler.sample_time_adaptive(1, 0.0, float(Vf))[0]
                     x, y, z = sampler.sample_spatial_physics_based(1, 0.0, t)
                     phi = self.target_phi_3d(x[0], y[0], z[0], t, 0.0, V_prev=float(Vf))
-                    interface_points.append([x[0], y[0], z[0], float(Vf), 0.0, t])
-                    interface_targets.append(phi)
+                    if not np.isnan(phi):
+                        interface_points.append([x[0], y[0], z[0], float(Vf), 0.0, t])
+                        interface_targets.append(phi)
 
-            # 1.4 中间电压跳变 (10%) — 覆盖非零起点/终点的电压转换
+            # 1.4 中间电压跳变 (10%)
             n_jump = int(n_interface * 0.1)
             jump_pairs = [(10, 25), (25, 10), (10, 20), (20, 10)]
             for _ in range(n_jump):
@@ -1168,8 +1227,9 @@ class DataGenerator:
                 t = sampler.sample_time_adaptive(1, float(V_to), float(V_from))[0]
                 x, y, z = sampler.sample_spatial_physics_based(1, float(V_to), t)
                 phi = self.target_phi_3d(x[0], y[0], z[0], t, float(V_to), V_prev=float(V_from))
-                interface_points.append([x[0], y[0], z[0], float(V_from), float(V_to), t])
-                interface_targets.append(phi)
+                if not np.isnan(phi):
+                    interface_points.append([x[0], y[0], z[0], float(V_from), float(V_to), t])
+                    interface_targets.append(phi)
         else:
             # 原有均匀采样逻辑
             # 1.1 稳态数据 (40%) - V_from = V_to
@@ -1182,8 +1242,9 @@ class DataGenerator:
                 eta = self.get_opening_rate(V, t)
                 x, y, z = self._sample_point_by_eta(eta)
                 phi = self.target_phi_3d(x, y, z, t, V, V_prev=V)
-                interface_points.append([x, y, z, V, V, t])
-                interface_targets.append(phi)
+                if not np.isnan(phi):
+                    interface_points.append([x, y, z, V, V, t])
+                    interface_targets.append(phi)
 
             # 1.2 升压响应 (30%) - 0 -> V
             n_up = int(n_interface * 0.3)
@@ -1194,8 +1255,9 @@ class DataGenerator:
                 eta = self.get_opening_rate(V, t)
                 x, y, z = self._sample_point_by_eta(eta)
                 phi = self.target_phi_3d(x, y, z, t, V, V_prev=0.0)
-                interface_points.append([x, y, z, 0.0, V, t])
-                interface_targets.append(phi)
+                if not np.isnan(phi):
+                    interface_points.append([x, y, z, 0.0, V, t])
+                    interface_targets.append(phi)
 
             # 1.3 降压响应 (30%) - V -> 0
             n_down = n_interface - n_steady - n_up
@@ -1204,13 +1266,13 @@ class DataGenerator:
             tau_recovery = PHYSICS["tau_recovery"]
 
             for V, t in zip(V_down, t_down, strict=False):
-                # 降压逻辑：从 V 的稳态开始指数衰减
                 eta_at_fall = self.get_opening_rate(V, 0.020)
                 eta = eta_at_fall * np.exp(-t / tau_recovery)
                 x, y, z = self._sample_point_by_eta(eta)
                 phi = self.target_phi_3d(x, y, z, t, 0.0, V_prev=V)
-                interface_points.append([x, y, z, V, 0.0, t])
-                interface_targets.append(phi)
+                if not np.isnan(phi):
+                    interface_points.append([x, y, z, V, 0.0, t])
+                    interface_targets.append(phi)
 
             # 1.4 中间电压跳变 (10%) — 覆盖非零起点/终点的电压转换
             n_jump = int(n_interface * 0.1)
@@ -1221,8 +1283,9 @@ class DataGenerator:
                 eta = self.get_opening_rate(V_to, t)
                 x, y, z = self._sample_point_by_eta(eta)
                 phi = self.target_phi_3d(x, y, z, t, V_to, V_prev=V_from)
-                interface_points.append([x, y, z, V_from, V_to, t])
-                interface_targets.append(phi)
+                if not np.isnan(phi):
+                    interface_points.append([x, y, z, V_from, V_to, t])
+                    interface_targets.append(phi)
 
         logger.info(f"  界面数据点: {len(interface_points)}")
 
@@ -1246,9 +1309,11 @@ class DataGenerator:
                 # V_from 是跳变前电压，V_to 是跳变后电压
                 t = sample_continuous_times(1)[0]  # 跳变后时间
             phi = self.target_phi_3d(x, y, z, t, V_to, V_prev=V_from)
-            interface_points.append([x, y, z, V_from, V_to, t])
-            interface_targets.append(phi)
-            bottom_added += 1
+            # 跳过毛细区域（target3D 返回 NaN）
+            if not np.isnan(phi):
+                interface_points.append([x, y, z, V_from, V_to, t])
+                interface_targets.append(phi)
+                bottom_added += 1
 
         logger.info(f"  底面数据点 (z=0): +{bottom_added}")
 
@@ -1267,7 +1332,19 @@ class DataGenerator:
             z = np.random.rand() * self.Lz  # 全域采样 [0, Lz]
 
             interface_width = PHYSICS["ic_width"]
-            phi = 0.5 * (1 - np.tanh((z - self.h_ink) / interface_width))
+            d_wall = min(x, self.Lx - x, y, self.Ly - y)
+
+            # IC 目标：根据位置决定 φ
+            if z > self.wall_height - self.wall_top_z_tol:
+                # 壁顶区域：极性液体 → φ=0
+                phi = 0.0
+            elif abs(z - self.wall_height) < self.wall_top_z_tol and d_wall < self.wall_top_z_tol:
+                # 壁顶接触线区域：三相接触线 → φ=0.5
+                phi = 0.5
+            else:
+                # 正常区域：tanh 台阶
+                phi = 0.5 * (1 - np.tanh((z - self.h_ink) / interface_width))
+
             phi = np.clip(phi, 0, 1)
 
             # 三元组格式: (x, y, z, V_from, V_to, t_since=0)
@@ -1325,15 +1402,20 @@ class DataGenerator:
             # 50% 在油墨层及界面区，30% 在壁面上部，20% 在过渡区
             z = _sample_bc_z(np.random.rand(), self.h_ink, self.Lz)
 
-            # 计算目标 phi
+            # 计算目标 phi（target3D 已处理围堰 BC）
             phi = self.target_phi_3d(x, y, z, t, V_to, V_prev=V_from)
 
-            # 壁顶区域强制 φ=0（极性液体接触，油墨突破=失效）
-            if z > self.wall_height - self.wall_top_z_tol:
-                phi = 0.0
+            # target3D 返回 NaN 表示毛细区域，跳过（不加入 bc_points）
+            if np.isnan(phi):
+                continue
 
-            # 夹角区域强制 φ=1（油墨堆积）
+            # 壁顶接触线区域：φ=0.5（三相接触线）
+            on_wall_top_z = abs(z - self.wall_height) < self.wall_top_z_tol
             d_wall = min(x, self.Lx - x, y, self.Ly - y)
+            if on_wall_top_z and d_wall < self.wall_top_z_tol:
+                phi = 0.5
+
+            # 夹角区域：φ=1（油墨堆积）
             if d_wall < self.wall_top_half_width and z < self.wall_height:
                 phi = 1.0
 
@@ -1344,9 +1426,10 @@ class DataGenerator:
         logger.info(f"  壁面边界条件点: {len(bc_points)}")
 
         # ============================================================
-        # 3b. 壁顶接触线过采样（z ≈ wall_height, 靠近壁面）
+        # 3b. 壁顶接触线过采样（z ≈ wall_height, 壁顶边缘线）
         # ============================================================
-        # 壁顶是极性液体接触面，φ=0 必须严格满足
+        # 壁顶接触线是油-水-固体三相线 → φ=0.5
+        # 壁顶面（接触线外侧）→ φ=0
         # 油墨突破壁顶接触线 = 器件失效
         n_wall_top = n_bc // 4
         wt_added = 0
@@ -1357,28 +1440,28 @@ class DataGenerator:
 
             # 随机选择一个壁面方向
             boundary_type = np.random.randint(0, 4)
-            if boundary_type == 0:  # x=0 壁
+            if boundary_type == 0:  # x=0 壁（左壁）
                 x = 0
                 y = np.random.uniform(self.wall_height, self.Ly - self.wall_height)
-            elif boundary_type == 1:  # x=Lx 壁
+            elif boundary_type == 1:  # x=Lx 壁（右壁）
                 x = self.Lx
                 y = np.random.uniform(self.wall_height, self.Ly - self.wall_height)
-            elif boundary_type == 2:  # y=0 壁
+            elif boundary_type == 2:  # y=0 壁（前壁）
                 x = np.random.uniform(self.wall_height, self.Lx - self.wall_height)
                 y = 0
-            else:  # y=Ly 壁
+            else:  # y=Ly 壁（后壁）
                 x = np.random.uniform(self.wall_height, self.Lx - self.wall_height)
                 y = self.Ly
 
             # z 在壁顶附近 ±z_tol 范围
             z = self.wall_height + np.random.uniform(-self.wall_top_z_tol, self.wall_top_z_tol)
 
-            # 壁顶始终 φ=0
+            # 壁顶接触线：φ=0.5（三相接触线）
             bc_points.append([x, y, z, V_from, V_to, t])
-            bc_values.append([0.0, 0.0, 0.0, 0.0, 0.0])
+            bc_values.append([0.0, 0.0, 0.0, 0.0, 0.5])
             wt_added += 1
 
-        logger.info(f"  壁顶接触线过采样: +{wt_added} 点 (z≈{self.wall_height*1e6:.1f}μm, φ=0)")
+        logger.info(f"  壁顶接触线过采样: +{wt_added} 点 (z≈{self.wall_height*1e6:.1f}μm, φ=0.5)")
 
         # ============================================================
         # 3c. 侧壁夹角区域过采样（z=0 四周角落）
@@ -3070,8 +3153,10 @@ class Trainer:
                 else:
                     z = np.random.uniform(0, self.model.Lz)
 
-                # 用 target_phi_3d 构造 φ target
+                # 用 target_phi_3d 构造 φ target（跳过毛细区域 NaN）
                 phi_target = self.data_generator.target_phi_3d(x, y, z, t_since, V_to, V_prev=V_from, t_step=0.0)
+                if np.isnan(phi_target):
+                    continue
 
                 all_points.append([x, y, z, V_from, V_to, t_since])
                 all_phi_targets.append(phi_target)
