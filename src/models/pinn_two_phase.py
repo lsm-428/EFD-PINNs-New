@@ -171,21 +171,28 @@ class FourierFeature(nn.Module):
 
 class TwoPhasePINN(nn.Module):
     """
-    两相流物理信息神经网络
+    两相流物理信息神经网络（6D Triad 输入）
 
-    特点：
-    - 支持升压和降压过程
-    - 分离 phi 网络和速度网络
-    - 输入: (x, y, z, V_from, V_to, t_since) - 6维（三元组格式）
-      * V_from: 跳变前电压
-      * V_to: 跳变后电压（当前电压）
-      * t_since: 跳变后经过的时间
-    - 输出: (u, v, w, p, phi)
+    输入: (x, y, z, V_from, V_to, t_since) - 6维
+      * V_from: 跳变前电压，V_to: 当前电压，t_since: 跳变后时间
+      * V_from=V_to: 恒压；V_from<V_to: 升压；V_from>V_to: 降压
 
-    电压历史的物理意义：
-    - V_from = V_to: 恒定电压状态
-    - V_from < V_to: 升压过程（电润湿驱动）
-    - V_from > V_to: 降压过程（表面张力恢复）
+    输出: (u, v, w, p, phi)，phi ∈ [0,1]（1=油墨，0=极性液体）
+
+    硬约束（use_hard_constraints=True 时启用）：
+      - 顶面 BC: z=Lz → φ=0（ITO 玻璃）
+      - 壁顶面 BC: z≈wall_height, 非接触线区 → φ=0（极性液体）
+      - 壁顶接触线 BC: z≈wall_height, 壁面边缘 → φ=0.5（三相线）
+      - 夹角区 BC: z=0, x/y∈[0,wall_height]∪[L-wall_height,L] → φ=1（油墨堆积）
+      - IC blend:
+        * z=0 非夹角区: 始终自由
+        * t<2ms 或 V<V_T: 强制 IC（φ=phi_ic）
+        * t>2ms, V>V_T: 逐渐自由（blend=1-t_norm/t_early）
+      - IC 目标 phi_ic:
+        * z < h_ink=3μm: φ=1（油墨）
+        * z ≈ wall_height=3.5μm: φ=0.5（接触线）
+        * z > wall_height: φ=0（水）
+        * h_ink < z < wall_height: tanh 过渡
     """
 
     def __init__(self, config: dict[str, Any] | None = None):
@@ -410,39 +417,6 @@ class TwoPhasePINN(nn.Module):
 
         # 速度预测 - 使用 Fourier 特征 + phi
         vel_input = torch.cat([phi_features, phi], dim=-1)
-        vel_out = self.vel_net(vel_input)
-        u, v, w, p = vel_out[:, 0:1], vel_out[:, 1:2], vel_out[:, 2:3], vel_out[:, 3:4]
-
-        return torch.cat([u, v, w, p, phi], dim=-1)
-
-    def forward_triplet(self, spatial_coords: torch.Tensor, voltage_triplet: torch.Tensor) -> torch.Tensor:
-        """
-        三元组格式的前向传播（与 LSTM-Hybrid-PINN 接口一致）
-
-        Args:
-            spatial_coords: (batch, 3) - (x, y, z)
-            voltage_triplet: (batch, 3) - (V_from, V_to, t_since)，已归一化
-
-        Returns:
-            (batch, 5) - (u, v, w, p, phi)
-        """
-        # 归一化空间坐标
-        x_norm = spatial_coords[:, 0:1] / self.Lx
-        y_norm = spatial_coords[:, 1:2] / self.Ly
-        z_norm = spatial_coords[:, 2:3] / self.Lz
-
-        # 电压三元组已经归一化
-        V_from_norm = voltage_triplet[:, 0:1]
-        V_to_norm = voltage_triplet[:, 1:2]
-        t_norm = voltage_triplet[:, 2:3]
-
-        # Phi 网络输入
-        phi_input = torch.cat([x_norm, y_norm, z_norm, V_from_norm, V_to_norm, t_norm], dim=-1)
-        phi_raw = self.phi_net(phi_input)
-        phi = torch.sigmoid(phi_raw)
-
-        # 速度网络输入
-        vel_input = torch.cat([x_norm, y_norm, z_norm, V_from_norm, V_to_norm, t_norm, phi], dim=-1)
         vel_out = self.vel_net(vel_input)
         u, v, w, p = vel_out[:, 0:1], vel_out[:, 1:2], vel_out[:, 2:3], vel_out[:, 3:4]
 
