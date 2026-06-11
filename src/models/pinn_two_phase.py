@@ -359,32 +359,43 @@ class TwoPhasePINN(nn.Module):
             # 3. 初始条件 IC(z)
             #    物理：油墨在 z∈[0, h_ink=3μm]，壁顶接触线 z=3.5μm，壁顶面以上全是水
             #    底板油膜呈微弱倒球冠：边缘 z=3.5μm，中心略低（<3.5μm），近似平铺
-            #    → 简化为：z < h_ink 时 φ=1，h_ink < z < wall_height 时 tanh 过渡，z > wall_height 时 φ=0
+            #    → z < h_ink: φ=1（油墨）
+            #    → z = wall_height: φ=0.5（接触线）
+            #    → z > wall_height: φ=0（水）
+            #    → h_ink < z < wall_height: tanh 过渡
             # ============================================================
             above_wall = z_phys > wall_height + wall_top_z_tol
+            at_contact_line_z = torch.abs(z_phys - wall_height) < wall_top_z_tol
             in_ink = z_phys < h_ink
-            # IC 目标：油墨区 φ=1，过渡区 tanh，壁顶以上 φ=0
+            # IC 目标：油墨区 φ=1，接触线 φ=0.5，壁顶以上 φ=0，过渡区 tanh
             phi_ic = torch.where(
                 above_wall,
                 torch.zeros_like(phi),
                 torch.where(
-                    in_ink,
-                    torch.ones_like(phi),
-                    0.5 * (1.0 + torch.tanh((h_ink - z_phys) / delta_ic)),
+                    at_contact_line_z,
+                    torch.full_like(phi, 0.5),
+                    torch.where(
+                        in_ink,
+                        torch.ones_like(phi),
+                        0.5 * (1.0 + torch.tanh((h_ink - z_phys) / delta_ic)),
+                    ),
                 ),
             )
 
             # ============================================================
-            # 4. Blend 因子
-            #    z=0 底面：blend=1（自由）
-            #    t<2ms 或 V<V_T：force_ic=1, blend=0（强制 IC）
-            #    t>0, V>V_T, z>0：blend=t_norm（逐渐自由）
+            # 4. Blend 因子：决定 IC 约束强度
+            #    z=0 底面：永远自由（不约束径向分布）
+            #    t<2ms 或 V<V_T：强制 IC（油墨未响应或电润湿力不足）
+            #    t>0, V>V_T, z>0：逐渐自由（电润湿驱动变形）
             # ============================================================
             z_mask = (z_norm > 1e-6).float()
             force_ic = ((t_since < t_early) | (V_eff < V_T)).float()
-            blend = 1.0 - z_mask * (1.0 - t_norm) * (1.0 - force_ic)
+            # force_ic=1 → blend=0（强制 IC）；force_ic=0 → blend=1-t_norm（渐变）
+            blend = 1.0 - z_mask * (force_ic + (1.0 - force_ic) * t_norm)
 
             phi = (1.0 - blend) * phi_ic + blend * phi
+            # IC blend 后重新强制接触线 BC（防止 blend 覆盖接触线 φ=0.5）
+            phi = torch.where(on_contact_line, torch.full_like(phi, 0.5), phi)
         else:
             phi = phi_learned
 
@@ -977,9 +988,14 @@ class DataGenerator:
         # ============================================================
         if eta < 0.01:
             # 无开口：初始状态，油墨在 z∈[0, h_ink=3μm]
-            # 倒球冠形状：边缘 z=3.5μm（接触线），中心略低，近似平铺
-            # 简化：z < h_ink 时 φ=1，h_ink < z < wall_height 时 tanh 过渡
-            phi_z = 1.0 if z < h_ink else 0.5 * (1 + np.tanh((h_ink - z) / (interface_width / 3)))
+            # 壁顶接触线 z=wall_height 处 φ=0.5
+            # 过渡区使用 ic_width（与 IC 数据/硬约束一致）
+            if z < h_ink:
+                phi_z = 1.0
+            elif abs(z - wall_height) < wall_top_z_tol:
+                phi_z = 0.5
+            else:
+                phi_z = 0.5 * (1 + np.tanh((h_ink - z) / interface_width))
         elif eta <= eta_lo:
             phi_z = self._center_opening_phi(x, y, z, eta, h_ink, r_open, interface_width)
         elif eta >= eta_hi:
