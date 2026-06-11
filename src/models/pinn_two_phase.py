@@ -302,26 +302,44 @@ class TwoPhasePINN(nn.Module):
             wall_height = getattr(self, "wall_height", PHYSICS["wall_height"])
             wall_top_z_tol = getattr(self, "wall_top_z_tol", PHYSICS["wall_top_z_tol"])
             delta_ic = getattr(self, "hard_ic_width", PHYSICS["ic_width"])
+            V_T = PHYSICS["V_T_base"]  # 阈值电压
+            t_early = 0.002  # 2ms 早期时间阈值
 
             # 1. 顶面 BC: φ(z=Lz) = 0 (ITO 玻璃，纯极性液体)
             phi = phi_learned * (1.0 - z_norm)
 
             # 2. 壁顶 BC: φ(z=wall_height) = 0 (SU-8 暴露面，极性液体接触)
-            #    在壁顶 ±z_tol 范围内线性衰减到 0
             wall_top_mask = torch.clamp(
                 1.0 - (z_phys - wall_height + wall_top_z_tol).clamp(min=0) / wall_top_z_tol, 0.0, 1.0
             )
             phi = phi * wall_top_mask
 
-            # 3. 初始条件: φ(t=0) = φ_IC(z)
-            #    φ_IC: tanh 平滑台阶, 油墨(z<h_ink)→1, 极性液体(z>h_ink)→0
+            # 3. 初始条件: φ_IC(z) = tanh 平滑台阶
             phi_ic = 0.5 * (1.0 + torch.tanh((h_ink - z_phys) / delta_ic))
 
-            #    Blend: 混合 phi_ic（初始条件）和 phi（模型预测+顶面/壁顶BC）
-            #      z=0 底面：blend ≡ 1（永远自由，不约束 xy 径向分布）
-            #      z>0：blend = t_norm（t=0→0 完全IC，t>0→逐渐自由）
-            z_mask = (z_norm > 1e-6).float()
-            blend = 1.0 - z_mask * (1.0 - t_norm)
+            # 4. Blend 因子：决定 IC 约束强度
+            #    物理规则：
+            #      - z=0 底面：blend ≡ 1（永远自由，不约束径向分布）
+            #      - t < 2ms 且 V < V_t：强制 IC（油墨未响应，保持初始状态）
+            #      - t=0：完全 IC
+            #      - t>0 且 V>V_t：逐渐自由（电润湿驱动变形）
+            z_mask = (z_norm > 1e-6).float()  # z=0→0, z>0→1
+
+            # 时间-电压联合判断：早期时间 + 低电压 → 强制 IC
+            # V_to < V_T：电压低于阈值，电润湿力不足以驱动油墨
+            # t_since < 2ms：早期时间，油墨尚未响应
+            V_eff = x[:, 4]  # V_to（6D 输入第 5 列）
+            t_since = x[:, 5]  # t_since（6D 输入第 6 列）
+
+            # 强制 IC 条件：t < 2ms 且 V_to < V_T
+            force_ic = ((t_since < t_early) & (V_eff < V_T)).float()
+
+            # blend 计算：
+            #   force_ic=1 → blend=0（完全 IC）
+            #   force_ic=0, z=0 → blend=1（自由）
+            #   force_ic=0, z>0 → blend=t_norm（逐渐自由）
+            blend = 1.0 - z_mask * (1.0 - t_norm) * (1.0 - force_ic)
+
             phi = (1.0 - blend) * phi_ic + blend * phi
         else:
             phi = phi_learned
@@ -2033,33 +2051,29 @@ class Trainer:
         ib_losses = self._compute_initial_boundary_loss(data, physics_cfg, mult["ic_phi"])
         losses.update(ib_losses)
 
-        # 4. 低能态约束（合并 early_time / zero_voltage / low_voltage）
-        ez_losses = self._compute_low_voltage_regime_loss()
-        losses.update(ez_losses)
-
-        # 5. 单调性 & 电压响应约束
+        # 4. 单调性 & 电压响应约束
         mr_losses = self._compute_monotonicity_response_loss()
         losses.update(mr_losses)
 
-        # 6. 开口率相关约束 (eta_ceiling, eta_monotonic)
+        # 5. 开口率相关约束 (eta_ceiling, eta_monotonic)
         eta_losses = self._compute_eta_constraints_loss(stage1_factor)
         losses.update(eta_losses)
 
-        # 6.5+6.6 φ 场空间分布 + 几何一致性约束（已合并为批量前向）
+        # 5.5+5.6 φ 场空间分布 + 几何一致性约束（已合并为批量前向）
         spatial_loss, geom_loss = self._compute_phi_spatial_loss(stage1_factor)
         losses["phi_spatial"] = spatial_loss
         losses["phi_geometry"] = geom_loss
 
-        # 7. 体积守恒约束
+        # 6. 体积守恒约束
         losses["volume_conservation"] = self._compute_volume_conservation_loss(stage1_factor)
 
-        # 7.5 η 匹配 loss（Two-Stage 核心锚定，乘子来自统一调度器）
+        # 6.5 η 匹配 loss（Two-Stage 核心锚定，乘子来自统一调度器）
         losses["eta_matching"] = self.compute_eta_matching_loss(epoch) * mult["eta_match"]
 
-        # 7.6 φ target3D loss（乘子来自统一调度器，已内含阶段衰减，无需双层退火）
+        # 6.6 φ target3D loss（乘子来自统一调度器，已内含阶段衰减，无需双层退火）
         losses["phi_target3d"] = self.compute_phi_target3d_loss(epoch) * mult["phi_target3d"]
 
-        # 8. 物理方程损失（整体乘子来自统一调度器）
+        # 7. 物理方程损失（整体乘子来自统一调度器）
         if any(w > 0 for w in physics_weights.values()):
             # 将 physics 乘子注入 weights，使 _compute_physics_equation_loss 无需改动
             scaled_weights = {k: v * mult["physics"] for k, v in physics_weights.items()}
@@ -2068,11 +2082,11 @@ class Trainer:
             )
             losses.update(phys_losses)
 
-        # 9. 降压过程：开口率恢复约束（阶段2及以后）
+        # 8. 降压过程：开口率恢复约束（阶段2及以后）
         if epoch >= self.stage1_epochs:
             losses["eta_recovery"] = self.eta_recovery_constraint_loss()
 
-        # 10. 连续性约束：升压→降压转换时刻必须连续（方案B新增）
+        # 9. 连续性约束：升压→降压转换时刻必须连续（方案B新增）
         if epoch >= self.stage1_epochs:
             losses["continuity_transition"] = self._compute_continuity_transition_loss()
 
@@ -2198,75 +2212,6 @@ class Trainer:
         res["bc"] = F.mse_loss(pred_bc[:, :3], data["bc_values"][idx_bc][:, :3]) * physics_cfg.get("bc_weight", 50.0)
         res["bc"] += F.mse_loss(pred_bc[:, 4:5], data["bc_values"][idx_bc][:, 4:5]) * 80.0
         return res
-
-    def _compute_low_voltage_regime_loss(self):
-        """4. 低能态约束 — 合并 early_time / zero_voltage / low_voltage。
-
-        物理：低电压或早期时间下，φ 应回归初始状态 φ_IC(z)。
-        按 V 和 t 分档加权：
-          - early_time (t<2ms, 任意V): 权重 1.0（最强，初始状态必须满足）
-          - zero_voltage (V=0, 任意t): 权重 1.0→0.3（S3 后半段退火）
-          - low_voltage (V<5V, t∈[5ms,20ms]): 权重 0.5→0.1（S3 后半段退火）
-        """
-        n = self.batch_size // 4
-        Lx, Ly, Lz = PHYSICS["Lx"], PHYSICS["Ly"], PHYSICS["Lz"]
-        h_ink = PHYSICS["h_ink"]
-        delta_ic = getattr(self, "hard_ic_width", 1e-6)
-
-        x = torch.rand(n, device=self.device) * Lx
-        y = torch.rand(n, device=self.device) * Ly
-        z = torch.rand(n, device=self.device) * Lz
-        xyz = torch.stack([x, y, z], dim=1)  # (n, 3)
-
-        # 3 组场景参数
-        t_early = torch.rand(n, device=self.device) * 0.002
-        v_early = torch.rand(n, device=self.device) * 30.0
-        t_0v = torch.rand(n, device=self.device) * PHYSICS["t_max"]
-        v_low = torch.rand(n, device=self.device) * 5.0
-        t_low = 0.005 + torch.rand(n, device=self.device) * 0.015
-
-        # 拼接为 (3n, 6)，一次前向
-        pts_all = torch.cat(
-            [
-                torch.cat(
-                    [xyz, torch.zeros(n, 1, device=self.device), v_early.unsqueeze(1), t_early.unsqueeze(1)], dim=1
-                ),
-                torch.cat(
-                    [
-                        xyz,
-                        torch.zeros(n, 1, device=self.device),
-                        torch.zeros(n, 1, device=self.device),
-                        t_0v.unsqueeze(1),
-                    ],
-                    dim=1,
-                ),
-                torch.cat([xyz, torch.zeros(n, 1, device=self.device), v_low.unsqueeze(1), t_low.unsqueeze(1)], dim=1),
-            ],
-            dim=0,
-        )  # (3n, 6)
-
-        phi_all = self.model(pts_all)[:, 4]  # (3n,)
-        phi_early = phi_all[:n]
-        phi_0v = phi_all[n : 2 * n]
-        phi_low = phi_all[2 * n :]
-
-        # target: phi_IC(z)
-        phi_ic_target = 0.5 * (1.0 + torch.tanh((h_ink - z) / delta_ic))
-
-        # S3 退火：zero_voltage 和 low_voltage 在 S3 后半段退火
-        _epoch = getattr(self, "_current_epoch", 0)
-        if _epoch > self.stage2_epochs:
-            _s3_total = max(1, self.epochs - self.stage2_epochs)
-            _s3_prog = (_epoch - self.stage2_epochs) / _s3_total
-            _volt_anneal = 1.0 if _s3_prog < 0.5 else max(0.1, 1.0 - 0.9 * ((_s3_prog - 0.5) / 0.5))
-        else:
-            _volt_anneal = 1.0
-
-        return {
-            "early_time": F.mse_loss(phi_early, phi_ic_target) * 100.0,
-            "zero_voltage": F.mse_loss(phi_0v, phi_ic_target) * 100.0 * _volt_anneal,
-            "low_voltage": F.mse_loss(phi_low, phi_ic_target) * 50.0 * _volt_anneal,
-        }
 
     def _compute_monotonicity_response_loss(self):
         """5. 单调性 & 电压响应约束 — 批量前向版本（4次→1次）。"""
