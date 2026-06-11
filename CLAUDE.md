@@ -148,45 +148,42 @@ src/
 > 统一梯度计算消除重复 autograd 调用，训练速度提升 3-4 倍。
 >
 > **BC 体系**（2026-06-11 重构后）：
-> - 顶面（z=Lz，ITO 玻璃）：φ=0 硬约束，φ=1=器件失效
-> - 壁顶（z≈wall_height，SU-8）：φ=0 硬约束 + bc 过采样，突破=失效
-> - 侧壁（x=0/Lx, y=0/Ly，Teflon）：无滑移 + φ 匹配，z 采样到 [0, Lz]
-> - 夹角区域（z=0 角落）：φ=1 bc 过采样（油墨堆积）
-> - 底面（z=0，Teflon）：`_compute_contact_angle_loss`，Young-Lippmann 调制
-> - ~~`_compute_unified_wetting_bc`~~ 已删除（与 bc 重叠）
-> - ~~`_compute_contact_line_dynamics_residual`~~ 已删除（与 contact_angle 重叠）
+> - 顶面（z=Lz=20μm，ITO 玻璃）：φ=0 硬约束
+> - 壁顶面（z=3.5μm，SU-8）：φ=0（极性液体），突破=器件失效
+> - 壁顶接触线（z≈3.5μm，壁面边缘）：φ=0.5（三相线）
+> - 夹角区域（z=0 角落，x/y∈[0,3.5μm]∪[L-3.5μm,L]）：φ=1（油墨堆积）
+> - 侧壁（x=0/Lx, y=0/Ly）：无滑移 + φ 匹配
+> - 底面（z=0）：接触角 BC（Young-Lippmann 调制）
+> - IC：硬约束 blend（t<2ms 或 V<V_T → 强制 IC；t>2ms, V>V_T → 渐变自由）
 
 | 行号 | 函数/方法 | 用途 | 活跃？ |
 |------|-----------|------|--------|
-| 37 | `_get_default_materials_params()` | 回退硬编码材料参数 | ✅ |
-| 118 | `class PhysicsConstraints` | 物理约束类 | ✅ |
-| 134 | `_compute_capacitance()` | 介电层串联电容计算 | ✅ |
-| 151 | `compute_navier_stokes_residual()` | NS方程（连续性+动量+EWF+CSF）| ✅ |
-| 345 | `_compute_laplacian()` | 标量场 Laplacian | ✅ |
+| 27 | `_get_default_materials_params()` | 回退硬编码材料参数 | ✅ |
+| 108 | `class PhysicsConstraints` | 物理约束类 | ✅ |
+| 121 | `_compute_capacitance()` | 介电层串联电容计算 | ✅ |
+| 138 | `compute_navier_stokes_residual()` | NS方程（连续性+动量+EWF+CSF）| ✅ |
+| 341 | `_compute_laplacian()` | 标量场 Laplacian（回退用） | ✅ |
 | 384 | `compute_volume_conservation_residual()` | 体积守恒 | ✅ |
 | 528 | `compute_interface_energy_residual()` | 界面能 σ\|∇φ\| | ✅ |
-| 546 | `safe_compute_laplacian_spatial()` | 安全空间Laplacian | ✅ |
 | 567 | `safe_compute_gradient()` | 安全梯度计算 | ✅ |
 | 592 | `compute_laplace_pressure_residual()` | Laplace压力一致 | ✅ |
-| 648 | `_compute_all_gradients()` | **统一梯度计算**（一次性 autograd，分发给所有约束）| ✅ |
+| 648 | `_compute_all_gradients()` | **统一梯度计算**（一次性 autograd）| ✅ |
 | 689 | **`compute_core_residuals()`** | **统一入口，调用所有活跃约束** | ✅ |
 | 748 | `_compute_temporal_smoothness()` | 时间连续性正则化 | ✅ |
 | 789 | `_compute_vof_residual()` | Allen-Cahn相场方程 | ✅ |
-| 855 | `safe_compute_laplacian()` | 安全Laplacian | ✅ |
-| 875 | `safe_compute_hessian()` | 安全Hessian | ✅ |
-| 898 | `_empty_residual()` | 空残差（降级用） | ✅ |
+| 952 | `_empty_residual()` | 空残差（降级用） | ✅ |
 
 **`compute_core_residuals()` 调用链**（L689）：
-1. `_compute_all_gradients()` — 统一计算所有梯度（一次性 autograd）
+1. `_compute_all_gradients()` — 统一计算所有梯度
 2. `compute_navier_stokes_residual()` — NS 方程残差
-3. `_compute_vof_residual()` — VOF 相场方程
+3. `_compute_vof_residual()` — Allen-Cahn 相场方程
 4. `compute_volume_conservation_residual()` — 体积守恒
-5. `compute_interface_energy_residual()` — 界面能
-6. `compute_laplace_pressure_residual()` — Laplace 压力
+5. `compute_interface_energy_residual()` — 界面能 σ\|∇φ\|
+6. `compute_laplace_pressure_residual()` — Laplace 压力一致
 7. `_compute_temporal_smoothness()` — 时间连续性
-8. `_compute_unified_wetting_bc()` — 统一相场润湿 BC（底面+侧壁，含 Young-Lippmann 电压调制）
-9. `_compute_contact_line_dynamics_residual()` — 接触线动力学
-10. 压力钉扎（pressure_pin）
+8. 压力钉扎（pressure_pin）
+
+**已删除**：`_compute_unified_wetting_bc`、`_compute_contact_line_dynamics_residual`、`safe_compute_laplacian_spatial`、`safe_compute_hessian`、`DYNAMIC_WEIGHT_AVAILABLE`
 
 ---
 
@@ -198,11 +195,10 @@ src/
 | 159 | `FourierFeature` | Fourier特征映射 (x,y,z→96) |
 | 172 | `class TwoPhasePINN` | 主PINN网络 | ✅ |
 | 191 | `TwoPhasePINN.__init__()` | phi_net[128,128,64,32] + vel_net[64,64,32] |
-| 253 | `TwoPhasePINN.forward()` | (B,6)→(B,5): u,v,w,p,phi |
-| 330 | `TwoPhasePINN.forward_triplet()` | 三时间点前向，用于时间导数 |
-| 369 | `class PhysicsLoss` | 物理损失适配层 | ✅ |
-| 388 | `PhysicsLoss.__init__()` | 加载参数，实例化 PhysicsConstraints |
-| 423 | `PhysicsLoss._sanitize_tensor()` | NaN/Inf 清理 |
+| 263 | `TwoPhasePINN.forward()` | (B,6)→(B,5): u,v,w,p,phi，含硬约束 blend |
+| 430 | `class PhysicsLoss` | 物理损失适配层 | ✅ |
+| 449 | `PhysicsLoss.__init__()` | 加载参数，实例化 PhysicsConstraints |
+| 484 | `PhysicsLoss._sanitize_tensor()` | NaN/Inf 清理 |
 | 442 | `PhysicsLoss.compute_all_residuals()` | 调用 compute_core_residuals + 清理 |
 | 464 | `PhysicsLoss.explicit_volume_conservation_loss()` | 显式体积守恒 |
 | 487 | `PhysicsLoss.compute_total_loss()` | 加权总loss（log1p缩放+自适应EMA归一化） |
