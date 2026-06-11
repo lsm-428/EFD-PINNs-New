@@ -352,9 +352,9 @@ class TwoPhasePINN(nn.Module):
             on_wall_top_face = on_wall_top_z & ~on_contact_line
 
             # 夹角区域（z=0 角落毛细区）：强制 φ=1
-            # 夹角区域：x 或 y 在 [0, wall_top_half_width] 或 [L-wall_top_half_width, L]
-            on_corner_x = (x_phys < self.wall_top_half_width) | (x_phys > self.Lx - self.wall_top_half_width)
-            on_corner_y = (y_phys < self.wall_top_half_width) | (y_phys > self.Ly - self.wall_top_half_width)
+            # 夹角区域：x 或 y 在 [0, wall_height] 或 [L-wall_height, L]
+            on_corner_x = (x_phys < self.wall_height) | (x_phys > self.Lx - self.wall_height)
+            on_corner_y = (y_phys < self.wall_height) | (y_phys > self.Ly - self.wall_height)
             on_corner_z0 = (z_norm < 1e-6) & (on_corner_x | on_corner_y)
 
             # 应用接触线 BC
@@ -1454,8 +1454,11 @@ class DataGenerator:
             if on_wall_top_z and d_wall < self.wall_top_z_tol:
                 phi = 0.5
 
-            # 夹角区域：φ=1（油墨堆积）
-            if d_wall < self.wall_top_half_width and z < self.wall_height:
+            # 夹角区域（角落毛细区）：φ=1（油墨堆积）
+            # 夹角区域：x 或 y 在 [0, wall_height] 或 [L-wall_height, L]
+            in_corner_x = (x < self.wall_height) or (x > self.Lx - self.wall_height)
+            in_corner_y = (y < self.wall_height) or (y > self.Ly - self.wall_height)
+            if (in_corner_x or in_corner_y) and z < self.wall_height:
                 phi = 1.0
 
             # 三元组格式: (x, y, z, V_from, V_to, t_since)
@@ -1513,20 +1516,20 @@ class DataGenerator:
             V_to = np.random.uniform(0, 30.0)
             t = sample_continuous_times(1)[0]
 
-            # 随机选择一个角落
+            # 随机选择一个角落（夹角区域范围：wall_height）
             corner = np.random.randint(0, 4)
             if corner == 0:  # (0, 0)
-                x = np.random.uniform(0, self.wall_top_half_width)
-                y = np.random.uniform(0, self.wall_top_half_width)
+                x = np.random.uniform(0, self.wall_height)
+                y = np.random.uniform(0, self.wall_height)
             elif corner == 1:  # (Lx, 0)
-                x = np.random.uniform(self.Lx - self.wall_top_half_width, self.Lx)
-                y = np.random.uniform(0, self.wall_top_half_width)
+                x = np.random.uniform(self.Lx - self.wall_height, self.Lx)
+                y = np.random.uniform(0, self.wall_height)
             elif corner == 2:  # (0, Ly)
-                x = np.random.uniform(0, self.wall_top_half_width)
-                y = np.random.uniform(self.Ly - self.wall_top_half_width, self.Ly)
+                x = np.random.uniform(0, self.wall_height)
+                y = np.random.uniform(self.Ly - self.wall_height, self.Ly)
             else:  # (Lx, Ly)
-                x = np.random.uniform(self.Lx - self.wall_top_half_width, self.Lx)
-                y = np.random.uniform(self.Ly - self.wall_top_half_width, self.Ly)
+                x = np.random.uniform(self.Lx - self.wall_height, self.Lx)
+                y = np.random.uniform(self.Ly - self.wall_height, self.Ly)
 
             z = 0.0  # 底面
 
