@@ -23,15 +23,6 @@ except ImportError:
 # 共享梯度工具 (消除跨文件公式重复)
 from src.utils.gradients import compute_gradient, gradient_magnitude, mean_curvature_3d
 
-# 导入动态权重调整模块
-try:
-    import src.training.scheduler  # noqa: F401
-
-    DYNAMIC_WEIGHT_AVAILABLE = True
-except ImportError:
-    logger.warning("动态权重调整模块不可用，将使用固定权重")
-    DYNAMIC_WEIGHT_AVAILABLE = False
-
 
 def _get_default_materials_params() -> dict:
     """获取默认材料参数（优先从统一配置加载）"""
@@ -555,27 +546,6 @@ class PhysicsConstraints:
             device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
             return {"interface_energy": torch.zeros(x_phys.shape[0], device=device, requires_grad=True)}
 
-    def safe_compute_laplacian_spatial(self, scalar_field: torch.Tensor, coords: torch.Tensor, spatial_dims: int = 3):
-        try:
-            grad = self.safe_compute_gradient(scalar_field, coords)
-            lap = torch.zeros_like(scalar_field)
-            dims = min(spatial_dims, coords.shape[-1])
-            for i in range(dims):
-                gi = grad[..., i]
-                g2 = torch.autograd.grad(
-                    outputs=gi,
-                    inputs=coords,
-                    grad_outputs=torch.ones_like(gi),
-                    create_graph=True,
-                    retain_graph=True,
-                    allow_unused=True,
-                )[0]
-                if g2 is not None:
-                    lap = lap + g2[..., i]
-            return lap
-        except Exception:
-            return torch.zeros_like(scalar_field)
-
     def safe_compute_gradient(self, output: torch.Tensor, input_tensor: torch.Tensor):
         try:
             if not isinstance(output, torch.Tensor) or not isinstance(input_tensor, torch.Tensor):
@@ -969,29 +939,6 @@ class PhysicsConstraints:
             return lap
         except Exception:
             return torch.zeros_like(scalar_field)
-
-    def safe_compute_hessian(self, scalar_field: torch.Tensor, coords: torch.Tensor):
-        try:
-            dim = coords.shape[-1]
-            H = torch.zeros((*coords.shape[:-1], dim, dim), device=coords.device)
-            grad = self.safe_compute_gradient(scalar_field, coords)
-            for i in range(dim):
-                gi = grad[..., i]
-                g2 = torch.autograd.grad(
-                    outputs=gi,
-                    inputs=coords,
-                    grad_outputs=torch.ones_like(gi),
-                    create_graph=True,
-                    retain_graph=True,
-                    allow_unused=True,
-                )[0]
-                if g2 is not None:
-                    for j in range(dim):
-                        H[..., i, j] = g2[..., j]
-            return H
-        except Exception:
-            dim = coords.shape[-1]
-            return torch.zeros((*coords.shape[:-1], dim, dim), device=coords.device)
 
     def _empty_residual(self, x, predictions):
         """返回空的残差字典"""
