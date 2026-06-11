@@ -357,13 +357,21 @@ class TwoPhasePINN(nn.Module):
 
             # ============================================================
             # 3. 初始条件 IC(z)
-            #    壁顶区域（z > wall_height - z_tol）→ φ=0（极性液体接触面）
-            #    壁侧区域（z < wall_height - z_tol）→ φ_IC(z) = tanh 台阶
+            #    物理：油墨在 z∈[0, h_ink=3μm]，壁顶接触线 z=3.5μm，壁顶面以上全是水
+            #    底板油膜呈微弱倒球冠：边缘 z=3.5μm，中心略低（<3.5μm），近似平铺
+            #    → 简化为：z < h_ink 时 φ=1，h_ink < z < wall_height 时 tanh 过渡，z > wall_height 时 φ=0
             # ============================================================
-            # 壁顶区域强制 φ=0
-            above_wall = z_phys > wall_height - wall_top_z_tol
+            above_wall = z_phys > wall_height + wall_top_z_tol
+            in_ink = z_phys < h_ink
+            # IC 目标：油墨区 φ=1，过渡区 tanh，壁顶以上 φ=0
             phi_ic = torch.where(
-                above_wall, torch.zeros_like(phi), 0.5 * (1.0 + torch.tanh((h_ink - z_phys) / delta_ic))
+                above_wall,
+                torch.zeros_like(phi),
+                torch.where(
+                    in_ink,
+                    torch.ones_like(phi),
+                    0.5 * (1.0 + torch.tanh((h_ink - z_phys) / delta_ic)),
+                ),
             )
 
             # ============================================================
@@ -968,8 +976,10 @@ class DataGenerator:
         # 正常区域：根据 η 选择模式
         # ============================================================
         if eta < 0.01:
-            # 无开口：初始状态
-            phi_z = 0.5 * (1 + np.tanh((h_ink - z) / (interface_width / 3)))
+            # 无开口：初始状态，油墨在 z∈[0, h_ink=3μm]
+            # 倒球冠形状：边缘 z=3.5μm（接触线），中心略低，近似平铺
+            # 简化：z < h_ink 时 φ=1，h_ink < z < wall_height 时 tanh 过渡
+            phi_z = 1.0 if z < h_ink else 0.5 * (1 + np.tanh((h_ink - z) / (interface_width / 3)))
         elif eta <= eta_lo:
             phi_z = self._center_opening_phi(x, y, z, eta, h_ink, r_open, interface_width)
         elif eta >= eta_hi:
@@ -1335,15 +1345,19 @@ class DataGenerator:
             d_wall = min(x, self.Lx - x, y, self.Ly - y)
 
             # IC 目标：根据位置决定 φ
-            if z > self.wall_height - self.wall_top_z_tol:
-                # 壁顶区域：极性液体 → φ=0
+            # 物理：油墨在 z∈[0, h_ink=3μm]，壁顶接触线 z=3.5μm，壁顶面以上全是水
+            if z > self.wall_height + self.wall_top_z_tol:
+                # 壁顶面以上：全是水 → φ=0
                 phi = 0.0
             elif abs(z - self.wall_height) < self.wall_top_z_tol and d_wall < self.wall_top_z_tol:
-                # 壁顶接触线区域：三相接触线 → φ=0.5
+                # 壁顶接触线区域（三相接触线）→ φ=0.5
                 phi = 0.5
+            elif z < self.h_ink:
+                # 油墨区域：φ=1
+                phi = 1.0
             else:
-                # 正常区域：tanh 台阶
-                phi = 0.5 * (1 - np.tanh((z - self.h_ink) / interface_width))
+                # 界面过渡区（h_ink < z < wall_height）：tanh 平滑
+                phi = 0.5 * (1 + np.tanh((self.h_ink - z) / interface_width))
 
             phi = np.clip(phi, 0, 1)
 
