@@ -320,9 +320,9 @@ class TwoPhasePINN(nn.Module):
             # 4. Blend 因子：决定 IC 约束强度
             #    物理规则：
             #      - z=0 底面：blend ≡ 1（永远自由，不约束径向分布）
-            #      - t < 2ms 且 V < V_t：强制 IC（油墨未响应，保持初始状态）
+            #      - t < 2ms 或 V < V_T：强制 IC（油墨未响应或电润湿力不足）
             #      - t=0：完全 IC
-            #      - t>0 且 V>V_t：逐渐自由（电润湿驱动变形）
+            #      - t>0 且 V>V_T：逐渐自由（电润湿驱动变形）
             z_mask = (z_norm > 1e-6).float()  # z=0→0, z>0→1
 
             # 时间-电压联合判断：早期时间 + 低电压 → 强制 IC
@@ -331,8 +331,9 @@ class TwoPhasePINN(nn.Module):
             V_eff = x[:, 4]  # V_to（6D 输入第 5 列）
             t_since = x[:, 5]  # t_since（6D 输入第 6 列）
 
-            # 强制 IC 条件：t < 2ms 且 V_to < V_T
-            force_ic = ((t_since < t_early) & (V_eff < V_T)).float()
+            # 强制 IC 条件：t < 2ms 或 V_to < V_T（宽松版）
+            # 物理：早期时间油墨未响应，或低电压电润湿力不足，都应收敛到初始状态
+            force_ic = ((t_since < t_early) | (V_eff < V_T)).float()
 
             # blend 计算：
             #   force_ic=1 → blend=0（完全 IC）
