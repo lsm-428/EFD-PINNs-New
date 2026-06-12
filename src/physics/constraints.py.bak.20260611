@@ -368,6 +368,71 @@ class PhysicsConstraints:
         except Exception:
             return torch.zeros_like(scalar_field)
 
+    def compute_volume_conservation_residual(self, x_phys: torch.Tensor, predictions: torch.Tensor):
+        try:
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            batch_size = predictions.shape[0] if isinstance(predictions, torch.Tensor) else 1
+
+            residuals = {
+                "volume_conservation": torch.zeros(batch_size, device=device, requires_grad=True),
+                "volume_consistency": torch.zeros(batch_size, device=device, requires_grad=True),
+            }
+
+            if isinstance(predictions, torch.Tensor) and predictions.shape[1] >= 5:
+                alpha = predictions[:, 4]
+                alpha_clamped = torch.clamp(alpha, 0.0, 1.0)
+                base_consistency = alpha - alpha_clamped
+
+                ink_fraction_target = self.materials_params.get("ink_initial_fraction", 0.15)
+                alpha_mean = torch.mean(alpha_clamped)
+                global_volume_residual = (alpha_mean - ink_fraction_target) / max(ink_fraction_target, 1e-6)
+                global_volume_residual_tensor = global_volume_residual.expand(batch_size)
+
+                overflow_penalty = torch.zeros(batch_size, device=device, requires_grad=True)
+                if isinstance(x_phys, torch.Tensor) and x_phys.dim() == 2 and x_phys.size(1) >= 3:
+                    coords = x_phys.detach()
+                    x = coords[:, 0]
+                    y = coords[:, 1]
+                    z = coords[:, 2]
+
+                    x_min, x_max = torch.min(x), torch.max(x)
+                    y_min, y_max = torch.min(y), torch.max(y)
+
+                    Lx = (x_max - x_min).clamp(min=1e-9)
+                    Ly = (y_max - y_min).clamp(min=1e-9)
+
+                    self.materials_params.get("ink_thickness", 3e-6)
+                    margin_x = 0.1 * Lx
+                    margin_y = 0.1 * Ly
+
+                    near_left = (x - x_min).abs() < margin_x
+                    near_right = (x_max - x).abs() < margin_x
+                    near_front = (y - y_min).abs() < margin_y
+                    near_back = (y_max - y_min).abs() < margin_y
+
+                    near_wall = near_left | near_right | near_front | near_back
+                    wall_h = self.materials_params.get("wall_height", 3.5e-6)
+                    above_wall = z > wall_h
+                    overflow_mask = near_wall & above_wall
+
+                    if overflow_mask.any():
+                        overflow_alpha = alpha_clamped * overflow_mask.float()
+                        overflow_penalty = overflow_alpha
+
+                residuals["volume_conservation"] = global_volume_residual_tensor
+                residuals["volume_consistency"] = base_consistency + overflow_penalty
+
+            return residuals
+
+        except Exception as e:
+            logger.error(f"计算体积守恒残差失败: {e!s}")
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            batch_size = x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
+            return {
+                "volume_conservation": torch.zeros(batch_size, device=device, requires_grad=True),
+                "volume_consistency": torch.zeros(batch_size, device=device, requires_grad=True),
+            }
+
     def compute_laplace_pressure_residual(self, x_phys: torch.Tensor, predictions: torch.Tensor, grads=None):
         """
         Laplace 压力一致约束: 沿界面 κ = 常数
@@ -462,11 +527,8 @@ class PhysicsConstraints:
                 return res
             phi = predictions[:, 4]
             # 从统一梯度计算结果读取 phi 梯度
-            # [2026-06-11] NaN 修复：加 eps 保护，防止 sqrt(0) 在反向传播时产生 NaN 梯度
-            # 根因：当 φ 在均匀区域 (φ=0 或 φ=1) 时，phi_x=phi_y=phi_z=0，
-            # sqrt(0) 的梯度 = 0/0 = NaN，通过计算图传播到所有参数。
             if grads is not None:
-                grad_mag = torch.sqrt(grads["phi_x"] ** 2 + grads["phi_y"] ** 2 + grads["phi_z"] ** 2 + 1e-10)
+                grad_mag = torch.sqrt(grads["phi_x"] ** 2 + grads["phi_y"] ** 2 + grads["phi_z"] ** 2)
             else:
                 try:
                     g = torch.autograd.grad(phi.sum(), x_phys, create_graph=True, retain_graph=True)[0]
@@ -627,21 +689,28 @@ class PhysicsConstraints:
             logger.warning(f"VOF 残差计算失败: {e}")
             residuals["vof"] = torch.zeros(batch_size, device=device)
 
-        # 3. 界面能残差
+        # 3. 体积守恒残差
+        try:
+            vc_residuals = self.compute_volume_conservation_residual(x_phys, predictions)
+            residuals.update(vc_residuals)
+        except Exception as e:
+            logger.warning(f"体积守恒残差计算失败: {e}")
+
+        # 4. 界面能
         try:
             ie_residuals = self.compute_interface_energy_residual(x_phys, predictions, grads=grads)
             residuals.update(ie_residuals)
         except Exception as e:
             logger.warning(f"界面能约束计算失败: {e}")
 
-        # 4. Laplace 压力一致约束
+        # 5. Laplace 压力一致约束
         try:
             lp_residuals = self.compute_laplace_pressure_residual(x_phys, predictions, grads=grads)
             residuals.update(lp_residuals)
         except Exception as e:
             logger.warning(f"Laplace 压力残差计算失败: {e}")
 
-        # 5. 时间连续性正则化（需要 model 做三时间点前向）
+        # 6. 时间连续性正则化（需要 model 做三时间点前向）
         try:
             temporal_residual = self._compute_temporal_smoothness(x_phys, predictions, model=model)
             residuals["temporal_smoothness"] = temporal_residual
@@ -891,4 +960,5 @@ class PhysicsConstraints:
             "momentum_v": torch.zeros(batch_size, device=device),
             "momentum_w": torch.zeros(batch_size, device=device),
             "vof": torch.zeros(batch_size, device=device),
+            "volume_conservation": torch.zeros(batch_size, device=device),
         }
