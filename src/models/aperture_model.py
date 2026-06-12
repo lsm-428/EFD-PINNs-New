@@ -1543,7 +1543,7 @@ def demo():
     validation = model.validate()
     logger.info(f"   体积守恒: {'✅' if validation['volume_conservation']['passed'] else '❌'}")
     logger.info(f"   开口率范围: {'✅' if validation['aperture_range']['passed'] else '❌'}")
-    logger.info(f"   单调性: {'✅' if validation['monotonicity']['passed'] else '❌'}")
+    logger.info(f"   单调性: {'✅' if validation['steady_monotonicity']['passed'] else '❌'}")
 
     # 绘图 - 4个子图
     _fig, axes = plt.subplots(2, 2, figsize=(12, 10))

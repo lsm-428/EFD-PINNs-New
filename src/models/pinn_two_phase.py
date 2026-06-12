@@ -3047,8 +3047,6 @@ class Trainer:
 
                 # 构建详细的损失字符串
                 physics_str = ""
-                if "low_voltage" in losses:
-                    physics_str += f" | LV: {losses['low_voltage'].item():.2e}"
                 if "volume_conservation" in losses:
                     vol_val = losses["volume_conservation"].item()
                     # 体积守恒：显示趋势箭头
