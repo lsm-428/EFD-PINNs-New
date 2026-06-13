@@ -57,27 +57,20 @@ class PhysicsBasedSampler:
             },
         )
 
-        # 阈值电压参数 — 优先从 Stage1 读取，回退到 PHYSICS（单一来源）
-        from src.config import PHYSICS
-
+        # 阈值电压参数 — 优先从 Stage1 读取
         if stage1_predictor is not None:
-            V_T_fallback = PHYSICS["V_T_base"]
-            self.V_T_base = stage1_predictor.params.get(
-                "V_T_base", stage1_predictor.params.get("V_threshold", V_T_fallback)
-            )
+            self.V_T_base = stage1_predictor.params.get("V_T_base", stage1_predictor.params.get("V_threshold", 3.0))
         else:
-            self.V_T_base = PHYSICS["V_T_base"]
-        self.V_T_sensitivity = PHYSICS["V_T_sensitivity"]
+            self.V_T_base = config.get("threshold_voltage_base", 3.0)
+        self.V_T_sensitivity = config.get("threshold_voltage_sensitivity", 2e6)
 
-        # 时间采样配置 — 从 PHYSICS 读取校准后的 τ 值
+        # 时间采样配置 — 对齐 Stage1 参数
         if stage1_predictor is not None:
-            default_tau_onset = stage1_predictor.params.get("tau_onset", PHYSICS["tau_onset"])
-            default_tau_linear = stage1_predictor.params.get("tau", PHYSICS["tau"])
-            default_tau_sat = stage1_predictor.params.get("tau_saturation", PHYSICS["tau_saturation"])
+            default_tau_onset = stage1_predictor.params.get("tau_onset", 0.0075)
+            default_tau_linear = stage1_predictor.params.get("tau", 0.005)
+            default_tau_sat = stage1_predictor.params.get("tau_saturation", 0.003)
         else:
-            default_tau_onset = PHYSICS["tau_onset"]
-            default_tau_linear = PHYSICS["tau"]
-            default_tau_sat = PHYSICS["tau_saturation"]
+            default_tau_onset, default_tau_linear, default_tau_sat = 0.0075, 0.005, 0.003
 
         self.time_config = config.get(
             "time_sampling",
@@ -165,17 +158,14 @@ class PhysicsBasedSampler:
 
             voltages.extend(v_samples)
 
-        # 补充剩余样本（上限从 PHYSICS 读取，与 DataGenerator 一致）
-        from src.config import PHYSICS
-
-        V_max = PHYSICS["V_max"]  # 30.0
+        # 补充剩余样本（限制 V <= 20V，避免 target3D 崩溃）
         if len(voltages) < n_samples:
             remaining = n_samples - len(voltages)
-            v_extra = np.random.uniform(0, V_max, remaining)
+            v_extra = np.random.uniform(0, 20.0, remaining)
             voltages.extend(v_extra)
 
-        # 限制最大电压为 V_max
-        voltages = np.clip(voltages, 0, V_max)
+        # 限制最大电压为 20V（target3D 在 V > 25V 时崩溃）
+        voltages = np.clip(voltages, 0, 20.0)
 
         return np.array(voltages[:n_samples])
 
@@ -219,12 +209,9 @@ class PhysicsBasedSampler:
         else:
             tau = self.time_config["tau_saturation"]
 
-        # 调整时间常数（降压响应更快，因子从 PHYSICS 读取）
+        # 调整时间常数（降压响应更快）
         if not is_ramp_up:
-            from src.config import PHYSICS
-
-            tau_recovery_factor = PHYSICS.get("tau_recovery_factor", 0.85)
-            tau *= tau_recovery_factor
+            tau *= 0.4  # 降压响应速度约为升压的2.5倍
 
         # 关键时间点采样
         critical_density = self.time_config["critical_points_density"]
@@ -322,7 +309,7 @@ class PhysicsBasedSampler:
         估算开口率
 
         优先使用 Stage1 精确模型（Young-Lippmann + tanh + 电容反馈）；
-        若不可用则回退到余弦映射模型（与 DataGenerator.get_opening_rate 一致）。
+        若不可用则回退到修正后的简化模型。
         """
         if self._stage1_predictor is not None and self._stage1_aperture is not None:
             theta_ss = self._stage1_predictor.young_lippmann(voltage)
@@ -333,30 +320,27 @@ class PhysicsBasedSampler:
                 theta_t = theta_ss
             return float(self._stage1_aperture.contact_angle_to_aperture_ratio(theta_t))
 
-        # 回退：tanh 饱和映射（与 DataGenerator.get_opening_rate 一致，参数从 PHYSICS 读取）
-        from src.config import PHYSICS
-
+        # 回退：修正后的简化模型（仅 Stage1 不可用时使用）
         V_T = self.V_T_base
         if voltage <= V_T:
             return 0.0
 
-        theta = self._estimate_contact_angle(voltage, time)
-        theta0 = PHYSICS["theta0"]
-        eta_max_aperture = PHYSICS.get("eta_max_aperture", 0.85)
-        k = PHYSICS.get("aperture_k", 2.02)
-        theta_scale = PHYSICS.get("aperture_theta_scale", 27.46)
+        V_eff = voltage - V_T
+        tau = self.time_config.get("tau_linear", 0.005)
+        try:
+            from src.config import PHYSICS
 
-        dtheta = theta0 - theta
-        if dtheta <= 0:
-            return 0.0
-        return float(np.clip(eta_max_aperture * np.tanh(k * dtheta / theta_scale), 0.0, eta_max_aperture))
+            eta_max_ref = PHYSICS["eta_max"]
+        except ImportError:
+            eta_max_ref = 0.68
+        eta_max = min(eta_max_ref, V_eff / 18.0)
+        return eta_max * (1.0 - np.exp(-time / tau))
 
     def _estimate_contact_angle(self, voltage: float, time: float) -> float:
         """
         估算接触角（度）
 
-        优先使用 Stage1 精确模型；若不可用则回退到 Young-Lippmann + 动态响应。
-        回退模型所有参数从 PHYSICS 读取，与 DataGenerator._analytical_contact_angle 一致。
+        优先使用 Stage1 精确模型；若不可用则回退到简化模型。
         """
         if self._stage1_predictor is not None:
             theta_ss = self._stage1_predictor.young_lippmann(voltage)
@@ -365,42 +349,11 @@ class PhysicsBasedSampler:
                 return self._stage1_predictor.dynamic_response(time, theta_start, theta_ss, V_to=voltage)
             return theta_ss
 
-        # 回退：Young-Lippmann + 一阶动态响应（参数全部从 PHYSICS 读取）
-        from src.config import PHYSICS
-
-        theta0 = PHYSICS["theta0"]
-        V_threshold = PHYSICS["V_threshold"]
-        V_eff = max(0.0, voltage - V_threshold)
-
-        if V_eff <= 0.0:
-            return theta0
-
-        # 介电层串联电容（简化单层模型，与 _analytical_contact_angle 一致）
-        epsilon_0 = PHYSICS["epsilon_0"]
-        epsilon_r = PHYSICS["epsilon_r"]
-        d_dielectric = PHYSICS["d_dielectric"]
-        sigma = PHYSICS["sigma"]
-        C_total = epsilon_0 * epsilon_r / d_dielectric
-
-        cos_theta0 = np.cos(np.radians(theta0))
-        ew_term = C_total * V_eff**2 / (2.0 * sigma)
-        cos_theta_eq = np.clip(cos_theta0 + ew_term, -1.0, 1.0)
-        theta_eq = np.degrees(np.arccos(cos_theta_eq))
-
-        # 一阶动态响应（zeta=1.0 → 临界阻尼，无振荡）
-        tau = PHYSICS["tau"]
-        zeta = PHYSICS["zeta"]
-        omega_0 = 1.0 / tau
-        if zeta >= 1.0:
-            theta_t = theta_eq + (theta0 - theta_eq) * np.exp(-omega_0 * time)
-        else:
-            omega_d = omega_0 * np.sqrt(1.0 - zeta**2)
-            exp_term = np.exp(-zeta * omega_0 * time)
-            damping = zeta / np.sqrt(1.0 - zeta**2)
-            theta_t = theta_eq + (theta0 - theta_eq) * exp_term * (
-                np.cos(omega_d * time) + damping * np.sin(omega_d * time)
-            )
-        return theta_t
+        # 回退：简化模型
+        V_T = self.V_T_base
+        if voltage <= V_T:
+            return 120.0
+        return 120.0  # 简化：无电压依赖
 
     def _sample_z_interface(
         self, n_samples: int, eta: float, voltage: float, time: float, r_open: float = 0.0, theta: float = 120.0

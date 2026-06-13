@@ -111,16 +111,16 @@ PHYSICS: dict[str, Any] = {
     "ac_interface_width": 5e-07,  # 界面宽度 (m) = 0.5μm, v7.2 校准值
     "ac_mobility": 1e-10,  # 迁移率 (m³·s/kg)
     # ========== 开口率参数 ==========
-    "eta_max": 0.68,  # 最大开口率
+    "eta_max": 0.68,  # Stage1 解析模型开口率上限（内部截断用）
+    "eta_max_aperture": 0.785,  # 开口率物理真实上限（pi/4，r_open=Lx/2 临界值，壁顶 BC 防止翻墙）
+    "aperture_k": 2.02,  # tanh 映射陡度（实验数据点拟合：0V→0, 20V→0.599, 30V→0.834）
+    "aperture_theta_scale": 27.46,  # tanh 映射角度缩放（实验数据点拟合）
+    "aperture_alpha": 0.03,  # 电容反馈强度
     "ink_initial_fraction": 0.15,  # 初始油墨体积分数
     # ========== 电润湿 EW 力参数 ==========
     "lambda_debye": 50e-9,  # 德拜屏蔽长度 [m] ~50nm，EW 力 z 方向衰减尺度
     # ========== 物理模型开关 ==========
     "use_convection": False,  # Re≈1-5, 默认关闭对流项
-    # ========== 开口率映射参数（用真实材料参数后需重新标定）==========
-    "aperture_k": 3.0,  # 映射陡度（提高以补偿 Δθ 缩小）
-    "aperture_theta_scale": 19.0,  # 角度缩放因子（降低使 tanh 更早饱和）
-    "aperture_alpha": 0.03,  # 电容反馈强度（稍增）
     # ========== target3D 非平凡结构参数（P3 新增，v2: 参数调大使训练可感知）==========
     "meniscus_kappa": 0.8,  # 接触线处油墨堆高曲率 (无量纲，0.5-1.5)，原 0.3 偏小
     "meniscus_delta_h": 1.5e-6,  # 弯月面额外高度 (m)，单角墨滴模式，原 0.5μm 偏小

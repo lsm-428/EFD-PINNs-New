@@ -138,11 +138,11 @@
         "_comment_capacitance": "Capacitance formula: C = A_eff / (d_su8/(eps0*eps_su8) + d_teflon/(eps0*eps_teflon)). A_eff absorbs fringe field, surface roughness, and pixel array effects."
     },
     "aperture_mapping": {
-        "k": 3.0,
-        "theta_scale": 19.0,
+        "k": 2.02,
+        "theta_scale": 27.46,
         "alpha": 0.03,
         "aperture_max": 0.68,
-        "_comment": "开口率映射(真实材料参数后重新标定): η=η_max×tanh(k×Δθ/theta_scale); Δθ@30V≈11°(旧拟合值Δθ≈52°); k和theta_scale调大以补偿Δθ缩小"
+        "_comment": "tanh 饱和映射: η=η_max×tanh(k×Δθ/theta_scale); 实验数据点拟合(0V→0, 20V→0.599, 30V→0.834); eta_max_aperture=0.85 为物理真实上限"
     },
     "physics_mechanism": {
         "_1_electrowetting": "电润湿作用在极性液体上，使其润湿疏水层(Teflon)",
