@@ -925,9 +925,6 @@ class DataGenerator:
         near_wall_edge = d_wall < wall_top_z_tol  # 靠近壁面边缘
         on_contact_line = on_wall_top_z & near_wall_edge
 
-        # 壁顶面区域：z≈wall_height 但不在接触线
-        on_wall_top_face = on_wall_top_z & ~near_wall_edge
-
         # 壁顶以上区域：z > wall_height
         above_wall = z > wall_height - wall_top_z_tol
 
@@ -941,24 +938,44 @@ class DataGenerator:
         eta_lo, eta_hi = 0.40, 0.50
 
         # ============================================================
-        # 围堰接触线/面 BC（最高优先级）
+        # 壁顶面/接触线 BC（最高优先级）
+        #    接触线（z≈wall_height, 壁面边缘）→ φ=0.5（三相线）
+        #    壁顶面（z≈wall_height, 非接触线）→ φ=0（SU-8 亲水）
         # ============================================================
+        on_wall_top_z = abs(z - wall_height) < wall_top_z_tol
         if on_contact_line:
-            # 接触线：油-水-固体三相线 → φ=0.5
             return 0.5
-        if on_wall_top_face or above_wall:
-            # 壁顶面/以上：极性液体 → φ=0
+        if on_wall_top_z:
             return 0.0
+
+        # z > wall_height 区域：区分开口区和油墨堆积区
+        if above_wall:
+            if eta < 0.01:
+                return 0.0
+            # 计算到中心距离 r（above_wall 区域需要判断开口/油墨）
+            r = np.sqrt((x - self.Lx / 2) ** 2 + (y - self.Ly / 2) ** 2)
+            if r < r_open - interface_width:
+                # 开口区上方：水 → φ=0
+                return 0.0
+            if r > r_open + interface_width:
+                # 油墨堆积区上方：油墨 → φ=1（如果 z < h_edge）
+                h_edge = h_ink / max(1.0 - eta, PHYSICS["ink_initial_fraction"])
+                if z < h_edge - interface_width:
+                    return 1.0
+                if z > h_edge + interface_width:
+                    return 0.0
+                return 0.5 * (1 + np.tanh((h_edge - z) / (interface_width / 2)))
+            # 过渡区
+            return 0.5
 
         # ============================================================
         # 毛细区域：target3D 不处理（返回 NaN，由调用方跳过）
         # ============================================================
         if in_capillary and z < wall_height:
-            # 毛细区域由壁面爬升效应处理，target3D 不定义
             return np.nan
 
         # ============================================================
-        # 正常区域：根据 η 选择模式
+        # 正常区域（z ≤ wall_height）：根据 η 选择模式
         # ============================================================
         if eta < 0.01:
             # 无开口：初始状态，油墨在 z∈[0, h_ink=3μm]
@@ -1036,11 +1053,11 @@ class DataGenerator:
         radial = 0.5 * (1 - np.tanh((r_c - r_blob) / interface_width))
 
         # 弯月面形状：z_meniscus = h_edge + Δh·exp(-(r_c - r_blob)/λ)
-        # 弯月面在围堰内壁处最高，不超过 wall_height
+        # 弯月面可高于 wall_height，由表面张力束缚
         delta_h = PHYSICS.get("meniscus_delta_h", 1.5e-6)
         lam = PHYSICS.get("meniscus_lambda", 5e-6)
         z_meniscus = h_edge + delta_h * np.exp(-(r_c - r_blob) / lam)
-        z_meniscus = min(z_meniscus, self.wall_height)
+        z_meniscus = min(z_meniscus, self.Lz * 0.95)
 
         # z 分布：弯月面以下 φ=1，以上 φ=0
         return radial * 0.5 * (1 - np.tanh((z - z_meniscus) / (interface_width / 2)))
@@ -1109,9 +1126,11 @@ class DataGenerator:
         h_edge = self.h_ink / max(1.0 - eta, PHYSICS["ink_initial_fraction"])
 
         if np.random.rand() < 0.7:
-            # 70% 在界面附近：以 h_edge 为中心，±2×interface_width
+            # 70% 在界面附近：以 h_edge 为中心，±interface_width/2
+            # 界面宽度 interface_width=5μm 是过渡区半宽
+            # 采样标准差设为 interface_width/4，让点更集中在界面附近
             interface_width = PHYSICS["ac_interface_width"]
-            z = np.random.normal(h_edge, interface_width * 2)
+            z = np.random.normal(h_edge, interface_width / 4)
             z = np.clip(z, 0, self.Lz)
         else:
             # 30% 全域均匀采样，确保上部域也有监督信号
