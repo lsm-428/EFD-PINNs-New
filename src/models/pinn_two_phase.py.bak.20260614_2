@@ -430,7 +430,9 @@ class TwoPhasePINN(nn.Module):
             # z > wall_height: 完全自由（above_wall_mask=1 → blend=1）
             # z ≤ wall_height, force_ic=1: blend=0（强制 IC）
             # z ≤ wall_height, force_ic=0: blend=0.1（弱锚定）
-            blend = 1.0 - z_mask * (1.0 - above_wall_mask) * (force_ic * 1.0 + (1.0 - force_ic) * 0.1)
+            blend = 1.0 - z_mask * (1.0 - above_wall_mask) * (
+                force_ic * 1.0 + (1.0 - force_ic) * 0.1
+            )
 
             phi = (1.0 - blend) * phi_ic + blend * phi
             # IC blend 后重新强制接触线 BC（防止 blend 覆盖接触线 φ=0.5）
