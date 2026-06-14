@@ -387,21 +387,20 @@ class TwoPhasePINN(nn.Module):
             )
 
             # ============================================================
-            # 4. Blend 因子：决定 IC 约束强度
-            #    z=0 底面（非夹角区）：始终自由
-            #    z=0 夹角区（毛细区）：强制 φ=1
-            #    t<2ms 或 V<V_T：IC 约束区 blend=0（强制 phi_ic）
-            #    其他情况：IC 约束区 blend=0.1（弱锚定，防止遗忘初始状态）
-            #    z > wall_height：始终自由（blend=1），不受 IC 约束
+            # 4. Blend 因子：二值切换，无弱锚定
+            #    t<2ms 或 V<V_T：blend=0（强制 phi_ic，初始状态直接输出）
+            #    其他情况：blend=1（完全自由，网络自己学）
+            #    z > wall_height：始终 blend=1（不受 IC 约束）
+            #    z=0 夹角区：强制 φ=1（毛细钉扎）
             # ============================================================
             z_mask = (z_norm > 1e-6).float()
             above_wall_mask = (z_phys > wall_height + wall_top_z_tol).float()
             force_ic = ((t_since < t_early) | (V_eff < V_T)).float()
 
-            # z > wall_height: 完全自由（above_wall_mask=1 → blend=1）
-            # z ≤ wall_height, force_ic=1: blend=0（强制 IC）
-            # z ≤ wall_height, force_ic=0: blend=0.1（弱锚定）
-            blend = 1.0 - z_mask * (1.0 - above_wall_mask) * (force_ic * 1.0 + (1.0 - force_ic) * 0.1)
+            # z > wall_height: 完全自由
+            # z ≤ wall_height, force_ic=1: 强制 IC（初始状态直接输出）
+            # z ≤ wall_height, force_ic=0: 完全自由
+            blend = 1.0 - z_mask * (1.0 - above_wall_mask) * force_ic
 
             phi = (1.0 - blend) * phi_ic + blend * phi
             # z=0 夹角区域（毛细区）强制 φ=1
