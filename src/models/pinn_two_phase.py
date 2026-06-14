@@ -346,46 +346,20 @@ class TwoPhasePINN(nn.Module):
             phi = phi_learned * (1.0 - z_norm)
 
             # ============================================================
-            # 2. 围堰接触线 BC
-            #    物理：4 条壁顶接触线（z=wall_height, x/y 在 [wall_height, L-wall_height]）
-            #    接触线是油-水-固体三相线 → φ=0.5
-            #    接触线外侧（壁顶面）→ φ=0（极性液体）
-            #    接触线内侧（壁侧面）→ 由 IC/target3D 决定
+            # 2. 壁顶面 BC（SU-8 亲水面）
+            #    壁顶面（z≈wall_height）→ φ=0（极性液体占据）
+            #    接触线形态（φ=0.5 油水界面）由网络从 target3D 学习，不硬约束
+            #    φ=0.5 是界面追踪的自然结果，强制它会限制弯月面形状
             # ============================================================
-
-            # 判断是否在壁顶接触线区域
-            # 接触线条件：z ≈ wall_height 且 (x 或 y 在 [wall_height, L-wall_height] 范围内)
             on_wall_top_z = torch.abs(z_phys - wall_height) < wall_top_z_tol
+            on_wall_top_face = on_wall_top_z
 
-            # x 方向壁顶接触线：y 在范围内，x 靠近 0 或 Lx
-            on_x_wall = (
-                (y_phys >= wall_height)
-                & (y_phys <= self.Ly - wall_height)
-                & ((x_phys < wall_top_z_tol) | (x_phys > self.Lx - wall_top_z_tol))
-            )
+            phi = torch.where(on_wall_top_face, torch.zeros_like(phi), phi)
 
-            # y 方向壁顶接触线：x 在范围内，y 靠近 0 或 Ly
-            on_y_wall = (
-                (x_phys >= wall_height)
-                & (x_phys <= self.Lx - wall_height)
-                & ((y_phys < wall_top_z_tol) | (y_phys > self.Ly - wall_top_z_tol))
-            )
-
-            # 接触线区域（z≈wall_height 且在壁顶边缘）
-            on_contact_line = on_wall_top_z & (on_x_wall | on_y_wall)
-
-            # 壁顶面区域（z≈wall_height 但不在接触线）→ φ=0
-            on_wall_top_face = on_wall_top_z & ~on_contact_line
-
-            # 夹角区域（z=0 角落毛细区）：强制 φ=1
-            # 夹角区域：x 或 y 在 [0, wall_height] 或 [L-wall_height, L]
+            # 夹角区域（z=0 角落毛细区）：强制 φ=1（油墨堆积）
             on_corner_x = (x_phys < self.wall_height) | (x_phys > self.Lx - self.wall_height)
             on_corner_y = (y_phys < self.wall_height) | (y_phys > self.Ly - self.wall_height)
             on_corner_z0 = (z_norm < 1e-6) & (on_corner_x | on_corner_y)
-
-            # 应用接触线 BC
-            phi = torch.where(on_contact_line, torch.full_like(phi, 0.5), phi)
-            phi = torch.where(on_wall_top_face, torch.zeros_like(phi), phi)
 
             # ============================================================
             # 3. 初始条件 IC(z) — 仅在 z ≤ wall_height 区域约束
@@ -396,21 +370,18 @@ class TwoPhasePINN(nn.Module):
             #    → z > wall_height: 不约束（交给网络/目标场决定）
             #       高压下油墨堆积可远超 wall_height，IC 不应限制此区域
             # ============================================================
-            at_contact_line_z = torch.abs(z_phys - wall_height) < wall_top_z_tol
             in_ink = z_phys < h_ink
             # IC 目标：仅定义 z ≤ wall_height 区域
             # z > wall_height: 中性值 0.5，blend 后不产生梯度
+            # 接触线处不强制 φ=0.5，让网络自己学习界面形态
             in_ic_zone = z_phys <= wall_height + wall_top_z_tol
             phi_ic = torch.where(
                 in_ic_zone,
                 torch.where(
-                    at_contact_line_z,
-                    torch.full_like(phi, 0.5),
-                    torch.where(
-                        in_ink,
-                        torch.ones_like(phi),
-                        0.5 * (1.0 + torch.tanh((h_ink - z_phys) / delta_ic)),
-                    ),
+                    in_ink,
+                    torch.ones_like(phi),
+                    # h_ink < z ≤ wall_height: tanh 过渡，不经过 φ=0.5
+                    0.5 * (1.0 + torch.tanh((h_ink - z_phys) / delta_ic)),
                 ),
                 torch.full_like(phi, 0.5),
             )
@@ -433,8 +404,6 @@ class TwoPhasePINN(nn.Module):
             blend = 1.0 - z_mask * (1.0 - above_wall_mask) * (force_ic * 1.0 + (1.0 - force_ic) * 0.1)
 
             phi = (1.0 - blend) * phi_ic + blend * phi
-            # IC blend 后重新强制接触线 BC（防止 blend 覆盖接触线 φ=0.5）
-            phi = torch.where(on_contact_line, torch.full_like(phi, 0.5), phi)
             # z=0 夹角区域（毛细区）强制 φ=1
             phi = torch.where(on_corner_z0, torch.ones_like(phi), phi)
         else:
