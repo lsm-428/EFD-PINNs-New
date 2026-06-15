@@ -2395,7 +2395,7 @@ class Trainer:
             r_open = float(np.sqrt(eta_s1 * Lx * Ly / np.pi))
             r_open = min(r_open, 0.95 * min(cx, cy))
             ink_area = max(Lx * Ly - np.pi * r_open**2, 1e-12)
-            h_edge = float(min(v0 / ink_area, PHYSICS["wall_height"]))
+            h_edge = float(min(v0 / ink_area, Lz))
             margin = 3e-6
             r_center = max(0.0, r_open - margin)
             r_edge_min = min(r_open + margin, 0.9 * min(cx, cy))
@@ -2427,13 +2427,13 @@ class Trainer:
                 rr = r_edge_min + torch.rand(n_geom_pts, device=self.device) * (r_edge_max_g - r_edge_min)
                 xe = torch.clamp(cx + rr * torch.cos(theta), 1e-9, Lx - 1e-9)
                 ye = torch.clamp(cy + rr * torch.sin(theta), 1e-9, Ly - 1e-9)
-                # 油墨层内 (z ≤ wall_height，油墨不会超过壁顶)
+                # 油墨层内
                 pts_list.append(
                     torch.stack(
                         [
                             xe,
                             ye,
-                            torch.rand(n_geom_pts, device=self.device) * min(h_edge * 0.8, PHYSICS["wall_height"]),
+                            torch.rand(n_geom_pts, device=self.device) * min(h_edge * 0.8, Lz),
                             torch.full((n_geom_pts,), Vf2, device=self.device),
                             torch.full((n_geom_pts,), Vt2, device=self.device),
                             torch.full((n_geom_pts,), ts2, device=self.device),
@@ -2441,8 +2441,7 @@ class Trainer:
                         dim=1,
                     )
                 )
-                # 极性液体层：从壁顶以上开始 (z > wall_height 全是水)
-                z_top_min = PHYSICS["wall_height"] + 1e-6
+                z_top_min = min(h_edge * 1.1, Lz * 0.99)
                 if z_top_min < Lz:
                     pts_list.append(
                         torch.stack(
