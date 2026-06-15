@@ -2074,8 +2074,7 @@ class Trainer:
           late  (S3): 物理约束主导，数据权重保持底线
 
         返回 dict，包含所有乘子：
-          interface, ic_phi, eta_match(已禁用), phi_target3d(已禁用), physics,
-          phi_spatial, phi_geometry(新增，替代 target3D)
+          interface, ic_phi, eta_match, phi_target3d, physics
         """
         s1_end = self.stage1_epochs
         s2_end = self.stage2_epochs
@@ -2085,10 +2084,8 @@ class Trainer:
             return {
                 "interface": 1.0,
                 "ic_phi": 1.0,
-                "eta_match": 0.0,  # 已禁用
-                "phi_target3d": 0.0,  # 已禁用
-                "phi_spatial": 1.0,  # 旧 geo 方案：spatial 乘子 = interface_mult
-                "phi_geometry": 1.0,  # 旧 geo 方案：geometry 乘子 = interface_mult
+                "eta_match": 1.0,
+                "phi_target3d": 300.0,  # 原基础权重 300
                 "physics": 0.0,
             }
 
@@ -2102,10 +2099,8 @@ class Trainer:
             return {
                 "interface": data_w,
                 "ic_phi": 1.0 - 0.5 * p,  # 1→0.5
-                "eta_match": 0.0,  # 已禁用
-                "phi_target3d": 0.0,  # 已禁用
-                "phi_spatial": data_w,  # 跟随 interface 退火
-                "phi_geometry": data_w,  # 跟随 interface 退火
+                "eta_match": 1.0 - 0.5 * p,  # 1→0.5
+                "phi_target3d": 300.0 * (1.0 - p * 0.33),  # 300→200
                 "physics": phys_w,
             }
 
@@ -2119,10 +2114,8 @@ class Trainer:
         return {
             "interface": max(0.05, data_w),  # 最低 0.05
             "ic_phi": 0.5 - 0.2 * p,  # 0.5→0.3
-            "eta_match": 0.0,  # 已禁用
-            "phi_target3d": 0.0,  # 已禁用
-            "phi_spatial": max(0.05, data_w),  # 跟随 interface 退火，最低 0.05
-            "phi_geometry": max(0.05, data_w),  # 跟随 interface 退火
+            "eta_match": 0.5 - 0.4 * p,  # 0.5→0.1
+            "phi_target3d": max(50.0, 200.0 * (1.0 - p * 0.75)),  # 200→50（保持底线 50）
             "physics": phys_w,
         }
 
@@ -2159,16 +2152,11 @@ class Trainer:
         # 3. 体积守恒约束
         losses["volume_conservation"] = self._compute_volume_conservation_loss(stage1_factor)
 
-        # 4. η 匹配 loss（暂时注释，回退到旧 geo 方案）
-        # losses["eta_matching"] = self.compute_eta_matching_loss(epoch) * mult["eta_match"]
+        # 4. η 匹配 loss（Two-Stage 核心锚定，乘子来自统一调度器）
+        losses["eta_matching"] = self.compute_eta_matching_loss(epoch) * mult["eta_match"]
 
-        # 5. φ target3D loss（暂时注释，回退到旧 geo 方案）
-        # losses["phi_target3d"] = self.compute_phi_target3d_loss(epoch) * mult["phi_target3d"]
-
-        # 5b. φ 空间分布 + 几何一致性约束（旧 geo 方案，从备份恢复）
-        spatial_loss, geom_loss = self._compute_phi_spatial_loss(stage1_factor)
-        losses["phi_spatial"] = spatial_loss
-        losses["phi_geometry"] = geom_loss
+        # 5. φ target3D loss（乘子来自统一调度器，已内含阶段衰减，无需双层退火）
+        losses["phi_target3d"] = self.compute_phi_target3d_loss(epoch) * mult["phi_target3d"]
 
         # 6. 物理方程损失（整体乘子来自统一调度器）
         if any(w > 0 for w in physics_weights.values()):
@@ -2242,263 +2230,6 @@ class Trainer:
         res["bc"] = F.mse_loss(pred_bc[:, :3], data["bc_values"][idx_bc][:, :3]) * physics_cfg.get("bc_weight", 50.0)
         res["bc"] += F.mse_loss(pred_bc[:, 4:5], data["bc_values"][idx_bc][:, 4:5]) * 80.0
         return res
-
-    def _compute_phi_spatial_loss(self, interface_mult: float):
-        """φ 场空间分布 + 几何一致性约束（批量前向版本）。
-
-        替代原 eta_matching + phi_target3D 方案：
-        - spatial: 中心+边缘两点约束（中心 φ<0.3, 边缘 φ>0.7）
-        - geometry: 三点约束（中心 φ<0.2, 边缘油墨 φ>0.8, 边缘极性 φ<0.2）
-
-        从 η 直接计算 r_open 和 h_edge，不依赖复杂的 target_phi_3d 函数。
-        批量前向：所有工况点拼接为一次大前向，效率高。
-
-        Returns:
-            (spatial_loss, geometry_loss) 两个独立标量
-        """
-        if self.stage1_model is None:
-            return torch.tensor(0.0, device=self.device), torch.tensor(0.0, device=self.device)
-
-        Lx, Ly, Lz, h_ink = PHYSICS["Lx"], PHYSICS["Ly"], PHYSICS["Lz"], PHYSICS["h_ink"]
-        cx, cy = Lx / 2, Ly / 2
-
-        # ===== spatial: 中心+边缘两点约束（批量前向） =====
-        n_spatial_pts = 20
-        spatial_test_cases = [
-            (0.0, 10.0, float(np.random.uniform(0.010, 0.020))),
-            (0.0, 20.0, float(np.random.uniform(0.010, 0.020))),
-            (0.0, 30.0, float(np.random.uniform(0.005, 0.012))),
-            (0.0, 30.0, float(np.random.uniform(0.018, 0.030))),
-        ]
-
-        spatial_pts_center = []
-        spatial_pts_edge = []
-
-        spatial_loss = torch.tensor(0.0, device=self.device)
-        spatial_count = 0
-        spatial_offset_center = 0
-        spatial_offset_edge = 0
-        center_valid_ranges = []
-        edge_valid_ranges = []
-
-        for V_from, V_to, t_since in spatial_test_cases:
-            _, eta_s1 = self.stage1_model.theta_eta_from_triad(V_from, V_to, t_since)
-            if eta_s1 < 0.05:
-                center_valid_ranges.append(None)
-                edge_valid_ranges.append(None)
-                continue
-
-            r_open = np.sqrt(eta_s1 * Lx * Ly / np.pi)
-            Vf, Vt, ts = float(V_from), float(V_to), float(t_since)
-
-            # 中心
-            r_center = r_open * 0.3
-            if r_center > 5e-6:
-                theta_a = torch.rand(n_spatial_pts, device=self.device) * 2 * np.pi
-                rr = torch.rand(n_spatial_pts, device=self.device) * r_center
-                xc = cx + rr * torch.cos(theta_a)
-                yc = cy + rr * torch.sin(theta_a)
-                zc = torch.zeros(n_spatial_pts, device=self.device)
-                pts = torch.stack(
-                    [
-                        xc,
-                        yc,
-                        zc,
-                        torch.full((n_spatial_pts,), Vf, device=self.device),
-                        torch.full((n_spatial_pts,), Vt, device=self.device),
-                        torch.full((n_spatial_pts,), ts, device=self.device),
-                    ],
-                    dim=1,
-                )
-                spatial_pts_center.append(pts)
-                center_valid_ranges.append((spatial_offset_center, n_spatial_pts))
-                spatial_offset_center += n_spatial_pts
-            else:
-                center_valid_ranges.append(None)
-
-            # 边缘
-            r_edge_min = min(r_open * 1.5, min(Lx, Ly) / 2 * 0.8)
-            r_edge_max = min(Lx, Ly) / 2 * 0.95
-            if r_edge_max > r_edge_min:
-                theta_a = torch.rand(n_spatial_pts, device=self.device) * 2 * np.pi
-                rr = r_edge_min + torch.rand(n_spatial_pts, device=self.device) * (r_edge_max - r_edge_min)
-                xe = cx + rr * torch.cos(theta_a)
-                ye = cy + rr * torch.sin(theta_a)
-                xe = torch.clamp(xe, 1e-6, Lx - 1e-6)
-                ye = torch.clamp(ye, 1e-6, Ly - 1e-6)
-                ze = torch.zeros(n_spatial_pts, device=self.device)
-                pts = torch.stack(
-                    [
-                        xe,
-                        ye,
-                        ze,
-                        torch.full((n_spatial_pts,), Vf, device=self.device),
-                        torch.full((n_spatial_pts,), Vt, device=self.device),
-                        torch.full((n_spatial_pts,), ts, device=self.device),
-                    ],
-                    dim=1,
-                )
-                spatial_pts_edge.append(pts)
-                edge_valid_ranges.append((spatial_offset_edge, n_spatial_pts))
-                spatial_offset_edge += n_spatial_pts
-            else:
-                edge_valid_ranges.append(None)
-
-        # 一次前向计算所有 spatial 中心点
-        if spatial_pts_center:
-            all_center_pts = torch.cat(spatial_pts_center, dim=0)
-            all_phi_center = self.model(all_center_pts)[:, 4]
-            for _i, rng in enumerate(center_valid_ranges):
-                if rng is not None:
-                    s, n = rng
-                    phi_c = all_phi_center[s : s + n]
-                    spatial_loss = spatial_loss + torch.mean(torch.relu(phi_c - 0.3) ** 2)
-                    spatial_count += 1
-
-        # 一次前向计算所有 spatial 边缘点
-        if spatial_pts_edge:
-            all_edge_pts = torch.cat(spatial_pts_edge, dim=0)
-            all_phi_edge = self.model(all_edge_pts)[:, 4]
-            for _i, rng in enumerate(edge_valid_ranges):
-                if rng is not None:
-                    s, n = rng
-                    phi_e = all_phi_edge[s : s + n]
-                    spatial_loss = spatial_loss + torch.mean(torch.relu(0.7 - phi_e) ** 2)
-                    spatial_count += 1
-
-        if spatial_count == 0:
-            spatial_loss = torch.tensor(0.0, device=self.device)
-        else:
-            spatial_loss = spatial_loss * 500.0 * interface_mult / spatial_count
-
-        # ===== geometry: 三点约束（中心+边缘油墨+边缘极性，批量前向） =====
-        v0 = Lx * Ly * h_ink
-        n_geom_pts = 256
-        geom_test_cases = [
-            (0.0, 20.0, 0.015),
-            (0.0, 20.0, 0.020),
-            (0.0, 30.0, 0.010),
-            (0.0, 30.0, 0.020),
-        ]
-
-        geom_pts_all = []
-        geom_valid_ranges = []
-
-        geom_offset = 0
-        for V_from, V_to, t_since in geom_test_cases:
-            _, eta_s1 = self.stage1_model.theta_eta_from_triad(V_from, V_to, t_since)
-            eta_s1 = float(np.clip(eta_s1, 0.0, 0.95))
-            if eta_s1 < 0.02:
-                geom_valid_ranges.append(None)
-                continue
-
-            r_open = float(np.sqrt(eta_s1 * Lx * Ly / np.pi))
-            r_open = min(r_open, 0.95 * min(cx, cy))
-            ink_area = max(Lx * Ly - np.pi * r_open**2, 1e-12)
-            h_edge = float(min(v0 / ink_area, Lz))
-            margin = 3e-6
-            r_center = max(0.0, r_open - margin)
-            r_edge_min = min(r_open + margin, 0.9 * min(cx, cy))
-            r_edge_max_g = 0.95 * min(cx, cy)
-            Vf2, Vt2, ts2 = float(V_from), float(V_to), float(t_since)
-
-            start = geom_offset
-
-            pts_list = []
-            if r_center > 5e-6:
-                theta = torch.rand(n_geom_pts, device=self.device) * 2 * np.pi
-                rr = torch.sqrt(torch.rand(n_geom_pts, device=self.device)) * r_center
-                pts_list.append(
-                    torch.stack(
-                        [
-                            cx + rr * torch.cos(theta),
-                            cy + rr * torch.sin(theta),
-                            torch.rand(n_geom_pts, device=self.device) * min(h_ink, Lz),
-                            torch.full((n_geom_pts,), Vf2, device=self.device),
-                            torch.full((n_geom_pts,), Vt2, device=self.device),
-                            torch.full((n_geom_pts,), ts2, device=self.device),
-                        ],
-                        dim=1,
-                    )
-                )
-
-            if r_edge_max_g > r_edge_min and h_edge > 1e-7:
-                theta = torch.rand(n_geom_pts, device=self.device) * 2 * np.pi
-                rr = r_edge_min + torch.rand(n_geom_pts, device=self.device) * (r_edge_max_g - r_edge_min)
-                xe = torch.clamp(cx + rr * torch.cos(theta), 1e-9, Lx - 1e-9)
-                ye = torch.clamp(cy + rr * torch.sin(theta), 1e-9, Ly - 1e-9)
-                # 油墨层内
-                pts_list.append(
-                    torch.stack(
-                        [
-                            xe,
-                            ye,
-                            torch.rand(n_geom_pts, device=self.device) * min(h_edge * 0.8, Lz),
-                            torch.full((n_geom_pts,), Vf2, device=self.device),
-                            torch.full((n_geom_pts,), Vt2, device=self.device),
-                            torch.full((n_geom_pts,), ts2, device=self.device),
-                        ],
-                        dim=1,
-                    )
-                )
-                z_top_min = min(h_edge * 1.1, Lz * 0.99)
-                if z_top_min < Lz:
-                    pts_list.append(
-                        torch.stack(
-                            [
-                                xe,
-                                ye,
-                                z_top_min + torch.rand(n_geom_pts, device=self.device) * (Lz - z_top_min),
-                                torch.full((n_geom_pts,), Vf2, device=self.device),
-                                torch.full((n_geom_pts,), Vt2, device=self.device),
-                                torch.full((n_geom_pts,), ts2, device=self.device),
-                            ],
-                            dim=1,
-                        )
-                    )
-
-            n_pts_case = len(pts_list) * n_geom_pts
-            if pts_list:
-                geom_pts_all.append(torch.cat(pts_list, dim=0))
-                geom_valid_ranges.append((start, h_edge, r_open, margin, len(pts_list)))
-                geom_offset += n_pts_case
-            else:
-                geom_valid_ranges.append(None)
-
-        if geom_pts_all:
-            all_geom_pts = torch.cat(geom_pts_all, dim=0)
-            all_phi_geom = self.model(all_geom_pts)[:, 4]
-            geom_loss = torch.tensor(0.0, device=self.device)
-            geom_count = 0
-            for rng in geom_valid_ranges:
-                if rng is None:
-                    continue
-                start, h_edge, r_open, margin, n_regions = rng
-                s = start
-                # 中心区域: φ < 0.2
-                if n_regions >= 1:
-                    phi_c = all_phi_geom[s : s + n_geom_pts]
-                    geom_loss = geom_loss + torch.mean(torch.relu(phi_c - 0.2) ** 2)
-                    s += n_geom_pts
-                # 边缘油墨区: φ > 0.8
-                if n_regions >= 2:
-                    phi_ink = all_phi_geom[s : s + n_geom_pts]
-                    geom_loss = geom_loss + torch.mean(torch.relu(0.8 - phi_ink) ** 2)
-                    s += n_geom_pts
-                # 边缘极性区: φ < 0.2
-                if n_regions >= 3:
-                    phi_polar = all_phi_geom[s : s + n_geom_pts]
-                    geom_loss = geom_loss + torch.mean(torch.relu(phi_polar - 0.2) ** 2)
-                geom_count += n_regions
-            if geom_count > 0:
-                keep_factor = 0.2 + 0.8 * interface_mult
-                geom_loss = geom_loss * 200.0 * keep_factor / geom_count
-            else:
-                geom_loss = torch.tensor(0.0, device=self.device)
-        else:
-            geom_loss = torch.tensor(0.0, device=self.device)
-
-        return spatial_loss, geom_loss
 
     def _compute_volume_conservation_loss(self, interface_mult: float):
         """体积守恒约束 — 批量前向版本。
