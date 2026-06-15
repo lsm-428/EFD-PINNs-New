@@ -2605,13 +2605,7 @@ class Trainer:
         else:
             _vol_ramp = 1.0
 
-        # NaN 修复：如果 base_weight 被降低（如 S2 用 500），S3 自动补偿恢复
-        # 补偿因子 = 2000 / base_weight，确保 S3 满权重时 effective weight ≈ 2000 × stage_weight
-        # 基准值 2000 是原始默认值，S3 需要满强度体积约束
-        # 注意：仅 S3 补偿，S2 保持低权重避免梯度爆炸
-        _vol_compensation = 2000.0 / max(base_weight, 1.0) if _epoch > self.stage2_epochs else 1.0
-
-        return loss_vol * base_weight * stage_weight * _vol_ramp * _vol_compensation
+        return loss_vol * base_weight * stage_weight * _vol_ramp
 
     def _compute_physics_equation_loss(
         self,

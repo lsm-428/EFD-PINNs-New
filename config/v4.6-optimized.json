@@ -1,21 +1,12 @@
 {
     "metadata": {
-        "description": "v4.6 v7.2 — 原始版本 (v7.3已回退)",
-        "based_on": "v4.6-standard.json"
+        "description": "v4.6 v7.4 — 回退到 stable 权重 + 保留 spatial+geometry 合并改进",
+        "based_on": "v4.5-stable (pinn_20260201_203537)"
     },
     "model": {
         "input_format": "triplet",
-        "hidden_phi": [
-            128,
-            128,
-            64,
-            32
-        ],
-        "hidden_vel": [
-            64,
-            64,
-            32
-        ],
+        "hidden_phi": [128, 128, 64, 32],
+        "hidden_vel": [64, 64, 32],
         "use_fourier": true,
         "fourier_mapping_size": 32,
         "fourier_sigma": 5.0
@@ -26,25 +17,16 @@
         "batch_size": 4096,
         "learning_rate": 0.0003,
         "min_lr": 1e-06,
-        "gradient_clip": 0.5,
+        "gradient_clip": 1.0,
         "stage1_epochs": 1500,
         "stage2_epochs": 4000,
         "stage3_epochs": 60000,
         "early_stop_patience": 60000,
         "warmup_epochs": 500,
-        "volume_n_vol": 2000,
-        "volume_base_weight": 500.0,
-        "volume_batch": 40960,
-        "volume_scenarios": {
-            "v_steady": [0.0, 10.0, 20.0, 25.0, 30.0],
-            "n_t_steady": 3,
-            "v_pairs_on": [[0, 5], [0, 10], [0, 15], [0, 20], [0, 25], [0, 30]],
-            "n_t_on": 5,
-            "v_pairs_off": [[5, 0], [10, 0], [15, 0], [20, 0], [25, 0], [30, 0]],
-            "n_t_off": 5
-        },
-        "stage1_tutor_min_factor": 0.1,
-        "stage1_tutor_anneal_span": 10000,
+        "volume_n_vol": 20000,
+        "volume_base_weight": 2000.0,
+        "stage1_tutor_min_factor": 0.2,
+        "stage1_tutor_anneal_span": 5000,
         "continuity_transition_weight": 2000.0,
         "use_lbfgs": true,
         "lbfgs_iter": 3000,
@@ -64,15 +46,16 @@
     },
     "physics": {
         "interface_weight": 500.0,
-        "ic_weight": 100.0,
+        "ic_weight": 300.0,
         "bc_weight": 80.0,
-        "continuity_weight": 2.0,
-        "vof_weight": 2.0,
-        "ns_weight": 0.5,
-        "surface_tension_weight": 2.0,
+        "continuity_weight": 0.5,
+        "vof_weight": 0.5,
+        "ns_weight": 0.1,
+        "surface_tension_weight": 0.01,
         "sharpening_weight": 1.0,
+        "explicit_volume_weight": 100.0,
         "laplace_pressure_weight": 0.05,
-        "interface_energy_weight": 2.0,
+        "interface_energy_weight": 0.05,
         "temporal_smoothness_weight": 0.1,
         "ac_interface_width": 5e-07,
         "ac_mobility": 1e-10
