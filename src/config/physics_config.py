@@ -32,6 +32,7 @@ EFD3D 统一物理参数配置模块
 日期: 2025-12-31
 """
 
+import copy
 from dataclasses import asdict, dataclass, field
 import json
 import logging
@@ -60,7 +61,7 @@ PHYSICS: dict[str, Any] = {
     "h_polar": 17e-6,  # 极性液体层厚度 (m)
     "wall_height": 3.5e-6,  # 围堰高度 (m)，实际器件
     "wall_top_half_width": 5e-6,  # 壁顶 x/y 方向半宽 (m) = 5μm（本像素 5μm + 隔壁 5μm = 10μm 全宽）
-    "wall_top_z_tol": 1e-6,  # 壁顶 z 方向容差 (m) = 1μm（界面过渡区厚度）
+    # wall_top_z_tol 已删除：壁顶面是精确平面 z = wall_height，不需要容差参数
     "theta_adv_su8": 125.0,  # 油膜在 SU-8 上的前进角 (°)，水环境中固定不受 EW 影响
     # ========== 流体属性 ==========
     # 油墨（非极性，深色）
@@ -156,7 +157,6 @@ class PhysicsConfig:
     h_polar: float = 17e-6
     wall_height: float = 3.5e-6
     wall_top_half_width: float = 5e-6  # 壁顶 x/y 方向半宽 (m)
-    wall_top_z_tol: float = 1e-6  # 壁顶 z 方向容差 (m)
     theta_adv_su8: float = 125.0  # 油膜在 SU-8 上的前进角 (°)
 
     # 流体属性 - 油墨
@@ -280,7 +280,6 @@ class PhysicsConfig:
             h_ink=geometry.get("ink_thickness", cls.h_ink),
             wall_height=geometry.get("wall_height", cls.wall_height),
             wall_top_half_width=geometry.get("wall_top_half_width", cls.wall_top_half_width),
-            wall_top_z_tol=geometry.get("wall_top_z_tol", cls.wall_top_z_tol),
             # 流体属性
             rho_oil=materials.get("rho_oil", cls.rho_oil),
             mu_oil=materials.get("mu_oil", cls.mu_oil),
@@ -390,7 +389,6 @@ class PhysicsConfig:
             "domain_height": self.Lz,
             "wall_height": self.wall_height,
             "wall_top_half_width": self.wall_top_half_width,
-            "wall_top_z_tol": self.wall_top_z_tol,
             "theta_adv_su8": self.theta_adv_su8,
             "ink_initial_fraction": self.ink_initial_fraction,
             # 电润湿 EW 力参数
@@ -497,6 +495,90 @@ def get_materials_params(path: str | Path | None = None) -> dict[str, Any]:
     """
     config = get_physics_config(path)
     return config.to_materials_params()
+
+
+# ============================================================================
+# 默认训练配置（从 JSON 加载，单一来源）
+# ============================================================================
+
+_DEFAULT_TRAINING_CONFIG: dict[str, Any] = {
+    "model": {
+        "hidden_phi": [64, 64, 64, 32],
+        "hidden_vel": [64, 64, 32],
+    },
+    "training": {
+        "epochs": 60000,
+        "batch_size": 4096,
+        "learning_rate": 3e-4,
+        "min_lr": 1e-6,
+        "gradient_clip": 0.1,
+        "stage1_epochs": 1500,
+        "stage2_epochs": 4000,
+        "stage3_epochs": 60000,
+    },
+    "physics": {
+        "interface_weight": 500.0,
+        "ic_weight": 100.0,
+        "bc_weight": 50.0,
+        "continuity_weight": 0.5,
+        "vof_weight": 0.5,
+        "ns_weight": 0.1,
+        "surface_tension_weight": 0.01,
+        "sharpening_weight": 0.1,
+    },
+    "data": {
+        "n_interface": 100000,
+        "n_initial": 10000,
+        "n_boundary": 10000,
+        "n_domain": 20000,
+        "voltages": [0.5 * i for i in range(0, 61)],
+        "times": 50,
+        "use_vertical_sampling": True,
+        "n_vertical_samples": 50,
+    },
+}
+
+
+def get_default_training_config() -> dict[str, Any]:
+    """获取默认训练配置（从 config/device_calibrated_physics.json 加载）。
+
+    JSON 中的 model/training/physics/data 为新版格式（单一来源），
+    PHYSICS 中的嵌套字典会被展平到返回的字典中。
+
+    Returns:
+        完整的训练配置字典，可直接用于 TwoPhasePINN、DataGenerator、Trainer。
+    """
+    try:
+        if Path(DEFAULT_CONFIG_PATH).exists():
+            with open(DEFAULT_CONFIG_PATH, encoding="utf-8") as f:
+                data = json.load(f)
+            # 从 JSON 中提取新版格式的训练配置
+            # 注意：JSON 中的 data 字段是旧版格式（use_dynamic, num_samples 等），
+            # 不用于新版训练配置。data 部分使用代码中的默认值。
+            model_cfg = data.get("model", {})
+            training_cfg = data.get("training", {})
+            physics_cfg = data.get("physics", {})
+
+            # 过滤掉旧版兼容字段（以 _legacy 开头的键）
+            model_cfg = {k: v for k, v in model_cfg.items() if not k.startswith("_")}
+            training_cfg = {k: v for k, v in training_cfg.items() if not k.startswith("_")}
+            physics_cfg = {k: v for k, v in physics_cfg.items() if not k.startswith("_")}
+
+            result = {
+                "model": model_cfg,
+                "training": training_cfg,
+                "physics": physics_cfg,
+                "data": _DEFAULT_TRAINING_CONFIG["data"],  # data 使用代码默认值
+            }
+            # 验证关键字段存在
+            required = ["model", "training", "physics", "data"]
+            if all(k in result and result[k] for k in required):
+                logger.debug(f"训练配置已从 {DEFAULT_CONFIG_PATH} 加载")
+                return result
+            logger.warning(f"配置文件 {DEFAULT_CONFIG_PATH} 缺少必要字段，使用内置默认值")
+    except Exception as e:
+        logger.warning(f"从配置文件加载训练配置失败: {e}，使用内置默认值")
+    return copy.deepcopy(_DEFAULT_TRAINING_CONFIG)
 
 
 # ============================================================================

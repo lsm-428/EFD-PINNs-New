@@ -11,7 +11,6 @@
         "fourier_mapping_size": 32,
         "fourier_sigma": 5.0
     },
-    "stage1_eta_tutor": true,
     "training": {
         "epochs": 60000,
         "batch_size": 4096,

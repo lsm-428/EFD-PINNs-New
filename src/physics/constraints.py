@@ -86,7 +86,6 @@ def _get_default_materials_params() -> dict:
         "domain_height": _get("Lz"),
         "wall_height": _get("wall_height"),
         "wall_top_half_width": _get("wall_top_half_width"),
-        "wall_top_z_tol": _get("wall_top_z_tol"),
         "ink_initial_fraction": _get("ink_initial_fraction"),
         # 电润湿 EW 力参数
         "lambda_debye": _get("lambda_debye"),
@@ -195,7 +194,6 @@ class PhysicsConstraints:
                 phi_x, phi_y, phi_z = grads["phi_x"], grads["phi_y"], grads["phi_z"]
                 u_t, v_t, w_t = grads["u_t"], grads["v_t"], grads["w_t"]
                 lap_u, lap_v, lap_w = grads["lap_u"], grads["lap_v"], grads["lap_w"]
-                lap_phi = grads["lap_phi"]
                 phi_xx, phi_yy, phi_zz = grads["phi_xx"], grads["phi_yy"], grads["phi_zz"]
                 phi_xy, phi_xz, phi_yz = grads["phi_xy"], grads["phi_xz"], grads["phi_yz"]
             else:
@@ -216,13 +214,45 @@ class PhysicsConstraints:
                 lap_u = self._compute_laplacian(u, x)
                 lap_v = self._compute_laplacian(v, x)
                 lap_w = self._compute_laplacian(w, x)
-                lap_phi = self._compute_laplacian(phi, x)
-                phi_xx = lap_phi
-                phi_yy = lap_phi
-                phi_zz = lap_phi
-                phi_xy = lap_phi
-                phi_xz = lap_phi
-                phi_yz = lap_phi
+
+                # 回退路径：独立计算 phi 的 Hessian 各分量（用于曲率）
+                # 注意：不能用 Laplacian 代替各二阶导数，曲率公式需要独立分量
+                def _get_hessian_diag(first_grad):
+                    """从一阶梯度计算 Hessian 对角线和混合分量"""
+                    hess = {}
+                    for i, key_i in enumerate("xyz"):
+                        g2 = torch.autograd.grad(
+                            outputs=first_grad[:, i].sum(),
+                            inputs=x,
+                            create_graph=True,
+                            retain_graph=True,
+                            allow_unused=True,
+                        )[0]
+                        if g2 is not None:
+                            for j, key_j in enumerate("xyz"):
+                                hess[key_i + key_j] = g2[:, j]
+                        else:
+                            for _j, key_j in enumerate("xyz"):
+                                hess[key_i + key_j] = torch.zeros_like(phi)
+                    return hess
+
+                g_phi = torch.autograd.grad(
+                    outputs=phi.sum(),
+                    inputs=x,
+                    create_graph=True,
+                    retain_graph=True,
+                    allow_unused=True,
+                )[0]
+                if g_phi is not None:
+                    phi_hess = _get_hessian_diag(g_phi)
+                    phi_xx = phi_hess["xx"]
+                    phi_yy = phi_hess["yy"]
+                    phi_zz = phi_hess["zz"]
+                    phi_xy = phi_hess["xy"]
+                    phi_xz = phi_hess["xz"]
+                    phi_yz = phi_hess["yz"]
+                else:
+                    phi_xx = phi_yy = phi_zz = phi_xy = phi_xz = phi_yz = torch.zeros_like(phi)
 
             # 表面张力 (CSF 模型 - 精确曲率)
 

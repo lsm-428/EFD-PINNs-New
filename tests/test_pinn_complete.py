@@ -280,11 +280,11 @@ class PhysicsValidator:
             )
             phi_pinn = phi_pinn.reshape(n, n)
 
-            # 目标值
+            # 目标值：用 compute_interface_phi（Stage 1 eta 指导）
             phi_target = np.zeros((n, n))
             for i in range(n):
                 for j in range(n):
-                    phi_target[i, j] = data_gen.target_phi_3d(x[j], y[i], z, t, V_to, V_prev=V_from)
+                    phi_target[i, j] = data_gen.compute_interface_phi(x[j], y[i], z, t, V_to, V_prev=V_from)
 
             # 计算误差
             mae = np.mean(np.abs(phi_pinn - phi_target))

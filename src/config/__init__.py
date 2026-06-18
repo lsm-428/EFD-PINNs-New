@@ -12,6 +12,7 @@ from .paths import (
 from .physics_config import (
     PHYSICS,
     PhysicsConfig,
+    get_default_training_config,
     get_materials_params,
     get_physics_config,
 )
@@ -26,6 +27,7 @@ __all__ = [
     # 物理配置
     "PhysicsConfig",
     "get_config_path",
+    "get_default_training_config",
     "get_materials_params",
     "get_output_dir",
     "get_physics_config",

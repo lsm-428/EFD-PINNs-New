@@ -31,13 +31,27 @@ EFD3D (Electrowetting Fluid Dynamics 3D) 是一个基于物理信息神经网络
 - **壁顶面始终无油**（φ=0），油墨如果突破壁顶接触线 → 翻过围堰 → **器件永久失效**
 - 壁顶面范围：x ∈ [0, Lx], y ∈ [0, Ly]，但夹角区域（z < wall_height）除外
 
-**壁顶接触线（四周壁顶边缘，z ≈ 3.5μm）**：油-水-固体三相接触线
-- **φ = 0.5**（三相接触线）
-- 接触线位置：z ≈ wall_height，且 (x < wall_top_z_tol 或 x > Lx-wall_top_z_tol 或 y < wall_top_z_tol 或 y > Ly-wall_top_z_tol)
+**壁顶面（z = wall_height = 3.5μm 精确平面）**：SU-8 暴露面（亲水，θ=125°）
+- **φ = 0**（极性液体占据）
+- 范围：z = wall_height，d_wall ≥ wall_height（远离围堰立面）
 
-**夹角区域（角落，z < wall_height）**：Teflon 涂层（亲油，θ=110°）
-- **毛细区域始终有油**（φ=1）
-- 夹角区域：x ∈ [0, wall_top_half_width] ∪ [Lx-wall_top_half_width, Lx]，y 同理，z ∈ [0, wall_height]
+**壁顶接触线（围堰立面与壁顶面顶角）**：油-水-固体三相接触线
+- **φ = 0.5**（三相接触线）
+- 位置：z = wall_height，d_wall < wall_height（靠近围堰立面）
+- 这是一条一维曲线；高于 wall_height 时接触线只会沿 SU-8 顶平面外溢，器件濒临失效
+
+**夹角区域（围堰立面与底板夹角）**：Teflon 涂层（亲油，θ=110°）
+- **φ = 1**（油墨堆积）
+- 范围：d_wall < wall_height，z < wall_height
+
+**硬约束执行顺序**（TwoPhasePINN.forward）：
+1. 顶面软约束：phi = phi_learned * (1 - z_norm)
+2. IC blend：phi = (1-blend)*phi_ic + blend*phi
+3. 壁顶面 BC：phi = 0（z = wall_height）
+4. 接触线 BC：phi = 0.5（z = wall_height, d_wall < wall_height）
+5. 夹角区 BC：phi = 1（d_wall < wall_height, z < wall_height）
+
+**注意**：wall_top_z_tol 已删除。壁顶面是精确平面，浮点比较用内置 _z_eps=1e-8。
 
 **初始条件 IC（t=0，无电压）**：
 - 油墨区域：x ∈ [0, Lx], y ∈ [0, Ly], z ∈ [0, h_ink=3μm]，φ=1
@@ -83,7 +97,7 @@ EFD3D (Electrowetting Fluid Dynamics 3D) 是一个基于物理信息神经网络
 ### 核心模块 API 速查
 
 > **⚠️ 修改代码时，必须检查所有相关模块，不只是 `pinn_two_phase.py`。**
-> `src/` 下共 42 个 Python 文件，分属 7 个子包。
+> `src/` 下共 44 个 Python 文件，分属 7 个子包。
 
 #### 📁 完整模块清单
 
@@ -110,7 +124,8 @@ src/
 │   └── physics_sampling.py  # PhysicsBasedSampler
 ├── utils/               # 工具函数
 │   ├── logging_config.py    # setup_logging(), get_logger()
-│   └── model_utils.py       # extract_predictions(), load_model_with_mismatch_handling()
+│   ├── model_utils.py       # extract_predictions(), load_model_with_mismatch_handling()
+│   └── gradients.py         # 共享梯度计算辅助函数
 ├── solvers/             # CFD求解器
 │   └── flow_solver.py       # Mesh, FlowSolver, PINNSolver, FlowFieldSimulator
 └── dashboard/           # Streamlit交互式面板（10个文件）
@@ -143,7 +158,7 @@ src/
 
 #### `src/physics/constraints.py` — 物理约束引擎（~1277行）
 
-> **重构说明**：旧版 ~3441 行，经清理后缩减到 ~1277 行。删除了所有 DEPRECATED 函数、
+> **重构说明**：旧版 ~3441 行，经清理后缩减到 ~921 行。删除了所有 DEPRECATED 函数、
 > `compute_sidewall_contact_angle_residual`（与统一润湿BC冲突）、死权重和死代码。
 > 统一梯度计算消除重复 autograd 调用，训练速度提升 3-4 倍。
 >
@@ -187,7 +202,7 @@ src/
 
 ---
 
-#### `src/models/pinn_two_phase.py` — 主PINN模型（~3512行）
+#### `src/models/pinn_two_phase.py` — 主PINN模型（~3022行）
 
 | 行号 | 类/方法 | 用途 |
 |------|---------|------|
@@ -233,8 +248,8 @@ src/
 | 2787 | `compute_aperture_ratio()` | φ→开口率（网格法） |
 | 2802 | `compute_aperture_ratio_batch()` | 批量φ→开口率 |
 | 2852 | `compute_aperture_ratio_differentiable()` | 可微φ→开口率 |
-| 2896 | `compute_eta_matching_loss()` | **η匹配loss**：PINN的η(V,t)追踪Teacher |
-| 2950 | `compute_phi_target3d_loss()` | **φ target3D loss**：PINN的φ场匹配target |
+| 2896 | ~~`compute_eta_matching_loss()`~~ | ❌ 已删除（2026-06-15，死代码） |
+| 2950 | ~~`compute_phi_target3d_loss()`~~ | ❌ 已删除（2026-06-15，死代码） |
 | 3035 | `eta_recovery_constraint_loss()` | 降压恢复约束 |
 | 3073 | `fine_tune_lbfgs()` | L-BFGS 二阶优化微调 |
 | 3141 | `Trainer.train()` | 主训练循环 |
@@ -272,7 +287,7 @@ src/
 | 79 | `LossStabilizer` | Loss稳定性控制 |
 | 137 | `EnhancedDataAugmenter` | 数据增强（噪声/扰动） |
 
-#### `src/solvers/flow_solver.py` — CFD求解器（~2648行）
+#### `src/solvers/flow_solver.py` — CFD求解器（~2439行）
 | 行号 | 类 | 用途 |
 |------|-----|------|
 | 74 | `Mesh` | 计算网格 |
@@ -433,8 +448,10 @@ outputs/train/pinn_YYYYMMDD_HHMMSS/
 - **代码清理**: constraints.py 从 ~3441 行精简到 ~1277 行，删除了所有 DEPRECATED 函数、冲突的 `compute_sidewall_contact_angle_residual`、死权重（`electrowetting`/`bottom_wetting`/`wall_wetting`/`top_boundary`/`dielectric_charge`）和死代码
 - **架构优化**: 统一梯度计算（`_compute_all_gradients`），训练速度提升 3-4 倍
 - **BC 体系已统一**: 壁侧面 110°（Teflon）+ 壁顶面 71°（SU-8）+ 底面 Young-Lippmann 调制，无冲突
-- **新增功能**: η匹配loss、φ target3D loss、L-BFGS微调、批量前向连续性约束
+- **新增功能**: L-BFGS微调、批量前向连续性约束
+- **已删除**: η匹配loss（`compute_eta_matching_loss`）、φ target3D loss（`compute_phi_target3d_loss`）（2026-06-15 删除，死代码，从未在训练中生效。代码中仅余注释提及）
 - **已知问题**: 瞬态精度不足（forward 缺少时间门控）、physics_sampling.py 与 Stage 1 有 3 处不一致（待论文完成后修复）
+- **2026-06-15 修复**: 壁顶面硬约束排除接触线区域（P0-1）、夹角区域 z 范围从 `z_norm<1e-6` 改为 `z<wall_height`（P0-2）、resample_interval 默认值改为 0（P1-4）、回退 Laplacian 路径 Hessian 独立计算（P1-3）、NaN 回滚学习率添加 min_lr 下限（P1-5）
 
 ---
 

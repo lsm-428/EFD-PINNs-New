@@ -6,8 +6,7 @@
 完整流场求解：Navier-Stokes + VOF 界面追踪
 
 使用方法:
-    python train_two_phase.py --epochs 30000
-    python train_two_phase.py --config config/two_phase_config.json
+        python train_two_phase.py --config config/two_phase_config.json
 
 作者: EFD-PINNs Team
 """
@@ -27,7 +26,6 @@ if __name__ == "__main__":
         print("  • VOF：∂φ/∂t + u·∇φ = 0")
         print("  • N-S：ρ(∂u/∂t + u·∇u) = -∇p + μ∇²u + F_st")
         print("\n使用方法:")
-        print("  python train_two_phase.py --epochs 30000")
         print("  python train_two_phase.py --config config/two_phase_config.json")
         print("=" * 60)
 

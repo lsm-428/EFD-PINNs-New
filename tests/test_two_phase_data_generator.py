@@ -142,35 +142,48 @@ class TestPhiFieldCalculation:
         y = y_frac * PHYSICS["Ly"]
         z = z_frac * PHYSICS["Lz"]
 
-        phi = data_generator.target_phi_3d(x, y, z, time, voltage)
-        assert 0 <= phi <= 1, f"φ={phi} 超出范围"
+        phi = data_generator.compute_interface_phi(x, y, z, time, voltage)
+        if not np.isnan(phi):
+            assert 0 <= phi <= 1, f"φ={phi} 超出范围"
 
     def test_phi_initial_condition(self, data_generator):
         """初始条件：底部油墨，上部透明"""
         Lx, Ly = PHYSICS["Lx"], PHYSICS["Ly"]
-        h_ink = PHYSICS["h_ink"]
 
-        # 底部中心应该是油墨
-        phi_bottom = data_generator.target_phi_3d(Lx / 2, Ly / 2, h_ink / 2, 0, 0)
-        assert phi_bottom > 0.9, f"底部中心 φ={phi_bottom} 应接近1"
+        # 底部中心应该是油墨（z=0 凹坑内部，compute_interface_phi 返回 NaN）
+        # 夹角区（d_wall < wall_height, z < wall_height）→ phi=1
+        wall_h = PHYSICS["wall_height"]
+        phi_corner = data_generator.compute_interface_phi(wall_h * 0.5, wall_h * 0.5, 0, 0, 0)
+        assert phi_corner == 1.0, f"夹角区 phi={phi_corner} 应为 1.0"
 
         # 顶部应该是透明液体
-        phi_top = data_generator.target_phi_3d(Lx / 2, Ly / 2, PHYSICS["Lz"] * 0.9, 0, 0)
-        assert phi_top < 0.1, f"顶部 φ={phi_top} 应接近0"
+        phi_top = data_generator.compute_interface_phi(Lx / 2, Ly / 2, PHYSICS["Lz"] * 0.9, 0, 0)
+        assert phi_top == 0.0, f"顶部 phi={phi_top} 应为 0.0"
+
+        # 壁顶接触线：d_wall≈0, z=wall_h → phi=0.5（位置由 PINN 学习，但 phi=0.5 给定）
+        phi_cl = data_generator.compute_interface_phi(1e-8, Ly / 2, wall_h, 0, 0)
+        assert abs(phi_cl - 0.5) < 0.01, f"接触线 phi={phi_cl} 应为 0.5"
 
     def test_phi_voltage_response(self, data_generator):
-        """施加电压后中心应变透明"""
+        """施加电压后：夹角区始终 phi=1，壁顶面始终 phi=0"""
         Lx, Ly = PHYSICS["Lx"], PHYSICS["Ly"]
-        h_ink = PHYSICS["h_ink"]
+        wall_h = PHYSICS["wall_height"]
 
-        # 0V：中心有油墨
-        phi_0V = data_generator.target_phi_3d(Lx / 2, Ly / 2, h_ink / 2, 0.02, 0)
+        # 夹角区：任何电压下都是 phi=1（毛细钉扎）
+        phi_corner_0V = data_generator.compute_interface_phi(wall_h * 0.5, wall_h * 0.5, 0, 0.02, 0)
+        phi_corner_30V = data_generator.compute_interface_phi(wall_h * 0.5, wall_h * 0.5, 0, 0.02, 30)
+        assert phi_corner_0V == 1.0, f"0V 夹角区 phi={phi_corner_0V} 应为 1.0"
+        assert phi_corner_30V == 1.0, f"30V 夹角区 phi={phi_corner_30V} 应为 1.0"
 
-        # 30V：中心透明
-        phi_30V = data_generator.target_phi_3d(Lx / 2, Ly / 2, h_ink / 2, 0.02, 30)
+        # 壁顶面：任何电压下都是 phi=0（水）
+        phi_top_0V = data_generator.compute_interface_phi(Lx / 2, Ly / 2, wall_h, 0.02, 0)
+        phi_top_30V = data_generator.compute_interface_phi(Lx / 2, Ly / 2, wall_h, 0.02, 30)
+        assert phi_top_0V == 0.0, f"0V 壁顶面 phi={phi_top_0V} 应为 0.0"
+        assert phi_top_30V == 0.0, f"30V 壁顶面 phi={phi_top_30V} 应为 0.0"
 
-        assert phi_30V < phi_0V, "施加电压后中心应更透明"
-        assert phi_30V < 0.3, f"30V时中心 φ={phi_30V} 应接近0"
+        # 接触线：d_wall≈0, z=wall_h → phi=0.5
+        phi_cl = data_generator.compute_interface_phi(1e-8, Ly / 2, wall_h, 0.02, 30)
+        assert abs(phi_cl - 0.5) < 0.01, f"接触线 phi={phi_cl} 应为 0.5"
 
 
 # ============================================================
@@ -194,22 +207,9 @@ class TestVoltageDownProcess:
         etas = []
 
         for t in times:
-            # 在底面采样计算开口率
-            n_samples = 20
-            Lx, Ly = PHYSICS["Lx"], PHYSICS["Ly"]
-            h_ink = PHYSICS["h_ink"]
-
-            phi_samples = []
-            for i in range(n_samples):
-                for j in range(n_samples):
-                    x = i * Lx / (n_samples - 1)
-                    y = j * Ly / (n_samples - 1)
-                    phi = data_generator.target_phi_3d(x, y, h_ink / 2, t, 0, V_prev=V_prev, t_step=t_step)
-                    phi_samples.append(phi)
-
-            # 开口率 = 透明区域比例
-            eta = np.mean(np.array(phi_samples) < 0.5)
-            etas.append(eta)
+            # 用 Stage 1 计算降压后的 eta（开口率）
+            _, eta_val = data_generator._aperture_model.theta_eta_from_triad(V_prev, 0, t - t_step)
+            etas.append(eta_val)
 
         # 检查单调递减
         for i in range(len(etas) - 1):

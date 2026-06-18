@@ -191,14 +191,11 @@ class PINNEvaluator:
     ) -> float:
         """Calculate aperture ratio (eta) at z = 0 (hydrophobic surface).
 
-        Use z=0 to match Stage 1 model's aperture definition.
-        Stage 1 calculates aperture based on contact angle at z=0 surface.
-
-        Note: This calculation assumes the model outputs a clear interface
-        (φ ≈ 0 in water, φ ≈ 1 in ink). If the model outputs a constant field,
-        the result will be unreliable. Use check_constant_field() to verify.
+        phi 只有 3 个值: 0(水), 1(油墨), 0.5(界面零宽度)
+        开口率 = z=0 平面上 phi=0 的面积占比
+        直接用硬阈值 phi < 0.5 判断，无需 tanh 软二值化
         """
-        z_sample = 0.0  # Use z=0 to match Stage 1
+        z_sample = 0.0
         fields = self.get_fields(
             model,
             V_to,
@@ -210,18 +207,12 @@ class PINNEvaluator:
         )
         phi = fields["phi"]
 
-        # Check if the model outputs a constant field
-        phi_std = np.std(phi)
-        if phi_std < 0.05:
-            # Constant field - aperture calculation is unreliable
+        # 常数场检查
+        if np.std(phi) < 0.05:
             return float(np.nan)
 
-        phi0 = float(self.aperture_phi0)
-        eps = float(self.aperture_eps)
-        if eps <= 0:
-            return float(np.mean(phi < phi0))
-        m = 0.5 * (1.0 + np.tanh((phi0 - phi) / eps))
-        return float(np.mean(m))
+        # 硬阈值：phi < 0.5 即为水（开口）
+        return float(np.mean(phi < 0.5))
 
     def check_constant_field(self, model: TwoPhasePINN, V: float, t: float) -> dict:
         """Check if the model outputs a constant φ field.
@@ -842,24 +833,17 @@ class PINNEvaluator:
             loss_vol += rel_error**2
             errors.append(abs(rel_error.item()) * 100)
 
-        # Calculate final loss (same as training code)
-        base_weight = 2000.0
-        stage_weight = 1.0
-        final_vol = loss_vol * base_weight * stage_weight / len(tests)
-
         # Calculate statistics
         avg_error = np.mean(errors)
         max_error = np.max(errors)
         min_error = np.min(errors)
 
-        print("=== Volume Conservation Results ===")
-        print("Training log Vol value: 0.317 (Epoch 58000)")
-        print(f"Calculated final_vol: {final_vol:.6f}")
-        print()
-        print("Volume error statistics:")
-        print(f"  Average error: {avg_error:.2f}%")
-        print(f"  Max error: {max_error:.2f}%")
-        print(f"  Min error: {min_error:.2f}%")
+        # 理论值: 全局 phi 均值 = h_ink / Lz = 3/20 = 0.15（体积守恒，定值）
+        phi_mean_expected = h_ink / Lz
+        print("=== Volume Conservation ===")
+        print(f"  理论 phi 均值 (h_ink/Lz): {phi_mean_expected:.4f}")
+        print("  体积误差统计:")
+        print(f"    平均: {avg_error:.2f}%  最大: {max_error:.2f}%  最小: {min_error:.2f}%")
         print()
 
         # Create a simple bar chart
