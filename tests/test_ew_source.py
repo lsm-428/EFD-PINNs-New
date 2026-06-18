@@ -35,6 +35,7 @@ def test_ew_source_magnitude():
     params.get("relative_permittivity", 12.0)
     params.get("epsilon_hydrophobic", 1.934)
     params.get("dielectric_thickness", 8e-7)
+    params.get("hydrophobic_thickness", 4e-7)
     sigma_ac = params.get("surface_tension_polar_ink", 0.02505)
     eps_ac = params.get("ac_interface_width", 5e-07)
     M_ac = params.get("ac_mobility", 1e-10)

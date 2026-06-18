@@ -111,9 +111,9 @@ class ScriptTestHelper:
         """
         try:
             return json.loads(output)
-        except json.JSONDecodeError as err:
-            msg = f"Failed to parse JSON output: {err}\nOutput: {output}"
-            raise ValueError(msg) from err
+        except json.JSONDecodeError as e:
+            msg = f"Failed to parse JSON output: {e}\nOutput: {output}"
+            raise ValueError(msg) from None
 
 
 class ConfigFixture:
@@ -185,29 +185,31 @@ class CLITestCase:
 
     def assert_exit_success(self, result: subprocess.CompletedProcess):
         """Assert script exited with success (return code 0)"""
-        assert (
-            result.returncode == 0
-        ), f"Script failed with return code {result.returncode}\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
+        assert result.returncode == 0, (
+            f"Script failed with return code {result.returncode}\n"
+            f"STDOUT: {result.stdout}\n"
+            f"STDERR: {result.stderr}"
+        )
 
     def assert_exit_failure(self, result: subprocess.CompletedProcess):
         """Assert script exited with failure (non-zero return code)"""
-        assert (
-            result.returncode != 0
-        ), f"Script succeeded when it should have failed\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
+        assert result.returncode != 0, (
+            f"Script succeeded when it should have failed\n" f"STDOUT: {result.stdout}\n" f"STDERR: {result.stderr}"
+        )
 
     def assert_output_contains(self, result: subprocess.CompletedProcess, text: str):
         """Assert output contains specific text"""
-        assert (
-            text in result.stdout or text in result.stderr
-        ), f"Expected output to contain '{text}'\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
+        assert text in result.stdout or text in result.stderr, (
+            f"Expected output to contain '{text}'\n" f"STDOUT: {result.stdout}\n" f"STDERR: {result.stderr}"
+        )
 
     def assert_json_output(self, result: subprocess.CompletedProcess) -> dict[str, Any]:
         """Assert output is valid JSON and return parsed data"""
         try:
             return json.loads(result.stdout)
-        except json.JSONDecodeError as err:
+        except json.JSONDecodeError:
             msg = f"Expected JSON output, got:\n{result.stdout}\nSTDERR: {result.stderr}"
-            raise AssertionError(msg) from err
+            raise AssertionError(msg) from None
 
     def assert_file_exists(self, filepath: str):
         """Assert file exists"""

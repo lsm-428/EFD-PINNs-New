@@ -177,11 +177,13 @@ class PhysicsLoss:
             if residual is None:
                 continue
 
-            # 计算 MSE
-            mse = torch.mean(residual**2)
+            # 计算 MSE，添加数值保护防止溢出
+            mse = torch.mean(torch.clamp(residual**2, min=0.0, max=1e36))
 
             # 应用 log1p 缩放稳定大损失
             scaled_loss = torch.log1p(mse)
+            if not torch.isfinite(scaled_loss):
+                scaled_loss = torch.tensor(100.0, device=self.device)
 
             # 自适应归一化: 除以 EMA 使各损失量级统一
             if use_adaptive and torch.isfinite(scaled_loss):
@@ -210,6 +212,13 @@ class PhysicsLoss:
             sharpening_val = torch.mean(phi_pred**2 * (1.0 - phi_pred) ** 2)
             losses["sharpening"] = weights["sharpening"] * sharpening_val
             total_loss = total_loss + losses["sharpening"]
+
+        # 显式体积约束
+        if "explicit_volume" in weights and weights["explicit_volume"] > 0:
+            ink_fraction_target = self.materials_params.get("ink_initial_fraction", 0.15)
+            explicit_volume_val = torch.abs(torch.mean(phi_pred) - ink_fraction_target)
+            losses["explicit_volume"] = weights["explicit_volume"] * explicit_volume_val
+            total_loss = total_loss + losses["explicit_volume"]
 
         losses["total"] = total_loss
         return losses

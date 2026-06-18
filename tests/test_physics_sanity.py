@@ -2,7 +2,7 @@
 物理残差 Sanity Check 测试
 
 验证：
-1. 参数一致性：θ₀=120°, εᵣ=12.0, σ=0.02505 在配置与约束实现中统一
+1. 参数一致性：θ₀=120°, εᵣ=12.0, σ=0.045 在配置与约束实现中统一
 2. 物理方程形式：N-S + VOF + 表面张力 + 体积守恒 在 PhysicsConstraints 中集中实现
 3. 梯度反向传播：通过小批量点验证模型参数能正确接收梯度
 4. 数值稳定性：在代表性高电压/长时间/边界点样例下无 NaN/Inf
@@ -84,10 +84,8 @@ class TestCoreResiduals:
     def test_compute_core_residuals_returns_all_keys(self, setup_model_and_data):
         """验证 compute_core_residuals 返回所有核心残差项"""
         model, pc, x_phys, _device = setup_model_and_data
-        model.eval()
-        predictions = model(x_phys)
 
-        residuals = pc.compute_core_residuals(x_phys, predictions, model=model)
+        residuals = pc.compute_core_residuals(x_phys, None, model=model)
 
         # 验证核心残差项存在
         expected_keys = ["continuity", "momentum_u", "momentum_v", "momentum_w", "vof"]
@@ -110,8 +108,7 @@ class TestCoreResiduals:
         model, pc, x_phys, device = setup_model_and_data
         model.train()
 
-        predictions = model(x_phys)
-        residuals = pc.compute_core_residuals(x_phys, predictions, model=model)
+        residuals = pc.compute_core_residuals(x_phys, None, model=model)
 
         # 计算总损失
         total_loss = torch.tensor(0.0, device=device)
@@ -143,6 +140,7 @@ class TestZeroFieldScenario:
         """
         from src.physics.constraints import PhysicsConstraints
 
+        torch.device("cpu")
         batch_size = 16
 
         # 创建一个输出恒定值的简单模型

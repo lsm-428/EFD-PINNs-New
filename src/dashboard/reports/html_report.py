@@ -338,7 +338,7 @@ class HTMLReport:
         loss_total = records.get("loss_total", [0])
 
         epochs = [e for e in epochs if e is not None and str(e) != "nan"]
-        loss_total = [loss for loss in loss_total if loss is not None and str(loss) != "nan"]
+        loss_total = [loss_val for loss_val in loss_total if loss_val is not None and str(loss_val) != "nan"]
 
         if not epochs or not loss_total:
             return

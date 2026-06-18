@@ -660,7 +660,7 @@ class Trainer(TrainerBase):
         self._current_epoch = epoch
 
         # 1. 界面数据拟合损失 (核心)
-        losses["interface"], data_fit_loss = self._compute_data_loss(data, physics_cfg, stage1_factor)
+        losses["interface"], _data_fit_loss = self._compute_data_loss(data, physics_cfg, stage1_factor)
 
         # 2. 初始条件 & 壁面边界条件损失
         ib_losses = self._compute_initial_boundary_loss(data, physics_cfg, mult["ic_phi"])

@@ -55,8 +55,6 @@ EWD_CMAP = LinearSegmentedColormap.from_list("EWD", ["#E0FFFF", "#FF00FF"])
 def load_model(checkpoint_path: str) -> tuple[TwoPhasePINN, torch.device, dict]:
     """加载模型和配置"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # 注意：weights_only=False 是必要的，因为 checkpoint 包含 config 字典
-    # 这是测试代码，加载的是受信任的训练输出文件
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
 
     config = checkpoint.get("config", DEFAULT_CONFIG)
@@ -280,11 +278,11 @@ class PhysicsValidator:
             )
             phi_pinn = phi_pinn.reshape(n, n)
 
-            # 目标值：用 compute_interface_phi（Stage 1 eta 指导）
+            # 目标值
             phi_target = np.zeros((n, n))
             for i in range(n):
                 for j in range(n):
-                    phi_target[i, j] = data_gen.compute_interface_phi(x[j], y[i], z, t, V_to, V_prev=V_from)
+                    phi_target[i, j] = data_gen.target_phi_3d(x[j], y[i], z, t, V_to, V_prev=V_from)
 
             # 计算误差
             mae = np.mean(np.abs(phi_pinn - phi_target))

@@ -620,7 +620,7 @@ class PhysicsConstraints:
     def compute_core_residuals(
         self,
         x_phys: torch.Tensor,
-        predictions: torch.Tensor,
+        predictions: torch.Tensor | None,
         model: nn.Module | None = None,
     ) -> dict[str, torch.Tensor]:
         """
@@ -631,6 +631,12 @@ class PhysicsConstraints:
         """
         device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
         batch_size = x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
+
+        if predictions is None and model is not None:
+            predictions = model(x_phys)
+
+        if predictions is None:
+            return self._empty_residual(x_phys, torch.zeros(batch_size, 5, device=device))
 
         # === 统一梯度计算（一次性完成所有 autograd） ===
         try:
@@ -671,7 +677,14 @@ class PhysicsConstraints:
         except Exception as e:
             logger.warning(f"Laplace 压力残差计算失败: {e}")
 
-        # 5. 时间连续性正则化（需要 model 做三时间点前向）
+        # 5. 体积守恒残差
+        try:
+            vc_residuals = self.compute_volume_conservation_residual(x_phys, predictions)
+            residuals.update(vc_residuals)
+        except Exception as e:
+            logger.warning(f"体积守恒残差计算失败: {e}")
+
+        # 6. 时间连续性正则化（需要 model 做三时间点前向）
         try:
             temporal_residual = self._compute_temporal_smoothness(x_phys, predictions, model=model)
             residuals["temporal_smoothness"] = temporal_residual
@@ -900,6 +913,134 @@ class PhysicsConstraints:
             return lap
         except Exception:
             return torch.zeros_like(scalar_field)
+
+    def compute_volume_conservation_residual(self, x_phys: torch.Tensor, predictions: torch.Tensor):
+        try:
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            batch_size = predictions.shape[0] if isinstance(predictions, torch.Tensor) else 1
+
+            residuals = {
+                "volume_conservation": torch.zeros(batch_size, device=device, requires_grad=True),
+                "volume_consistency": torch.zeros(batch_size, device=device, requires_grad=True),
+                "ink_potential_min": torch.zeros(batch_size, device=device, requires_grad=True),
+            }
+
+            if isinstance(predictions, torch.Tensor) and predictions.shape[1] >= 5:
+                alpha = predictions[:, 4]
+                alpha_clamped = torch.clamp(alpha, 0.0, 1.0)
+                base_consistency = alpha - alpha_clamped
+
+                ink_fraction_target = self.materials_params.get("ink_initial_fraction", 0.15)
+                alpha_mean = torch.mean(alpha_clamped)
+                global_volume_residual = (alpha_mean - ink_fraction_target) / max(ink_fraction_target, 1e-6)
+                global_volume_residual_tensor = global_volume_residual.expand(batch_size)
+
+                overflow_penalty = torch.zeros(batch_size, device=device, requires_grad=True)
+                if isinstance(x_phys, torch.Tensor) and x_phys.dim() == 2 and x_phys.size(1) >= 3:
+                    coords = x_phys.detach()
+                    x = coords[:, 0]
+                    y = coords[:, 1]
+                    z = coords[:, 2]
+
+                    x_min, x_max = torch.min(x), torch.max(x)
+                    y_min, y_max = torch.min(y), torch.max(y)
+
+                    Lx = (x_max - x_min).clamp(min=1e-9)
+                    Ly = (y_max - y_min).clamp(min=1e-9)
+
+                    margin_x = 0.1 * Lx
+                    margin_y = 0.1 * Ly
+
+                    near_left = (x - x_min).abs() < margin_x
+                    near_right = (x_max - x).abs() < margin_x
+                    near_front = (y - y_min).abs() < margin_y
+                    near_back = (y_max - y_min).abs() < margin_y
+
+                    near_wall = near_left | near_right | near_front | near_back
+                    wall_h = self.materials_params.get("wall_height", 3.5e-6)
+                    above_wall = z > wall_h
+                    overflow_mask = near_wall & above_wall
+
+                    if overflow_mask.any():
+                        overflow_alpha = alpha_clamped * overflow_mask.float()
+                        overflow_penalty = overflow_alpha
+
+                residuals["volume_conservation"] = global_volume_residual_tensor
+                residuals["volume_consistency"] = base_consistency + overflow_penalty
+
+            if isinstance(predictions, torch.Tensor) and predictions.shape[1] >= 6:
+                ink_potential = predictions[:, 5]
+                min_potential = self.materials_params.get("ink_potential_min", 0.0)
+                residuals["ink_potential_min"] = torch.nn.functional.relu(min_potential - ink_potential)
+
+            return residuals
+
+        except Exception as e:
+            logger.error(f"计算体积守恒残差失败: {e!s}")
+            device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+            batch_size = x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
+            return {
+                "volume_conservation": torch.zeros(batch_size, device=device, requires_grad=True),
+                "volume_consistency": torch.zeros(batch_size, device=device, requires_grad=True),
+                "ink_potential_min": torch.zeros(batch_size, device=device, requires_grad=True),
+            }
+
+    def compute_electrowetting_residual(
+        self, x_phys: torch.Tensor, predictions: torch.Tensor, grads=None
+    ) -> dict[str, torch.Tensor]:
+        """
+        计算电润湿残差 — EW 力作为体积力作用在 NS 方程中
+        """
+        device = x_phys.device if isinstance(x_phys, torch.Tensor) else torch.device("cpu")
+        batch_size = x_phys.shape[0] if isinstance(x_phys, torch.Tensor) else 1
+
+        try:
+            if not isinstance(x_phys, torch.Tensor) or not isinstance(predictions, torch.Tensor):
+                return {"electrowetting": torch.zeros(batch_size, device=device)}
+
+            if not x_phys.requires_grad:
+                x_phys = x_phys.clone().detach().requires_grad_(True)
+
+            phi = predictions[:, 4] if predictions.shape[1] >= 5 else torch.zeros(batch_size, device=device)
+
+            if grads is not None:
+                phi_x = grads["phi_x"]
+                phi_y = grads["phi_y"]
+            else:
+                g_phi = torch.autograd.grad(
+                    phi.sum(),
+                    x_phys,
+                    create_graph=True,
+                    retain_graph=True,
+                    allow_unused=True,
+                )[0]
+                if g_phi is None:
+                    return {"electrowetting": torch.zeros(batch_size, device=device)}
+                phi_x, phi_y = g_phi[:, 0], g_phi[:, 1]
+
+            C_ew = self._compute_capacitance()
+            V_T = self.materials_params.get("V_T_base", 3.0)
+            V_to = x_phys[:, 4] if x_phys.shape[1] >= 5 else torch.zeros(batch_size, device=device)
+            V_eff_ew = torch.clamp(V_to - V_T, min=0.0)
+            d_eff = self.materials_params.get("dielectric_thickness", 800e-9)
+            f_ew_magnitude = 0.5 * C_ew * V_eff_ew**2 / d_eff
+
+            z_coord = x_phys[:, 2] if x_phys.shape[1] >= 3 else torch.zeros(batch_size, device=device)
+            lambda_d = self.materials_params.get("lambda_debye", 50e-9)
+            z_decay = torch.exp(-z_coord / lambda_d)
+
+            grad_mag = torch.sqrt(phi_x**2 + phi_y**2 + 1e-10)
+            ew_active = (grad_mag > 1e-3).float()
+            f_ew_x = -f_ew_magnitude * z_decay * phi_x / grad_mag * ew_active
+            f_ew_y = -f_ew_magnitude * z_decay * phi_y / grad_mag * ew_active
+
+            ew_residual = torch.sqrt(f_ew_x**2 + f_ew_y**2)
+
+            return {"electrowetting": ew_residual}
+
+        except Exception as e:
+            logger.warning(f"电润湿残差计算失败: {e}")
+            return {"electrowetting": torch.zeros(batch_size, device=device)}
 
     def _empty_residual(self, x, predictions):
         """返回空的残差字典"""

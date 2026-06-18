@@ -149,6 +149,7 @@ class TestPhiFieldCalculation:
     def test_phi_initial_condition(self, data_generator):
         """初始条件：底部油墨，上部透明"""
         Lx, Ly = PHYSICS["Lx"], PHYSICS["Ly"]
+        PHYSICS["h_ink"]
 
         # 底部中心应该是油墨（z=0 凹坑内部，compute_interface_phi 返回 NaN）
         # 夹角区（d_wall < wall_height, z < wall_height）→ phi=1

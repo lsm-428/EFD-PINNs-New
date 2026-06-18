@@ -69,10 +69,10 @@ def test_field_dimensions():
 
     assert Lx > 0, f"Lx should be positive: {Lx}"
     assert Ly > 0, f"Ly should be positive: {Ly}"
-    assert Lx == Ly, f"Expected square pixel: Lx={Lx * 1e6:.0f}μm, Ly={Ly * 1e6:.0f}μm"
+    assert Lx == Ly, f"Expected square pixel: Lx={Lx*1e6:.0f}μm, Ly={Ly*1e6:.0f}μm"
 
     # 域大小应在合理范围 (100-200μm 像素)
-    assert 100e-6 <= Lx <= 300e-6, f"Lx = {Lx * 1e6:.0f}μm out of expected pixel range [100, 300]μm"
+    assert 100e-6 <= Lx <= 300e-6, f"Lx = {Lx*1e6:.0f}μm out of expected pixel range [100, 300]μm"
 
 
 def test_bottom_grid_sampling():
@@ -100,7 +100,7 @@ def test_bottom_grid_sampling():
     assert pts.shape == (
         n_grid * n_grid,
         6,
-    ), f"Expected shape ({n_grid * n_grid}, 6), got {pts.shape}"
+    ), f"Expected shape ({n_grid*n_grid}, 6), got {pts.shape}"
 
     # z 应为 0
     assert np.allclose(pts[:, 2], 0.0), "z coordinate should be 0 at bottom"
@@ -116,4 +116,3 @@ def test_time_sampling():
     assert 0 <= t <= 0.05, f"t={t} should be in training range [0, 0.05]"
 
     # 零时间应有 phi = phi_IC（初始条件）
-    assert t >= 0, "t should be non-negative"

@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import warnings
 
 if TYPE_CHECKING:
-    import plotly
+    import plotly.graph_objects as go
 
 import numpy as np
 import pandas as pd
@@ -87,7 +87,8 @@ def check_file_size(file_path: str, max_size: int = MAX_FILE_SIZE) -> bool:
         file_size = path.stat().st_size
         if file_size > max_size:
             warnings.warn(
-                f"文件大小超过限制 ({file_size / 1024 / 1024:.2f} MB > {max_size / 1024 / 1024:.2f} MB): {file_path}",
+                f"文件大小超过限制 ({file_size / 1024 / 1024:.2f} MB > "
+                f"{max_size / 1024 / 1024:.2f} MB): {file_path}",
                 stacklevel=2,
             )
             return False
@@ -963,9 +964,9 @@ class TrainingOutputAnalyzer:
         """
         try:
             import streamlit as st
-        except ImportError as e:
+        except ImportError:
             msg = "Streamlit 未安装。请运行: pip install streamlit"
-            raise ImportError(msg) from e
+            raise ImportError(msg) from None
 
         st.title("📊 训练输出分析器")
         st.markdown("分析和可视化训练输出目录中的训练运行。")
@@ -1176,7 +1177,7 @@ class TrainingOutputAnalyzer:
         show_log_scale: bool = True,
         show_stage_markers: bool = True,
         smooth_window: int = 10,
-    ) -> "plotly.graph_objects.Figure":
+    ) -> "go.Figure":
         """创建总损失曲线图表
 
         Args:
@@ -1258,7 +1259,7 @@ class TrainingOutputAnalyzer:
 
         return fig
 
-    def _create_loss_components_chart(self, df: pd.DataFrame, smooth_window: int = 10) -> "plotly.graph_objects.Figure":
+    def _create_loss_components_chart(self, df: pd.DataFrame, smooth_window: int = 10) -> "go.Figure":
         """创建损失组件分解图表
 
         Args:
@@ -1312,7 +1313,7 @@ class TrainingOutputAnalyzer:
 
         return fig
 
-    def _create_lr_chart(self, df: pd.DataFrame, show_stage_markers: bool = True) -> "plotly.graph_objects.Figure":
+    def _create_lr_chart(self, df: pd.DataFrame, show_stage_markers: bool = True) -> "go.Figure":
         """创建学习率变化图表
 
         Args:
@@ -2640,13 +2641,12 @@ class TrainingOutputAnalyzer:
                 col=3,
             )
 
-            title = (
-                f"切片可视化: {axis.upper()}平面 @ 位置{pos * 100:.0f}% "
-                f"| 电压 {voltage_from}V→{voltage_to}V | 时间 {time:.3f}s"
-            )
             fig.update_layout(
                 height=700,
-                title_text=title,
+                title_text=(
+                    f"切片可视化: {axis.upper()}平面 @ 位置{pos * 100:.0f}% "
+                    f"| 电压 {voltage_from}V→{voltage_to}V | 时间 {time:.3f}s"
+                ),
                 showlegend=False,
             )
 

@@ -178,12 +178,12 @@ class SolverConfig:
     t_end: float = 0.02  # 结束时间 (20ms)
     save_interval: int = 10  # 保存间隔（每多少步保存一次）
 
-    # 物理参数 (默认值来自 src.config.PHYSICS，使用 field(default_factory=...) 动态获取)
-    sigma: float = field(default_factory=lambda: PHYSICS["sigma"])  # 界面张力 (N/m)
-    rho_oil: float = field(default_factory=lambda: PHYSICS["rho_oil"])  # 油墨密度 (kg/m³)
-    rho_water: float = field(default_factory=lambda: PHYSICS["rho_polar"])  # 极性液体密度 (kg/m³)
-    mu_oil: float = field(default_factory=lambda: PHYSICS["mu_oil"])  # 油墨粘度 (Pa·s)
-    mu_water: float = field(default_factory=lambda: PHYSICS["mu_polar"])  # 极性液体粘度 (Pa·s)
+    # 物理参数 (默认值来自 src.config.PHYSICS)
+    sigma: float = 0.02505  # 界面张力 (N/m) — PHYSICS["sigma"]
+    rho_oil: float = 763.0  # 油墨密度 (kg/m³) — PHYSICS["rho_oil"]
+    rho_water: float = 998.0  # 极性液体密度 (kg/m³) — PHYSICS["rho_polar"]
+    mu_oil: float = 9.41e-4  # 油墨粘度 (Pa·s) — PHYSICS["mu_oil"]
+    mu_water: float = 1.01e-3  # 极性液体粘度 (Pa·s) — PHYSICS["mu_polar"]
 
     # 数值参数
     cfl: float = 0.5
@@ -1202,7 +1202,7 @@ class FlowSolver:
         for i in range(1, nx - 1):
             for j in range(1, ny - 1):
                 for k in range(1, nz - 1):
-                    # 对流项
+                    # 对流项（中心差分）
                     dudx = (self.u[i + 1, j, k] - self.u[i - 1, j, k]) / (2 * dx)
                     dudy = (self.u[i, j + 1, k] - self.u[i, j - 1, k]) / (2 * dy)
                     dudz = (self.u[i, j, k + 1] - self.u[i, j, k - 1]) / (2 * dz)
