@@ -282,7 +282,7 @@ class PhysicsValidator:
             phi_target = np.zeros((n, n))
             for i in range(n):
                 for j in range(n):
-                    phi_target[i, j] = data_gen.target_phi_3d(x[j], y[i], z, t, V_to, V_prev=V_from)
+                    phi_target[i, j] = data_gen.target_phi_3d(x[j], y[i], z, V_from, V_to, t)
 
             # 计算误差
             mae = np.mean(np.abs(phi_pinn - phi_target))

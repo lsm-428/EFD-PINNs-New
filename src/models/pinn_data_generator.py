@@ -426,17 +426,6 @@ class DataGenerator:
             except Exception as e:
                 logger.warning(f"HybridPredictor 初始化失败: {e}")
 
-        # 初始化 EnhancedApertureModel（用于 target3D 倾斜界面）
-        self._aperture_model = None
-        if HAS_APERTURE:
-            try:
-                from src.config import CONFIG_PATH
-
-                self._aperture_model = EnhancedApertureModel(config_path=str(CONFIG_PATH))
-                logger.info("✅ 已集成 EnhancedApertureModel 用于 target3D")
-            except Exception as e:
-                logger.warning(f"EnhancedApertureModel 初始化失败: {e}")
-
         self.theta0 = PHYSICS["theta0"]
         self.wall_height = PHYSICS["wall_height"]
         self.wall_top_z_tol = 1e-8  # z 方向浮点容差，与 TwoPhasePINN.forward 中的 _z_eps 一致
@@ -453,7 +442,7 @@ class DataGenerator:
                 self.physics_sampler = PhysicsBasedSampler(
                     sampling_cfg,
                     stage1_predictor=self.contact_angle_predictor,
-                    stage1_aperture_model=self._aperture_model,
+                    stage1_aperture_model=None,
                 )
                 logger.info("✅ 使用物理采样策略 (PhysicsBasedSampler)")
             except ImportError as e:
@@ -486,11 +475,11 @@ class DataGenerator:
         x: float,
         y: float,
         z: float,
-        t: float,
-        V: float,
-        V_prev: float | None = None,
+        V_from: float,
+        V_to: float,
+        t_since: float,
     ) -> float:
-        """定义 interface 数据点的 phi 硬约束值。
+        """定义 interface 数据点的 phi 硬约束值（6元组签名）。
 
         phi 是油水体积分数：0(纯水), 1(纯油), 0.5(油水界面零宽度)
         油水分离，没有混合态。
@@ -528,7 +517,7 @@ class DataGenerator:
 
         # ===== z=0 非夹角区（d_wall >= wall_height）：Stage 1 eta 指导 =====
         if z < 1e-8:
-            eta = self._get_eta_from_stage1(V_prev, V, t)
+            eta = self._get_eta_from_stage1(V_from, V_to, t_since)
             if eta is None or eta < 0.01:
                 return float("nan")
 
@@ -636,16 +625,6 @@ class DataGenerator:
 
     def get_opening_rate(self, V: float, t: float) -> float:
         theta = self.get_contact_angle(V, t)
-        if HAS_APERTURE and self.use_stage1_eta:
-            try:
-                if not hasattr(self, "_aperture_model"):
-                    from src.config import CONFIG_PATH
-
-                    self._aperture_model = EnhancedApertureModel(config_path=str(CONFIG_PATH))
-                return self._aperture_model.contact_angle_to_aperture_ratio(theta)
-            except Exception as e:
-                logger.warning(f"EnhancedApertureModel 调用失败: {e}")
-
         # tanh 饱和映射: eta = eta_max * tanh(k * Δθ / theta_scale)
         theta0 = PHYSICS["theta0"]
         eta_max_aperture = PHYSICS.get("eta_max_aperture", 0.85)
@@ -662,18 +641,16 @@ class DataGenerator:
         x: float,
         y: float,
         z: float,
-        t: float,
-        V: float,
-        V_prev: float | None = None,
-        t_step: float = 0.0,
+        V_from: float,
+        V_to: float,
+        t_since: float,
     ) -> float:
-        """
-        计算目标 φ 值（支持升压和降压）
+        """计算目标 φ 值（支持升压和降压）。
 
         物理模型：
         - 初始：底部 3μm 油墨 (φ=1)，上部 17μm 极性液体 (φ=0)
-        - 升压（V > V_prev）：电润湿驱动，油墨被推到边缘/角落
-        - 降压（V < V_prev）：表面张力恢复，油墨从边缘/角落铺展回中心
+        - 升压（V_to > V_from）：电润湿驱动，油墨被推到边缘/角落
+        - 降压（V_to < V_from）：表面张力恢复，油墨从边缘/角落铺展回中心
 
         升压模式：
         - 开口率 < 50%：中心开口模式（油墨环形分布）
@@ -681,147 +658,85 @@ class DataGenerator:
 
         降压模式：
         - 油墨从当前位置向中心铺展
-        - 开口率指数衰减：η(t) = η_at_step × exp(-(t - t_step) / τ_recovery)
+        - 开口率指数衰减：η(t) = η_at_step × exp(-t_since / τ_recovery)
+
+        Args:
+            x, y, z: 空间坐标 (m)
+            V_from: 跳变前电压 (V)
+            V_to: 跳变后电压 (V)
+            t_since: 跳变后经过的时间 (s)
+
+        Returns:
+            φ ∈ [0, 1]
         """
         h_ink = self.h_ink
-        if V_prev is None:
-            V_prev = V
-        if t_step is None:
-            t_step = 0.0
-        t_since = max(0.0, t - t_step)
-        eta = None
-        if HAS_APERTURE:
-            try:
-                if not hasattr(self, "_aperture_model"):
-                    from src.config import CONFIG_PATH
 
-                    self._aperture_model = EnhancedApertureModel(config_path=str(CONFIG_PATH))
-                theta_stage1, _ = self._aperture_model.theta_eta_from_triad(V_prev, V, t_since)
-                theta = float(theta_stage1)
-                theta0 = PHYSICS["theta0"]
-                eta_max_aperture = PHYSICS.get("eta_max_aperture", 0.85)
-                k = PHYSICS.get("aperture_k", 2.02)
-                theta_scale = PHYSICS.get("aperture_theta_scale", 27.46)
-                dtheta = theta0 - theta
-                eta = 0.0 if dtheta <= 0 else eta_max_aperture * np.tanh(k * dtheta / theta_scale)
-                eta = float(np.clip(eta, 0.0, eta_max_aperture))
-            except Exception as e:
-                logger.warning(f"EnhancedApertureModel 在 target_phi_3d 中失败: {e}")
-        if eta is None:
-            eta = self.get_opening_rate(V, t)
+        # 判断是否降压
+        is_voltage_down = V_to < V_from
 
+        if is_voltage_down:
+            # 降压模式：开口率指数衰减
+            tau_recovery = PHYSICS.get("tau_recovery", 0.0075)
+            eta_max = self.get_opening_rate(V_from, 0.020)
+            eta = eta_max * np.exp(-t_since / tau_recovery)
+        else:
+            # 升压或稳态模式
+            eta = self.get_opening_rate(V_to, t_since)
+
+        # 使用统一的中心开口模式计算
+        return self._phi_center_opening_mode(x, y, z, eta, h_ink)
+
+    def _phi_center_opening_mode(self, x: float, y: float, z: float, eta: float, h_ink: float) -> float:
+        """中心开口模式的 φ 分布（用于升压和降压）。
+
+        物理模型：
+        - 中心区域透明（φ=0），油墨在边缘形成环形分布
+        - 开口半径 r_open = sqrt(η × Lx × Ly / π)
+        - 油墨堆高满足体积守恒
+
+        Args:
+            x, y, z: 空间坐标 (m)
+            eta: 开口率 ∈ [0, 1]
+            h_ink: 初始油墨厚度 (m)
+
+        Returns:
+            φ ∈ [0, 1]
+        """
         interface_width = PHYSICS["ac_interface_width"]
-        wall_height = self.wall_height
-        wall_top_z_tol = self.wall_top_z_tol
 
-        d_wall = min(x, self.Lx - x, y, self.Ly - y)
+        if eta < 0.01:
+            # 无开口：初始状态，油墨均匀铺在底部
+            return 0.5 * (1 - np.tanh((z - h_ink) / (interface_width / 3)))
 
-        on_wall_top_z = abs(z - wall_height) < wall_top_z_tol
-        near_wall_edge = d_wall < wall_top_z_tol
-        on_contact_line = on_wall_top_z & near_wall_edge
-
-        above_wall = z > wall_height - wall_top_z_tol
-
-        in_capillary = d_wall < wall_top_z_tol
-
-        r_open = np.sqrt(eta * self.Lx * self.Ly / np.pi) if eta > 0.01 else 0.0
-
-        eta_lo, eta_hi = 0.40, 0.50
-
-        # 壁顶面/接触线 BC（最高优先级）
-        on_wall_top_z = abs(z - wall_height) < wall_top_z_tol
-        if on_contact_line:
-            return 0.5
-        if on_wall_top_z:
+        if eta > 0.99:
+            # 完全开口：几乎没有油墨
             return 0.0
 
-        # z > wall_height 区域
-        if above_wall:
-            if eta < 0.01:
-                return 0.0
-            r = np.sqrt((x - self.Lx / 2) ** 2 + (y - self.Ly / 2) ** 2)
-            if r < r_open - interface_width:
-                return 0.0
-            if r > r_open + interface_width:
-                h_edge = h_ink / max(1.0 - eta, PHYSICS["ink_initial_fraction"])
-                if z < h_edge - interface_width:
-                    return 1.0
-                if z > h_edge + interface_width:
-                    return 0.0
-                return 0.5 * (1 + np.tanh((h_edge - z) / (interface_width / 2)))
-            return 0.5
-
-        # 毛细区域：target3D 不处理
-        if in_capillary and z < wall_height:
-            return np.nan
-
-        # 正常区域（z <= wall_height）
-        if eta < 0.01:
-            if z < h_ink:
-                phi_z = 1.0
-            elif abs(z - wall_height) < wall_top_z_tol:
-                phi_z = 0.5
-            else:
-                phi_z = 0.5 * (1 + np.tanh((h_ink - z) / interface_width))
-        elif eta <= eta_lo:
-            phi_z = self._center_opening_phi(x, y, z, eta, h_ink, r_open, interface_width)
-        elif eta >= eta_hi:
-            phi_z = self._corner_blob_phi(x, y, z, eta, h_ink, interface_width)
-        else:
-            w = (eta - eta_lo) / (eta_hi - eta_lo)
-            phi_center = self._center_opening_phi(x, y, z, eta, h_ink, r_open, interface_width)
-            phi_corner = self._corner_blob_phi(x, y, z, eta, h_ink, interface_width)
-            phi_z = (1.0 - w) * phi_center + w * phi_corner
-
-        return np.clip(phi_z, 0, 1)
-
-    def _center_opening_phi(self, x, y, z, eta, h_ink, r_open, interface_width):
-        """中心开口模式的 φ 分布（油墨环形分布），含接触角倾斜"""
         r = np.sqrt((x - self.cx) ** 2 + (y - self.cy) ** 2)
-        h_edge = h_ink / max(1.0 - eta, PHYSICS["ink_initial_fraction"])
 
-        theta = PHYSICS.get("theta0", 120.0)
-        tan_theta = np.tan(np.radians(theta))
-        z_tilt = z + (r - r_open) * tan_theta * 0.1
+        # 开口半径
+        r_open = np.sqrt(eta * self.Lx * self.Ly / np.pi)
+
+        # 油墨堆高（体积守恒）
+        max_eta = 0.85
+        eta = min(eta, max_eta)
+        r_open = np.sqrt(eta * self.Lx * self.Ly / np.pi)
+        ink_area = self.Lx * self.Ly - np.pi * r_open**2
+        h_ink_edge = self.Lx * self.Ly * h_ink / max(ink_area, 1e-12)
+
+        # 径向分布
+        radial_factor = 0.5 * (1 + np.tanh((r - r_open) / interface_width))
 
         if r < r_open - interface_width:
-            return 0.0
-        if r > r_open + interface_width:
-            if z_tilt < h_edge - interface_width:
-                return 1.0
-            if z_tilt > h_edge + interface_width:
-                return 0.0
-            return 0.5 * (1 + np.tanh((h_edge - z_tilt) / (interface_width / 2)))
-        radial_factor = (r - (r_open - interface_width)) / (2 * interface_width)
-        if z_tilt < h_edge - interface_width:
-            phi_edge = 1.0
-        elif z_tilt > h_edge + interface_width:
-            phi_edge = 0.0
+            phi_z = 0.0  # 中心透明
+        elif r > r_open + interface_width:
+            phi_z = 0.5 * (1 - np.tanh((z - h_ink_edge) / (interface_width / 2)))
         else:
-            phi_edge = 0.5 * (1 + np.tanh((h_edge - z_tilt) / (interface_width / 2)))
-        return phi_edge * radial_factor
+            phi_center = 0.0
+            phi_edge = 0.5 * (1 - np.tanh((z - h_ink_edge) / (interface_width / 2)))
+            phi_z = phi_center * (1 - radial_factor) + phi_edge * radial_factor
 
-    def _corner_blob_phi(self, x, y, z, eta, h_ink, interface_width):
-        """单角墨滴模式的 φ 分布（油墨汇聚到最近角落），含弯月面"""
-        h_edge = h_ink / max(1.0 - eta, PHYSICS["ink_initial_fraction"])
-
-        ink_volume = self.Lx * self.Ly * h_ink
-        r_blob = np.sqrt(4.0 * ink_volume / (np.pi * self.wall_height))
-
-        corners = [(0.0, 0.0), (self.Lx, 0.0), (0.0, self.Ly), (self.Lx, self.Ly)]
-        dists = [np.sqrt((x - cx) ** 2 + (y - cy) ** 2) for cx, cy in corners]
-        corner_x, corner_y = corners[np.argmin(dists)]
-
-        r_c = np.sqrt((x - corner_x) ** 2 + (y - corner_y) ** 2)
-
-        radial = 0.5 * (1 - np.tanh((r_c - r_blob) / interface_width))
-
-        delta_h = PHYSICS.get("meniscus_delta_h", 1.5e-6)
-        lam = PHYSICS.get("meniscus_lambda", 5e-6)
-        z_meniscus = h_edge + delta_h * np.exp(-(r_c - r_blob) / lam)
-        z_meniscus = min(z_meniscus, self.Lz * 0.95)
-
-        return radial * 0.5 * (1 - np.tanh((z - z_meniscus) / (interface_width / 2)))
+        return np.clip(phi_z, 0, 1)
 
     def _sample_point_by_eta(self, eta: float) -> tuple:
         """根据开口率采样空间点，XY 方向界面加密"""
@@ -1004,7 +919,7 @@ class DataGenerator:
             for V in V_steady_arr:
                 t = sampler.sample_time_adaptive(1, V, V)[0]
                 x, y, z = sampler.sample_spatial_physics_based(1, V, t)
-                phi = self.target_phi_3d(x[0], y[0], z[0], t, float(V), V_prev=float(V))
+                phi = self.target_phi_3d(x[0], y[0], z[0], float(V), float(V), t)
                 if not np.isnan(phi):
                     interface_points.append(self._make_6d(x[0], y[0], z[0], float(V), float(V), t))
                     interface_targets.append(phi)
@@ -1016,7 +931,7 @@ class DataGenerator:
                     continue
                 t = sampler.sample_time_adaptive(1, float(V), 0.0)[0]
                 x, y, z = sampler.sample_spatial_physics_based(1, float(V), t)
-                phi = self.target_phi_3d(x[0], y[0], z[0], t, float(V), V_prev=0.0)
+                phi = self.target_phi_3d(x[0], y[0], z[0], 0.0, float(V), t)
                 if not np.isnan(phi):
                     interface_points.append(self._make_6d(x[0], y[0], z[0], 0.0, float(V), t))
                     interface_targets.append(phi)
@@ -1030,7 +945,7 @@ class DataGenerator:
                         continue
                     t = sampler.sample_time_adaptive(1, 0.0, float(Vf))[0]
                     x, y, z = sampler.sample_spatial_physics_based(1, 0.0, t)
-                    phi = self.target_phi_3d(x[0], y[0], z[0], t, 0.0, V_prev=float(Vf))
+                    phi = self.target_phi_3d(x[0], y[0], z[0], float(Vf), 0.0, t)
                     if not np.isnan(phi):
                         interface_points.append(self._make_6d(x[0], y[0], z[0], float(Vf), 0.0, t))
                         interface_targets.append(phi)
@@ -1041,7 +956,7 @@ class DataGenerator:
                 V_from, V_to = jump_pairs[np.random.randint(len(jump_pairs))]
                 t = sampler.sample_time_adaptive(1, float(V_to), float(V_from))[0]
                 x, y, z = sampler.sample_spatial_physics_based(1, float(V_to), t)
-                phi = self.target_phi_3d(x[0], y[0], z[0], t, float(V_to), V_prev=float(V_from))
+                phi = self.target_phi_3d(x[0], y[0], z[0], float(V_from), float(V_to), t)
                 if not np.isnan(phi):
                     interface_points.append(self._make_6d(x[0], y[0], z[0], float(V_from), float(V_to), t))
                     interface_targets.append(phi)
@@ -1058,7 +973,7 @@ class DataGenerator:
             for V_from, V_to, t in steady_sc:
                 eta = self.get_opening_rate(V_to, t)
                 x, y, z = self._sample_point_by_eta(eta)
-                phi = self.target_phi_3d(x, y, z, t, V_to, V_prev=V_from)
+                phi = self.target_phi_3d(x, y, z, V_from, V_to, t)
                 if not np.isnan(phi):
                     interface_points.append(self._make_6d(x, y, z, V_from, V_to, t))
                     interface_targets.append(phi)
@@ -1067,7 +982,7 @@ class DataGenerator:
             for V_from, V_to, t in up_sc:
                 eta = self.get_opening_rate(V_to, t)
                 x, y, z = self._sample_point_by_eta(eta)
-                phi = self.target_phi_3d(x, y, z, t, V_to, V_prev=V_from)
+                phi = self.target_phi_3d(x, y, z, V_from, V_to, t)
                 if not np.isnan(phi):
                     interface_points.append(self._make_6d(x, y, z, V_from, V_to, t))
                     interface_targets.append(phi)
@@ -1078,7 +993,7 @@ class DataGenerator:
                 eta_at_fall = self.get_opening_rate(V_from, 0.020)
                 eta = eta_at_fall * np.exp(-t / tau_recovery)
                 x, y, z = self._sample_point_by_eta(eta)
-                phi = self.target_phi_3d(x, y, z, t, V_to, V_prev=V_from)
+                phi = self.target_phi_3d(x, y, z, V_from, V_to, t)
                 if not np.isnan(phi):
                     interface_points.append(self._make_6d(x, y, z, V_from, V_to, t))
                     interface_targets.append(phi)
@@ -1087,7 +1002,7 @@ class DataGenerator:
             for V_from, V_to, t in jump_sc:
                 eta = self.get_opening_rate(V_to, t)
                 x, y, z = self._sample_point_by_eta(eta)
-                phi = self.target_phi_3d(x, y, z, t, V_to, V_prev=V_from)
+                phi = self.target_phi_3d(x, y, z, V_from, V_to, t)
                 if not np.isnan(phi):
                     interface_points.append(self._make_6d(x, y, z, V_from, V_to, t))
                     interface_targets.append(phi)
@@ -1110,7 +1025,7 @@ class DataGenerator:
                 t = self._sample_times(1)[0]
             else:
                 t = self._sample_times(1)[0]
-            phi = self.target_phi_3d(x, y, z, t, V_to, V_prev=V_from)
+            phi = self.target_phi_3d(x, y, z, V_from, V_to, t)
             if not np.isnan(phi):
                 interface_points.append(self._make_6d(x, y, z, V_from, V_to, t))
                 interface_targets.append(phi)
@@ -1187,7 +1102,7 @@ class DataGenerator:
             elif in_corner:
                 phi = 1.0
             else:
-                phi = self.target_phi_3d(x, y, z, t, V_to, V_prev=V_from)
+                phi = self.target_phi_3d(x, y, z, V_from, V_to, t)
                 if np.isnan(phi):
                     phi = 1.0 if z < self.h_ink else 0.0
 
@@ -1339,7 +1254,16 @@ class DataGenerator:
         con_scenarios = con_steady_sc + con_up_sc + con_down_sc
 
         for V_from, V_to, t in con_scenarios:
-            theta = self.get_contact_angle(V_to, t)
+            # 接触角计算逻辑（对齐 EFD-PINNs 参考实现）
+            if V_from > V_to:  # 降压过程 (Step Down)
+                # 模拟接触角弛豫：从 theta(V_from) 恢复到 theta0
+                theta_high = self.get_contact_angle(V_from, 1.0)
+                theta_low = self.theta0
+                tau_recovery = PHYSICS.get("tau_recovery", 0.0075)
+                decay = np.exp(-t / tau_recovery)
+                theta = theta_low + (theta_high - theta_low) * decay
+            else:  # 升压或稳态
+                theta = self.get_contact_angle(V_to, t)
             x = np.random.rand() * self.Lx
             y = np.random.rand() * self.Ly
             contact_points.append(self._make_6d(x, y, 0.0, V_from, V_to, t))
@@ -1370,13 +1294,13 @@ class DataGenerator:
             y_cl = np.clip(y_cl, 0, self.Ly)
             z_cl = 0.0
 
-            phi_cl = self.target_phi_3d(x_cl, y_cl, z_cl, t, V, V_prev=V_prev)
+            phi_cl = self.target_phi_3d(x_cl, y_cl, z_cl, V_prev, V, t)
             if not np.isnan(phi_cl):
                 interface_points.append(self._make_6d(x_cl, y_cl, z_cl, V_prev, V, t))
                 interface_targets.append(phi_cl)
                 cl_added += 1
 
-        logger.info(f"  底面接触线精细采样: +{cl_added} 点 (z=0, r~r_open, φ=target3D)")
+        logger.info(f"  底面接触线精细采样: +{cl_added} 点 (z=0, r~r_open)")
 
         # ============================================================
         # 5c. 突破时刻底面过采样 (t∈[0,5ms], 升压场景)
@@ -1396,13 +1320,13 @@ class DataGenerator:
             y_bt = np.clip(self.cy + r * np.sin(angle), 0, self.Ly)
             z_bt = 0.0
 
-            phi_bt = self.target_phi_3d(x_bt, y_bt, z_bt, t, V, V_prev=0.0)
+            phi_bt = self.target_phi_3d(x_bt, y_bt, z_bt, 0.0, V, t)
             if not np.isnan(phi_bt):
                 interface_points.append(self._make_6d(x_bt, y_bt, z_bt, 0.0, V, t))
                 interface_targets.append(phi_bt)
                 bt_added += 1
 
-        logger.info(f"  突破时刻底面过采样: +{bt_added} 点 (t~[0,5ms], 升压, φ=target3D)")
+        logger.info(f"  突破时刻底面过采样: +{bt_added} 点 (t~[0,5ms], 升压)")
 
         return {
             "interface_points": torch.tensor(np.array(interface_points), dtype=torch.float32, device=self.device),
@@ -1471,3 +1395,56 @@ def create_physics_sampling_dataset(config: dict, n_total: int = 100000) -> dict
     logger.info(f"数据集生成完成，总样本数: {total_samples}")
 
     return dataset
+
+
+if __name__ == "__main__":
+    """独立运行数据生成。
+
+    使用方法:
+        python -m src.models.pinn_data_generator [--config CONFIG_PATH] [--output OUTPUT_DIR] [--n-samples N]
+    """
+    import argparse
+    import json
+    import os
+
+    parser = argparse.ArgumentParser(description="PINN 两相流数据生成器")
+    parser.add_argument("--config", type=str, default=None, help="配置文件路径")
+    parser.add_argument("--output", type=str, default="outputs/data", help="输出目录")
+    parser.add_argument("--n-samples", type=int, default=100000, help="样本数量")
+    parser.add_argument("--device", type=str, default="cpu", help="设备 (cpu/cuda)")
+    args = parser.parse_args()
+
+    # 加载配置
+    if args.config:
+        with open(args.config, encoding="utf-8") as f:
+            config = json.load(f)
+    else:
+        config = {}
+
+    # 创建设备
+    device = torch.device(args.device)
+
+    # 创建数据生成器
+    logger.info("初始化 DataGenerator...")
+    data_gen = DataGenerator(config, device)
+
+    # 生成数据
+    logger.info(f"生成数据 (n_samples={args.n_samples})...")
+    data = data_gen.generate_all_data()
+
+    # 保存数据
+    os.makedirs(args.output, exist_ok=True)
+    output_file = os.path.join(args.output, "training_data.pt")
+
+    torch.save(data, output_file)
+    logger.info(f"数据已保存到: {output_file}")
+
+    # 打印统计信息
+    logger.info("=" * 60)
+    logger.info("数据统计:")
+    for key, value in data.items():
+        if hasattr(value, "shape"):
+            logger.info(f"  {key}: {value.shape}")
+        elif isinstance(value, list):
+            logger.info(f"  {key}: {len(value)} items")
+    logger.info("=" * 60)
