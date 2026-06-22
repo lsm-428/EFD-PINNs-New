@@ -254,7 +254,7 @@ class TwoPhasePINN(nn.Module):
             # ============================================================
             on_wall_top_z = torch.abs(z_phys - wall_height) < _z_eps
             d_wall = torch.min(torch.min(x_phys, self.Lx - x_phys), torch.min(y_phys, self.Ly - y_phys))
-            on_contact_line = on_wall_top_z & (d_wall < wall_height)
+            on_contact_line = on_wall_top_z & (d_wall < _z_eps)
             on_wall_top_face = on_wall_top_z & ~on_contact_line
 
             phi = torch.where(on_wall_top_face, torch.zeros_like(phi), phi)

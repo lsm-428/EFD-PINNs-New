@@ -4,7 +4,7 @@ EWP 两相流 PINN — 数据生成器模块
 ====================================
 
 从 pinn_two_phase.py 中抽取的数据生成相关类，包含：
-1. PhysicsBasedSampler — 基于物理机制的采样器（从 src/data/physics_sampling.py 迁入）
+1. PhysicsBasedSampler — 基于物理机制的采样器
 2. _sample_bc_z — 壁面 BC 的 z 坐标分层采样函数
 3. DataGenerator — 训练数据生成器
 
@@ -49,7 +49,7 @@ DEFAULT_CONFIG = get_default_training_config()
 
 
 # ============================================================================
-# 基于物理机制的采样器（从 src/data/physics_sampling.py 迁入）
+# 基于物理机制的采样器
 # ============================================================================
 
 
@@ -438,7 +438,7 @@ class DataGenerator:
         self.physics_sampler = None
         if self.sampling_strategy == "physics_based":
             try:
-                # PhysicsBasedSampler 定义在本文件顶部（从 src.data.physics_sampling 迁入）
+                # PhysicsBasedSampler 定义在本文件顶部
                 self.physics_sampler = PhysicsBasedSampler(
                     sampling_cfg,
                     stage1_predictor=self.contact_angle_predictor,
@@ -1034,7 +1034,8 @@ class DataGenerator:
         logger.info(f"  底面数据点 (z=0): +{bottom_added}")
 
         # ============================================================
-        # 2. 初始条件：t=0 时油墨均匀铺在底部 3μm
+        # 2. 初始条件：只覆盖油水交界面 φ(x,y,z=h_ink)=0.5
+        #    判定标准：>90% 采样点满足 φ=0.5 即认为回到初始状态
         # ============================================================
         n_ic = data_cfg.get("n_initial", 10000)
         ic_points, ic_values = [], []
@@ -1044,19 +1045,13 @@ class DataGenerator:
         for V in V_ic:
             x = np.random.rand() * self.Lx
             y = np.random.rand() * self.Ly
-            z = np.random.rand() * self.wall_height
-
+            # 只在交界面 z≈h_ink=3μm 附近采样，标准差=ic_width/4
             interface_width = PHYSICS["ic_width"]
-            d_wall = min(x, self.Lx - x, y, self.Ly - y)
+            z = self.h_ink + np.random.randn() * interface_width / 4
+            z = np.clip(z, 0, self.wall_height)
 
-            if abs(z - self.wall_height) < self.wall_top_z_tol and d_wall < self.wall_top_z_tol:
-                phi = 0.5
-            elif z < self.h_ink:
-                phi = 1.0
-            else:
-                phi = 0.5 * (1 + np.tanh((self.h_ink - z) / interface_width))
+            phi = 0.5  # 交界面目标值
 
-            phi = np.clip(phi, 0, 1)
             ic_points.append(self._make_6d(x, y, z, V, V, 0.0))
             ic_values.append([0.0, 0.0, 0.0, 0.0, phi])
 
@@ -1096,10 +1091,14 @@ class DataGenerator:
             in_corner = (in_corner_x or in_corner_y) and z < self.wall_height
 
             if on_wall_top_z and d_wall < self.wall_top_z_tol:
+                # 接触线：z=3.5μm, d_wall=0
                 phi = 0.5
             elif z >= self.wall_height - self.wall_top_z_tol:
                 phi = 0.0
             elif in_corner:
+                phi = 1.0
+            elif d_wall < self.wall_height and z < self.wall_height:
+                # 围堰立壁面钉扎：d_wall<3.5μm, z<3.5μm → φ=1
                 phi = 1.0
             else:
                 phi = self.target_phi_3d(x, y, z, V_from, V_to, t)

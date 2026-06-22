@@ -669,10 +669,10 @@ class Trainer(TrainerBase):
         # 3. 体积守恒约束
         losses["volume_conservation"] = self._compute_volume_conservation_loss(stage1_factor)
 
-        # 4. phi 空间分布 + 几何一致性约束
-        spatial_loss, geom_loss = self._compute_phi_spatial_loss(stage1_factor)
-        losses["phi_spatial"] = spatial_loss
-        losses["phi_geometry"] = geom_loss
+        # 4. phi 空间分布 + 几何一致性约束（暂时关闭）
+        # spatial_loss, geom_loss = self._compute_phi_spatial_loss(stage1_factor)
+        # losses["phi_spatial"] = spatial_loss
+        # losses["phi_geometry"] = geom_loss
 
         # 6. 物理方程损失（整体乘子来自统一调度器）
         if any(w > 0 for w in physics_weights.values()):
